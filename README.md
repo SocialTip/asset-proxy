@@ -37,6 +37,14 @@ The signature segment is always required structurally. When `SIGNING_KEY` and `S
 
 The shorthand `rs` is also accepted (e.g. `rs:fill:480:360`).
 
+### Framerate — `framerate:<fps>` (shorthand `fr`)
+
+Sets the output framerate. Example: `fr:30`.
+
+### Trim — `trim:<seconds>` (shorthand `tr`)
+
+Limits output duration to the given number of seconds. Example: `tr:10`.
+
 ### Output format
 
 Append `@mp4` or `@webm` to the source URL to choose the output container format. Default is `mp4`.

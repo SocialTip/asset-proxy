@@ -10,16 +10,24 @@ const SOURCE_URL = "http://file-server/test-video.mp4";
 interface VideoMeta {
   width: number;
   height: number;
+  duration: number;
+  fps: number;
 }
 
 function probeVideo(filePath: string): VideoMeta {
   const raw = execSync(
-    `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of json "${filePath}"`,
+    `ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate -show_entries format=duration -of json "${filePath}"`,
     { encoding: "utf-8" },
   );
   const parsed = JSON.parse(raw);
   const stream = parsed.streams[0];
-  return { width: stream.width, height: stream.height };
+  const [num, den] = stream.r_frame_rate.split("/").map(Number);
+  return {
+    width: stream.width,
+    height: stream.height,
+    duration: parseFloat(parsed.format.duration),
+    fps: num / den,
+  };
 }
 
 function extractFrame(videoPath: string): Buffer {
@@ -32,8 +40,8 @@ function extractFrame(videoPath: string): Buffer {
 }
 
 describe("video resize", () => {
-  it("resizes to 128x128 fill", async () => {
-    const url = `${SERVICE_URL}/insecure/resize:fill:128:128/plain/${SOURCE_URL}`;
+  it("resizes to 128x128 fill with framerate and trim", async () => {
+    const url = `${SERVICE_URL}/insecure/resize:fill:128:128/fr:15/tr:1/plain/${SOURCE_URL}`;
     const res = await fetch(url);
 
     expect(res.status).toBe(200);
@@ -47,10 +55,12 @@ describe("video resize", () => {
     const videoPath = join(tmp, "output.mp4");
     writeFileSync(videoPath, buffer);
 
-    // Assert output dimensions
+    // Assert output dimensions, framerate, and duration
     const meta = probeVideo(videoPath);
     expect(meta.width).toBe(128);
     expect(meta.height).toBe(128);
+    expect(meta.fps).toBe(15);
+    expect(meta.duration).toBeLessThanOrEqual(1.5);
 
     // Snapshot first frame
     const frame = extractFrame(videoPath);

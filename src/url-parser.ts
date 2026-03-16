@@ -21,6 +21,8 @@ export type OutputFormat = "mp4" | "webm";
 export interface ParsedUrl {
   resize: ResizeOptions;
   sourceUrl: string;
+  framerate?: number;
+  trim?: number;
   outputFormat: OutputFormat;
 }
 
@@ -32,6 +34,7 @@ export interface ParsedUrl {
  *   /resize:<type>:<width>:<height>/enc/<encrypted_source_url>[@<format>]
  *
  * Shorthand "rs" is also accepted.
+ * Additional options: framerate:<fps> (fr), trim:<seconds> (tr).
  * Output format suffix: @mp4 (default), @webm.
  */
 export function parseProcessingUrl(path: string): ParsedUrl {
@@ -74,13 +77,23 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     sourceUrl = decryptSourceUrl(sourceUrl);
   }
 
-  const resize = parseResizeOption(optionsPart);
+  const options = parseOptions(optionsPart);
 
-  return { resize, sourceUrl, outputFormat };
+  return { ...options, sourceUrl, outputFormat };
 }
 
-function parseResizeOption(optionsStr: string): ResizeOptions {
+interface ParsedOptions {
+  resize: ResizeOptions;
+  framerate?: number;
+  trim?: number;
+}
+
+function parseOptions(optionsStr: string): ParsedOptions {
   const segments = optionsStr.split("/").filter(Boolean);
+
+  let resize: ResizeOptions | undefined;
+  let framerate: number | undefined;
+  let trim: number | undefined;
 
   for (const segment of segments) {
     const parts = segment.split(":");
@@ -91,13 +104,29 @@ function parseResizeOption(optionsStr: string): ResizeOptions {
       if (!VALID_RESIZE_TYPES.has(type)) {
         throw new Error(`Invalid resizing type: ${type}`);
       }
-      return {
+      resize = {
         type: type as ResizingType,
         width: parseInt(parts[2], 10) || 0,
         height: parseInt(parts[3], 10) || 0,
       };
+    } else if (name === "framerate" || name === "fr") {
+      const value = parseFloat(parts[1]);
+      if (isNaN(value) || value <= 0) {
+        throw new Error(`Invalid framerate: ${parts[1]}`);
+      }
+      framerate = value;
+    } else if (name === "trim" || name === "tr") {
+      const value = parseFloat(parts[1]);
+      if (isNaN(value) || value <= 0) {
+        throw new Error(`Invalid trim duration: ${parts[1]}`);
+      }
+      trim = value;
     }
   }
 
-  throw new Error("No resize option found in URL");
+  if (!resize) {
+    throw new Error("No resize option found in URL");
+  }
+
+  return { resize, framerate, trim };
 }

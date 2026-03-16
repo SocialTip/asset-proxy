@@ -47,12 +47,21 @@ interface ResizeParams {
   resizingType: ResizingType;
   width: number;
   height: number;
+  framerate?: number;
+  trim?: number;
   outputFormat?: OutputFormat;
 }
 
 export async function resizeVideo(
   sourceUrl: string,
-  { resizingType, width, height, outputFormat = "mp4" }: ResizeParams,
+  {
+    resizingType,
+    width,
+    height,
+    framerate,
+    trim,
+    outputFormat = "mp4",
+  }: ResizeParams,
 ): Promise<Readable> {
   if (width <= 0 && height <= 0) {
     throw new Error("At least one of width or height must be specified");
@@ -65,6 +74,8 @@ export async function resizeVideo(
     width,
     height,
     gpu,
+    framerate,
+    trim,
     outputFormat,
   });
 
@@ -103,6 +114,8 @@ function buildFfmpegArgs({
   width,
   height,
   gpu,
+  framerate,
+  trim,
   outputFormat = "mp4",
 }: FfmpegArgsParams): string[] {
   const args = ["-hide_banner", "-y"];
@@ -113,8 +126,18 @@ function buildFfmpegArgs({
 
   args.push("-i", sourceUrl);
 
+  // Trim: limit output duration
+  if (trim !== undefined) {
+    args.push("-t", String(trim));
+  }
+
   const filter = buildScaleFilter({ resizingType, width, height, gpu });
   args.push("-vf", filter);
+
+  // Framerate
+  if (framerate !== undefined) {
+    args.push("-r", String(framerate));
+  }
 
   if (outputFormat === "webm") {
     args.push("-c:v", "libvpx-vp9");

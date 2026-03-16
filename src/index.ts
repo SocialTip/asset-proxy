@@ -66,6 +66,8 @@ async function handleRequest(req: express.Request, res: express.Response) {
       resizingType: parsed.resize.type,
       width: parsed.resize.width,
       height: parsed.resize.height,
+      framerate: parsed.framerate,
+      trim: parsed.trim,
       outputFormat: parsed.outputFormat,
     });
 

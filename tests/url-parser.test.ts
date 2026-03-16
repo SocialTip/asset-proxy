@@ -39,6 +39,61 @@ describe("parseProcessingUrl", () => {
     expect(result.resize).toEqual({ type: "fill", width: 480, height: 360 });
   });
 
+  it("parses framerate option", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/framerate:30/plain/https://example.com/video.mp4",
+    );
+    expect(result.framerate).toBe(30);
+  });
+
+  it("parses framerate shorthand (fr)", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/fr:24/plain/https://example.com/video.mp4",
+    );
+    expect(result.framerate).toBe(24);
+  });
+
+  it("parses trim option", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/trim:10/plain/https://example.com/video.mp4",
+    );
+    expect(result.trim).toBe(10);
+  });
+
+  it("parses trim shorthand (tr)", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/tr:5.5/plain/https://example.com/video.mp4",
+    );
+    expect(result.trim).toBe(5.5);
+  });
+
+  it("parses all options together", () => {
+    const result = parseProcessingUrl(
+      "/rs:fill:480:360/fr:30/tr:10/plain/https://example.com/video.mp4@webm",
+    );
+    expect(result.resize).toEqual({ type: "fill", width: 480, height: 360 });
+    expect(result.framerate).toBe(30);
+    expect(result.trim).toBe(10);
+    expect(result.outputFormat).toBe("webm");
+    expect(result.sourceUrl).toBe("https://example.com/video.mp4");
+  });
+
+  it("rejects invalid framerate", () => {
+    expect(() =>
+      parseProcessingUrl(
+        "/resize:fill:480:360/fr:0/plain/https://example.com/video.mp4",
+      ),
+    ).toThrow("Invalid framerate");
+  });
+
+  it("rejects invalid trim", () => {
+    expect(() =>
+      parseProcessingUrl(
+        "/resize:fill:480:360/tr:-5/plain/https://example.com/video.mp4",
+      ),
+    ).toThrow("Invalid trim duration");
+  });
+
   it("parses @webm output format", () => {
     const result = parseProcessingUrl(
       "/resize:fill:480:360/plain/https://example.com/video.mp4@webm",
