@@ -1,0 +1,17 @@
+services:
+  st-assets:
+    build:
+      context: .
+      target: base
+    environment:
+      - SKIP_GPU=1
+      - SOURCE_URL_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    ports:
+      - "8080:8080"
+    depends_on:
+      - file-server
+
+  file-server:
+    image: nginx:alpine
+    volumes:
+      - ./tests/fixtures:/usr/share/nginx/html:ro
