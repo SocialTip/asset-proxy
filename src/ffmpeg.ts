@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import { env } from "./env.js";
-import type { ResizingType } from "./url-parser.js";
+import type { OutputFormat, ResizingType } from "./url-parser.js";
 
 const gpuReady: Promise<boolean> = env.SKIP_GPU
   ? Promise.resolve(false)
@@ -46,18 +46,26 @@ interface ResizeParams {
   resizingType: ResizingType;
   width: number;
   height: number;
+  outputFormat?: OutputFormat;
 }
 
 export async function resizeVideo(
   sourceUrl: string,
-  { resizingType, width, height }: ResizeParams,
+  { resizingType, width, height, outputFormat = "mp4" }: ResizeParams,
 ): Promise<Readable> {
   if (width <= 0 && height <= 0) {
     throw new Error("At least one of width or height must be specified");
   }
 
   const gpu = await gpuReady;
-  const args = buildFfmpegArgs({ sourceUrl, resizingType, width, height, gpu });
+  const args = buildFfmpegArgs({
+    sourceUrl,
+    resizingType,
+    width,
+    height,
+    gpu,
+    outputFormat,
+  });
 
   const proc = spawn("ffmpeg", args);
 
@@ -91,6 +99,7 @@ function buildFfmpegArgs({
   width,
   height,
   gpu,
+  outputFormat = "mp4",
 }: FfmpegArgsParams): string[] {
   const args = ["-hide_banner", "-y"];
 
@@ -103,15 +112,20 @@ function buildFfmpegArgs({
   const filter = buildScaleFilter({ resizingType, width, height, gpu });
   args.push("-vf", filter);
 
-  if (gpu) {
-    args.push("-c:v", "h264_nvenc", "-preset", "p4", "-tune", "hq");
+  if (outputFormat === "webm") {
+    args.push("-c:v", "libvpx-vp9");
+    args.push("-c:a", "libopus");
+    args.push("-f", "webm", "pipe:1");
   } else {
-    args.push("-c:v", "libx264", "-preset", "fast");
+    if (gpu) {
+      args.push("-c:v", "h264_nvenc", "-preset", "p4", "-tune", "hq");
+    } else {
+      args.push("-c:v", "libx264", "-preset", "fast");
+    }
+    args.push("-c:a", "copy");
+    args.push("-movflags", "frag_keyframe+empty_moov+faststart");
+    args.push("-f", "mp4", "pipe:1");
   }
-
-  args.push("-c:a", "copy");
-  args.push("-movflags", "frag_keyframe+empty_moov+faststart");
-  args.push("-f", "mp4", "pipe:1");
 
   return args;
 }

@@ -15,9 +15,12 @@ async function handleResize(req: express.Request, res: express.Response) {
       resizingType: parsed.resize.type,
       width: parsed.resize.width,
       height: parsed.resize.height,
+      outputFormat: parsed.outputFormat,
     });
 
-    res.set("Content-Type", "video/mp4");
+    const contentType =
+      parsed.outputFormat === "webm" ? "video/webm" : "video/mp4";
+    res.set("Content-Type", contentType);
     res.set("Cache-Control", "public, max-age=31536000, immutable");
     result.pipe(res);
 

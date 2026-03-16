@@ -26,6 +26,7 @@ describe("parseProcessingUrl", () => {
 
     expect(result.sourceUrl).toBe("https://example.com/video.mp4");
     expect(result.resize).toEqual({ type: "fill", width: 480, height: 360 });
+    expect(result.outputFormat).toBe("mp4");
   });
 
   it("parses an encrypted source URL", () => {
@@ -36,5 +37,28 @@ describe("parseProcessingUrl", () => {
 
     expect(result.sourceUrl).toBe(original);
     expect(result.resize).toEqual({ type: "fill", width: 480, height: 360 });
+  });
+
+  it("parses @webm output format", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/plain/https://example.com/video.mp4@webm",
+    );
+    expect(result.outputFormat).toBe("webm");
+    expect(result.sourceUrl).toBe("https://example.com/video.mp4");
+  });
+
+  it("parses @mp4 output format explicitly", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/plain/https://example.com/video.mov@mp4",
+    );
+    expect(result.outputFormat).toBe("mp4");
+    expect(result.sourceUrl).toBe("https://example.com/video.mov");
+  });
+
+  it("defaults to mp4 when no format suffix", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/plain/https://example.com/video.mp4",
+    );
+    expect(result.outputFormat).toBe("mp4");
   });
 });

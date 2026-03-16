@@ -1,12 +1,12 @@
-# st-assets
+# assets-proxy
 
 A video processing service with an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses ffmpeg with optional NVIDIA GPU acceleration.
 
 ## URL format
 
 ```
-/<signature>/<options>/plain/<source_url>
-/<signature>/<options>/enc/<encrypted_source_url>
+/<signature>/<options>/plain/<source_url>[@<format>]
+/<signature>/<options>/enc/<encrypted_source_url>[@<format>]
 ```
 
 The signature segment is always required structurally. When `SIGNING_KEY` and `SIGNING_SALT` are not set, any value is accepted (e.g. `_`). When they are set, the signature is validated as described below.
@@ -36,6 +36,13 @@ The signature segment is always required structurally. When `SIGNING_KEY` and `S
 | `auto`      | Uses `fill` when orientations match, otherwise `fit`           |
 
 The shorthand `rs` is also accepted (e.g. `rs:fill:480:360`).
+
+### Output format
+
+Append `@mp4` or `@webm` to the source URL to choose the output container format. Default is `mp4`.
+
+- **`mp4`** — H.264 video, audio copied through
+- **`webm`** — VP9 video, Opus audio
 
 ### Encrypted source URLs
 

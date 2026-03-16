@@ -16,19 +16,23 @@ const VALID_RESIZE_TYPES = new Set<string>([
   "auto",
 ]);
 
+export type OutputFormat = "mp4" | "webm";
+
 export interface ParsedUrl {
   resize: ResizeOptions;
   sourceUrl: string;
+  outputFormat: OutputFormat;
 }
 
 /**
  * Parses an imgproxy-format processing path (after signature has been stripped).
  *
  * Supported formats:
- *   /resize:<type>:<width>:<height>/plain/<source_url>
- *   /resize:<type>:<width>:<height>/enc/<encrypted_source_url>
+ *   /resize:<type>:<width>:<height>/plain/<source_url>[@<format>]
+ *   /resize:<type>:<width>:<height>/enc/<encrypted_source_url>[@<format>]
  *
  * Shorthand "rs" is also accepted.
+ * Output format suffix: @mp4 (default), @webm.
  */
 export function parseProcessingUrl(path: string): ParsedUrl {
   const withoutPrefix = path.replace(/^\//, "");
@@ -58,13 +62,21 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     throw new Error("Missing source URL");
   }
 
+  // Parse output format suffix from the source URL
+  let outputFormat: OutputFormat = "mp4";
+  const formatMatch = sourceUrl.match(/@(mp4|webm)$/);
+  if (formatMatch) {
+    outputFormat = formatMatch[1] as OutputFormat;
+    sourceUrl = sourceUrl.slice(0, -formatMatch[0].length);
+  }
+
   if (encrypted) {
     sourceUrl = decryptSourceUrl(sourceUrl);
   }
 
   const resize = parseResizeOption(optionsPart);
 
-  return { resize, sourceUrl };
+  return { resize, sourceUrl, outputFormat };
 }
 
 function parseResizeOption(optionsStr: string): ResizeOptions {
