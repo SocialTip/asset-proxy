@@ -1,11 +1,11 @@
 import { Storage } from "@google-cloud/storage";
 import express from "express";
 import { env } from "./env.js";
-import { gpuReady, resizeVideo } from "./ffmpeg.js";
+import { gpuReady, processVideo } from "./ffmpeg.js";
 import { logger } from "./logger.js";
 import { processImage } from "./sharp.js";
 import { verifySignature } from "./signature.js";
-import { isImageUrl, parseProcessingUrl } from "./url-parser.js";
+import { isImageUrl, isVideoUrl, parseProcessingUrl } from "./url-parser.js";
 
 const CONTENT_TYPES: Record<string, string> = {
   mp4: "video/mp4",
@@ -83,19 +83,8 @@ async function handleRequest(req: express.Request, res: express.Response) {
       );
       res.set("Cache-Control", env.CACHE_CONTROL);
       res.send(buffer);
-    } else {
-      if (!parsed.resize) {
-        throw new Error("Resize options are required for video processing");
-      }
-
-      const result = await resizeVideo(sourceUrl, {
-        resizingType: parsed.resize.type,
-        width: parsed.resize.width,
-        height: parsed.resize.height,
-        framerate: parsed.framerate,
-        trim: parsed.trim,
-        outputFormat: parsed.outputFormat,
-      });
+    } else if (isVideoUrl(parsed)) {
+      const result = await processVideo(sourceUrl, parsed);
 
       res.set(
         "Content-Type",

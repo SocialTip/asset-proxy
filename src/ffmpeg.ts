@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
-import type { OutputFormat, ResizingType } from "./url-parser.js";
+import type { OutputFormat, ResizingType, VideoUrl } from "./url-parser.js";
 
 export const gpuReady: Promise<boolean> = env.SKIP_GPU
   ? Promise.resolve(false)
@@ -52,7 +52,24 @@ interface ResizeParams {
   outputFormat?: OutputFormat;
 }
 
-export async function resizeVideo(
+export async function processVideo(
+  sourceUrl: string,
+  parsed: VideoUrl,
+): Promise<Readable> {
+  if (!parsed.resize) {
+    throw new Error("Resize options are required for video processing");
+  }
+  return resizeVideo(sourceUrl, {
+    resizingType: parsed.resize.type,
+    width: parsed.resize.width,
+    height: parsed.resize.height,
+    framerate: parsed.framerate,
+    trim: parsed.trim,
+    outputFormat: parsed.outputFormat,
+  });
+}
+
+async function resizeVideo(
   sourceUrl: string,
   {
     resizingType,
