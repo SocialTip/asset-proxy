@@ -6,6 +6,11 @@ import { logger } from "./logger.js";
 import { verifySignature } from "./signature.js";
 import { parseProcessingUrl } from "./url-parser.js";
 
+const CONTENT_TYPES: Record<string, string> = {
+  mp4: "video/mp4",
+  webm: "video/webm",
+};
+
 const gcs = new Storage();
 
 export const app = express();
@@ -58,6 +63,7 @@ async function handleRequest(req: express.Request, res: express.Response) {
 
     assertOriginAllowed(parsed.sourceUrl);
 
+    // Resolve gs:// URLs to signed HTTP URLs
     const sourceUrl = parsed.sourceUrl.startsWith("gs://")
       ? await resolveGcsUrl(parsed.sourceUrl)
       : parsed.sourceUrl;
@@ -71,10 +77,8 @@ async function handleRequest(req: express.Request, res: express.Response) {
       outputFormat: parsed.outputFormat,
     });
 
-    const contentType =
-      parsed.outputFormat === "webm" ? "video/webm" : "video/mp4";
-    res.set("Content-Type", contentType);
-    res.set("Cache-Control", "public, max-age=31536000, immutable");
+    res.set("Content-Type", CONTENT_TYPES[parsed.outputFormat] || "video/mp4");
+    res.set("Cache-Control", env.CACHE_CONTROL);
     result.pipe(res);
 
     result.on("error", (err) => {

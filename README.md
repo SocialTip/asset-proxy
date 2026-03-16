@@ -15,17 +15,15 @@ The signature segment is always required structurally. When `SIGNING_KEY` and `S
 
 ```
 /_/resize:fill:480:360/plain/https://example.com/my-video.mp4
+/_/resize:fill:480:360/fr:30/tr:10/plain/https://example.com/my-video.mp4@webm
 /oKfUtW34Dvo.../resize:fill:480:360/enc/dGhpcyBpcyBhIGJhc2U2NC...
 ```
 
-**Examples:**
+### Processing options
 
-```
-/insecure/resize:fill:480:360/plain/https://example.com/my-video.mp4
-/oKfUtW34Dvo.../resize:fill:480:360/enc/dGhpcyBpcyBhIGJhc2U2NC...
-```
+Options are path segments between the signature and the source URL.
 
-### Resize types
+#### Resize — `resize:<type>:<width>:<height>` (shorthand `rs`)
 
 | Type        | Behaviour                                                      |
 | ----------- | -------------------------------------------------------------- |
@@ -35,13 +33,11 @@ The signature segment is always required structurally. When `SIGNING_KEY` and `S
 | `force`     | Stretch to exact dimensions, ignoring aspect ratio             |
 | `auto`      | Uses `fill` when orientations match, otherwise `fit`           |
 
-The shorthand `rs` is also accepted (e.g. `rs:fill:480:360`).
-
-### Framerate — `framerate:<fps>` (shorthand `fr`)
+#### Framerate — `framerate:<fps>` (shorthand `fr`)
 
 Sets the output framerate. Example: `fr:30`.
 
-### Trim — `trim:<seconds>` (shorthand `tr`)
+#### Trim — `trim:<seconds>` (shorthand `tr`)
 
 Limits output duration to the given number of seconds. Example: `tr:10`.
 
@@ -52,7 +48,19 @@ Append `@mp4` or `@webm` to the source URL to choose the output container format
 - **`mp4`** — H.264 video, audio copied through
 - **`webm`** — VP9 video, Opus audio
 
-### Encrypted source URLs
+### Source URLs
+
+#### Plain HTTP(S) URLs
+
+Use the `/plain/` prefix: `/plain/https://example.com/video.mp4`
+
+#### Google Cloud Storage (`gs://`)
+
+Use `gs://` URLs directly: `/plain/gs://my-bucket/path/to/video.mp4`
+
+Authenticated via Application Default Credentials. A temporary signed URL is generated for ffmpeg.
+
+#### Encrypted source URLs
 
 Source URLs can be encrypted using AES-256-CBC, following the [imgproxy encrypted source URL format](https://docs.imgproxy.net/usage/encrypting_source_url):
 
@@ -72,7 +80,7 @@ URLs can be signed with HMAC-SHA256, following the [imgproxy URL signing format]
 2. Compute HMAC-SHA256 of: `salt + path`
 3. Encode the digest with URL-safe Base64
 
-When `SIGNING_KEY` and `SIGNING_SALT` are set, all requests must be signed. The `/insecure/` prefix is always accepted as a bypass.
+When `SIGNING_KEY` and `SIGNING_SALT` are not set, the signature segment is still required but any value is accepted.
 
 ## Development
 
