@@ -5,7 +5,7 @@ import { resizeVideo } from "./ffmpeg.js";
 
 const app = express();
 
-app.get("/insecure/*", async (req, res) => {
+app.get("/insecure/{*rest}", async (req, res) => {
   try {
     const parsed = parseProcessingUrl(req.path);
 

@@ -1,0 +1,16 @@
+services:
+  st-assets:
+    build:
+      context: .
+      target: base
+    environment:
+      - SKIP_GPU=1
+    ports:
+      - "8080:8080"
+    depends_on:
+      - file-server
+
+  file-server:
+    image: nginx:alpine
+    volumes:
+      - ./tests/fixtures:/usr/share/nginx/html:ro
