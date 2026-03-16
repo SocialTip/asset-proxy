@@ -1,5 +1,4 @@
 import { createCipheriv, randomBytes } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
 
 const TEST_KEY_HEX =
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
