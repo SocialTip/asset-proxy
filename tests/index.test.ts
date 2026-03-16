@@ -7,6 +7,7 @@ vi.hoisted(() => {
 });
 
 vi.mock("../src/ffmpeg.js");
+vi.mock("../src/sharp.js");
 vi.mock("@google-cloud/storage", () => ({ Storage: vi.fn() }));
 
 const { app } = await import("../src/index.js");

@@ -1,6 +1,6 @@
 # assets-proxy
 
-A video processing service with an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses ffmpeg with optional NVIDIA GPU acceleration.
+An image and video processing service with an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses sharp for images and ffmpeg (with optional NVIDIA GPU acceleration) for video.
 
 ## URL format
 
@@ -16,12 +16,15 @@ The signature segment is always required structurally. When `SIGNING_KEY` and `S
 ```
 /_/resize:fill:480:360/plain/https://example.com/my-video.mp4
 /_/resize:fill:480:360/fr:30/tr:10/plain/https://example.com/my-video.mp4@webm
+/_/w:300/q:80/plain/https://example.com/photo.jpg@webp
 /oKfUtW34Dvo.../resize:fill:480:360/enc/dGhpcyBpcyBhIGJhc2U2NC...
 ```
 
+The service automatically detects whether to use image or video processing based on the output format suffix and source URL extension.
+
 ### Processing options
 
-Options are path segments between the signature and the source URL.
+Options are path segments between the signature and the source URL. Compatible with the [imgproxy processing API](https://docs.imgproxy.net/usage/processing).
 
 #### Resize — `resize:<type>:<width>:<height>` (shorthand `rs`)
 
@@ -33,20 +36,82 @@ Options are path segments between the signature and the source URL.
 | `force`     | Stretch to exact dimensions, ignoring aspect ratio             |
 | `auto`      | Uses `fill` when orientations match, otherwise `fit`           |
 
-#### Framerate — `framerate:<fps>` (shorthand `fr`)
+#### Size — `size:<width>:<height>` (shorthand `s`)
+
+Shorthand for setting width and height without specifying resize type (defaults to `fit`).
+
+#### Width / Height — `width:<w>` (`w`) / `height:<h>` (`h`)
+
+Set dimensions individually. When used without a `resize` segment, defaults to `fit`.
+
+#### Enlarge — `enlarge:1` (shorthand `el`)
+
+Allow upscaling when the image is smaller than the target dimensions. Off by default.
+
+#### Crop — `crop:<width>:<height>:<gravity>` (shorthand `c`)
+
+Extract a region before resizing. Values less than 1 are treated as relative to source dimensions.
+
+#### Gravity — `gravity:<type>` (shorthand `g`)
+
+Anchor point for resize and crop: `no`, `so`, `ea`, `we`, `noea`, `nowe`, `soea`, `sowe`, `ce`.
+
+#### Quality — `quality:<1-100>` (shorthand `q`)
+
+Output quality for lossy formats (JPEG, WebP, AVIF).
+
+#### Blur — `blur:<sigma>` (shorthand `bl`)
+
+Gaussian blur. Example: `bl:5`.
+
+#### Sharpen — `sharpen:<sigma>` (shorthand `sh`)
+
+Sharpening. Example: `sh:1.5`.
+
+#### Rotate — `rotate:<angle>` (shorthand `rot`)
+
+Rotate by 0, 90, 180, or 270 degrees.
+
+#### Auto Rotate — `auto_rotate:1` (shorthand `ar`)
+
+Rotate based on EXIF orientation data. Enabled by default.
+
+#### Background — `background:<hex>` or `background:<R>:<G>:<B>` (shorthand `bg`)
+
+Background colour for padding and alpha flattening. Example: `bg:ff0000` or `bg:255:0:0`.
+
+#### Padding — `padding:<top>:<right>:<bottom>:<left>` (shorthand `pd`)
+
+Extend the canvas. A single value applies uniform padding: `pd:10`.
+
+#### Strip Metadata — `strip_metadata:1` (shorthand `sm`)
+
+Remove EXIF and other metadata from the output.
+
+#### Format — `format:<extension>` (shorthand `f`)
+
+Alternative to the `@suffix` for specifying output format.
+
+#### Framerate — `framerate:<fps>` (shorthand `fr`) — video only
 
 Sets the output framerate. Example: `fr:30`.
 
-#### Trim — `trim:<seconds>` (shorthand `tr`)
+#### Trim — `trim:<seconds>` (shorthand `tr`) — video only
 
 Limits output duration to the given number of seconds. Example: `tr:10`.
 
 ### Output format
 
-Append `@mp4` or `@webm` to the source URL to choose the output container format. Default is `mp4`.
+Append a format suffix to the source URL to choose the output format:
+
+**Video:** `@mp4` (default for video), `@webm`
 
 - **`mp4`** — H.264 video, audio copied through
 - **`webm`** — VP9 video, Opus audio
+
+**Image:** `@jpg`, `@png`, `@webp`, `@avif`, `@gif`
+
+- Default is `jpg` when the source is an image
 
 ### Source URLs
 

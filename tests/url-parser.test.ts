@@ -16,7 +16,8 @@ function encrypt(url: string): string {
 }
 
 vi.stubEnv("SOURCE_URL_ENCRYPTION_KEY", TEST_KEY_HEX);
-const { parseProcessingUrl } = await import("../src/url-parser.js");
+const { parseProcessingUrl, inferMediaType } =
+  await import("../src/url-parser.js");
 
 describe("parseProcessingUrl", () => {
   it("parses a plain source URL", () => {
@@ -67,7 +68,7 @@ describe("parseProcessingUrl", () => {
     expect(result.trim).toBe(5.5);
   });
 
-  it("parses all options together", () => {
+  it("parses all video options together", () => {
     const result = parseProcessingUrl(
       "/rs:fill:480:360/fr:30/tr:10/plain/https://example.com/video.mp4@webm",
     );
@@ -110,10 +111,207 @@ describe("parseProcessingUrl", () => {
     expect(result.sourceUrl).toBe("https://example.com/video.mov");
   });
 
-  it("defaults to mp4 when no format suffix", () => {
+  it("defaults to mp4 when no format suffix on video", () => {
     const result = parseProcessingUrl(
       "/resize:fill:480:360/plain/https://example.com/video.mp4",
     );
     expect(result.outputFormat).toBe("mp4");
+  });
+});
+
+describe("image processing options", () => {
+  it("parses standalone width and height", () => {
+    const result = parseProcessingUrl(
+      "/w:300/h:200/plain/https://example.com/photo.jpg",
+    );
+    expect(result.resize).toEqual({ type: "fit", width: 300, height: 200 });
+  });
+
+  it("parses size shorthand", () => {
+    const result = parseProcessingUrl(
+      "/s:400:300/plain/https://example.com/photo.jpg",
+    );
+    expect(result.resize).toEqual({ type: "fit", width: 400, height: 300 });
+  });
+
+  it("parses quality option", () => {
+    const result = parseProcessingUrl(
+      "/w:300/q:85/plain/https://example.com/photo.jpg",
+    );
+    expect(result.quality).toBe(85);
+  });
+
+  it("parses blur option", () => {
+    const result = parseProcessingUrl(
+      "/w:300/bl:5/plain/https://example.com/photo.jpg",
+    );
+    expect(result.blur).toBe(5);
+  });
+
+  it("parses sharpen option", () => {
+    const result = parseProcessingUrl(
+      "/w:300/sh:1.5/plain/https://example.com/photo.jpg",
+    );
+    expect(result.sharpen).toBe(1.5);
+  });
+
+  it("parses rotate option", () => {
+    const result = parseProcessingUrl(
+      "/w:300/rot:90/plain/https://example.com/photo.jpg",
+    );
+    expect(result.rotate).toBe(90);
+  });
+
+  it("parses auto_rotate option", () => {
+    const result = parseProcessingUrl(
+      "/w:300/ar:1/plain/https://example.com/photo.jpg",
+    );
+    expect(result.autoRotate).toBe(true);
+  });
+
+  it("parses background as hex", () => {
+    const result = parseProcessingUrl(
+      "/w:300/bg:ff0000/plain/https://example.com/photo.jpg",
+    );
+    expect(result.background).toEqual({ r: 255, g: 0, b: 0 });
+  });
+
+  it("parses background as RGB", () => {
+    const result = parseProcessingUrl(
+      "/w:300/bg:128:64:32/plain/https://example.com/photo.jpg",
+    );
+    expect(result.background).toEqual({ r: 128, g: 64, b: 32 });
+  });
+
+  it("parses padding option", () => {
+    const result = parseProcessingUrl(
+      "/w:300/pd:10:20:10:20/plain/https://example.com/photo.jpg",
+    );
+    expect(result.padding).toEqual({
+      top: 10,
+      right: 20,
+      bottom: 10,
+      left: 20,
+    });
+  });
+
+  it("parses uniform padding", () => {
+    const result = parseProcessingUrl(
+      "/w:300/pd:15/plain/https://example.com/photo.jpg",
+    );
+    expect(result.padding).toEqual({
+      top: 15,
+      right: 15,
+      bottom: 15,
+      left: 15,
+    });
+  });
+
+  it("parses strip_metadata option", () => {
+    const result = parseProcessingUrl(
+      "/w:300/sm:1/plain/https://example.com/photo.jpg",
+    );
+    expect(result.stripMetadata).toBe(true);
+  });
+
+  it("parses enlarge option", () => {
+    const result = parseProcessingUrl(
+      "/w:300/el:1/plain/https://example.com/photo.jpg",
+    );
+    expect(result.enlarge).toBe(true);
+  });
+
+  it("parses crop option", () => {
+    const result = parseProcessingUrl(
+      "/c:200:100:ce/w:300/plain/https://example.com/photo.jpg",
+    );
+    expect(result.crop).toEqual({ width: 200, height: 100, gravity: "ce" });
+  });
+
+  it("parses gravity option", () => {
+    const result = parseProcessingUrl(
+      "/w:300/g:no/plain/https://example.com/photo.jpg",
+    );
+    expect(result.gravity).toBe("no");
+  });
+
+  it("parses format option as override", () => {
+    const result = parseProcessingUrl(
+      "/w:300/f:webp/plain/https://example.com/photo.jpg",
+    );
+    expect(result.outputFormat).toBe("webp");
+  });
+
+  it("parses image format suffixes", () => {
+    for (const fmt of ["jpg", "png", "webp", "avif", "gif"]) {
+      const result = parseProcessingUrl(
+        `/w:300/plain/https://example.com/photo.bmp@${fmt}`,
+      );
+      expect(result.outputFormat).toBe(fmt);
+    }
+  });
+
+  it("normalises jpeg to jpg", () => {
+    const result = parseProcessingUrl(
+      "/w:300/plain/https://example.com/photo.bmp@jpeg",
+    );
+    expect(result.outputFormat).toBe("jpg");
+  });
+
+  it("defaults to jpg for image source URLs", () => {
+    const result = parseProcessingUrl(
+      "/w:300/plain/https://example.com/photo.png",
+    );
+    expect(result.outputFormat).toBe("jpg");
+  });
+
+  it("allows no resize for image pass-through", () => {
+    const result = parseProcessingUrl(
+      "/q:80/plain/https://example.com/photo.jpg",
+    );
+    expect(result.resize).toBeUndefined();
+    expect(result.quality).toBe(80);
+  });
+
+  it("parses combined image options", () => {
+    const result = parseProcessingUrl(
+      "/rs:fill:400:300/q:80/bl:2/rot:90/bg:ffffff/plain/https://example.com/photo.png@webp",
+    );
+    expect(result.resize).toEqual({ type: "fill", width: 400, height: 300 });
+    expect(result.quality).toBe(80);
+    expect(result.blur).toBe(2);
+    expect(result.rotate).toBe(90);
+    expect(result.background).toEqual({ r: 255, g: 255, b: 255 });
+    expect(result.outputFormat).toBe("webp");
+  });
+});
+
+describe("inferMediaType", () => {
+  it("returns image for image output formats", () => {
+    const result = parseProcessingUrl(
+      "/w:300/plain/https://example.com/photo.bmp@webp",
+    );
+    expect(inferMediaType(result)).toBe("image");
+  });
+
+  it("returns video for video output formats", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/plain/https://example.com/video.mp4@mp4",
+    );
+    expect(inferMediaType(result)).toBe("video");
+  });
+
+  it("returns image when source URL has image extension", () => {
+    const result = parseProcessingUrl(
+      "/w:300/plain/https://example.com/photo.png",
+    );
+    expect(inferMediaType(result)).toBe("image");
+  });
+
+  it("returns video when framerate is set", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/fr:30/plain/https://example.com/file",
+    );
+    expect(inferMediaType(result)).toBe("video");
   });
 });
