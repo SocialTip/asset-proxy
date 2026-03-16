@@ -2,6 +2,7 @@ import express from "express";
 import { env } from "./env.js";
 import { parseProcessingUrl } from "./url-parser.js";
 import { gpuReady, resizeVideo } from "./ffmpeg.js";
+import { logger } from "./logger.js";
 import { verifySignature } from "./signature.js";
 
 const app = express();
@@ -25,7 +26,7 @@ async function handleResize(req: express.Request, res: express.Response) {
     result.pipe(res);
 
     result.on("error", (err) => {
-      console.error("ffmpeg stream error:", err.message);
+      logger.error("ffmpeg stream error", { error: err.message });
       if (!res.headersSent) {
         res.status(500).send("Processing failed");
       }
@@ -33,7 +34,7 @@ async function handleResize(req: express.Request, res: express.Response) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const status = message === "Invalid signature" ? 403 : 400;
-    console.error("Request error:", message);
+    logger.error("Request error", { error: message, status });
     if (!res.headersSent) {
       res.status(status).send(message);
     }
@@ -50,7 +51,7 @@ app.get("/health", (_req, res) => {
 async function start() {
   await gpuReady;
   app.listen(env.PORT, () => {
-    console.log(`asset-proxy listening on :${env.PORT}`);
+    logger.info(`asset-proxy listening on :${env.PORT}`);
   });
 }
 

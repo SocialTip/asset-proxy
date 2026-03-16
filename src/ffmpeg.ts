@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import { env } from "./env.js";
+import { logger } from "./logger.js";
 import type { OutputFormat, ResizingType } from "./url-parser.js";
 
 export const gpuReady: Promise<boolean> = env.SKIP_GPU
@@ -24,10 +25,10 @@ export const gpuReady: Promise<boolean> = env.SKIP_GPU
       proc.on("close", (code) => {
         const available = code === 0;
         if (available) {
-          console.log("GPU acceleration: enabled (NVENC)");
+          logger.info("GPU acceleration: enabled (NVENC)");
           resolve(true);
         } else {
-          console.error(
+          logger.error(
             "GPU acceleration is required but not available. Set env.SKIP_GPU=1 to use CPU encoding.",
           );
           process.exit(1);
@@ -35,7 +36,7 @@ export const gpuReady: Promise<boolean> = env.SKIP_GPU
       });
 
       proc.on("error", () => {
-        console.error(
+        logger.error(
           "GPU acceleration is required but ffmpeg could not be started. Set env.SKIP_GPU=1 to use CPU encoding.",
         );
         process.exit(1);
@@ -77,7 +78,10 @@ export async function resizeVideo(
 
   proc.on("close", (code) => {
     if (code !== 0) {
-      console.error(`ffmpeg exited with code ${code}: ${stderr.slice(-2000)}`);
+      logger.error("ffmpeg exited with non-zero code", {
+        code,
+        stderr: stderr.slice(-2000),
+      });
     }
   });
 
