@@ -68,6 +68,7 @@ async function handleRequest(req: express.Request, res: express.Response) {
       ? await resolveGcsUrl(parsed.sourceUrl)
       : parsed.sourceUrl;
 
+    // TODO: detect source type and route to image processing pipeline when applicable
     const result = await resizeVideo(sourceUrl, {
       resizingType: parsed.resize.type,
       width: parsed.resize.width,

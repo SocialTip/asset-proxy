@@ -115,15 +115,15 @@ The Docker image supports GPU-accelerated rendering on GCP Cloud Run.
 
 All configuration is via environment variables.
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `PORT` | `8080` | Server listen port |
-| `SKIP_GPU` | — | Set to skip GPU acceleration and fall back to CPU encoding |
-| `SIGNING_KEY` | — | Hex-encoded HMAC-SHA256 key for URL signature verification |
-| `SIGNING_SALT` | — | Hex-encoded salt for URL signing. Required when `SIGNING_KEY` is set |
-| `ALLOWED_ORIGINS` | — | Comma-separated list of allowed source URL origins (e.g. `https://cdn.example.com,https://storage.googleapis.com`). When unset, all origins are permitted |
-| `CACHE_CONTROL` | `public, max-age=31536000, immutable` | Value of the `Cache-Control` response header |
-| `SOURCE_URL_ENCRYPTION_KEY` | — | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs |
+| Variable                    | Default                               | Description                                                                                                                                               |
+| --------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                      | `8080`                                | Server listen port                                                                                                                                        |
+| `SKIP_GPU`                  | —                                     | Set to skip GPU acceleration and fall back to CPU encoding                                                                                                |
+| `SIGNING_KEY`               | —                                     | Hex-encoded HMAC-SHA256 key for URL signature verification                                                                                                |
+| `SIGNING_SALT`              | —                                     | Hex-encoded salt for URL signing. Required when `SIGNING_KEY` is set                                                                                      |
+| `ALLOWED_ORIGINS`           | —                                     | Comma-separated list of allowed source URL origins (e.g. `https://cdn.example.com,https://storage.googleapis.com`). When unset, all origins are permitted |
+| `CACHE_CONTROL`             | `public, max-age=31536000, immutable` | Value of the `Cache-Control` response header                                                                                                              |
+| `SOURCE_URL_ENCRYPTION_KEY` | —                                     | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs                                                                |
 
 Environment variables are validated at startup. The process exits immediately with a descriptive error if validation fails.
 
@@ -133,9 +133,13 @@ The service sets a `Cache-Control` header on responses, configurable via `CACHE_
 
 ## Node.js Client
 
+<!-- TODO: implement as a separate package (e.g. packages/client) -->
+
 A standalone Node.js package for generating asset proxy URLs. Handles URL signing, source URL encryption, and processing option serialisation. This package has no dependency on the service itself and can be used in any Node.js environment.
 
 ## Astro Image Service Plugin
+
+<!-- TODO: implement as a separate package (e.g. packages/astro) on top of the Node.js client -->
 
 An `astro-integration` package provides an [Astro image service](https://docs.astro.build/en/reference/image-service-reference/) backed by this proxy, built on top of the Node.js client. The plugin:
 
