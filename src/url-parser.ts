@@ -22,16 +22,16 @@ export interface ParsedUrl {
 }
 
 /**
- * Parses an imgproxy-format URL path.
+ * Parses an imgproxy-format processing path (after signature has been stripped).
  *
  * Supported formats:
- *   /insecure/resize:<type>:<width>:<height>/plain/<source_url>
- *   /insecure/resize:<type>:<width>:<height>/enc/<encrypted_source_url>
+ *   /resize:<type>:<width>:<height>/plain/<source_url>
+ *   /resize:<type>:<width>:<height>/enc/<encrypted_source_url>
  *
  * Shorthand "rs" is also accepted.
  */
 export function parseProcessingUrl(path: string): ParsedUrl {
-  const withoutPrefix = path.replace(/^\/insecure\//, "");
+  const withoutPrefix = path.replace(/^\//, "");
 
   // Try /plain/ first, then /enc/
   const plainIdx = withoutPrefix.indexOf("/plain/");

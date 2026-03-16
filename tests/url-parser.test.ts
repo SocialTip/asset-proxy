@@ -21,7 +21,7 @@ const { parseProcessingUrl } = await import("../src/url-parser.js");
 describe("parseProcessingUrl", () => {
   it("parses a plain source URL", () => {
     const result = parseProcessingUrl(
-      "/insecure/resize:fill:480:360/plain/https://example.com/video.mp4",
+      "/resize:fill:480:360/plain/https://example.com/video.mp4",
     );
 
     expect(result.sourceUrl).toBe("https://example.com/video.mp4");
@@ -32,9 +32,7 @@ describe("parseProcessingUrl", () => {
     const original = "https://example.com/video.mp4";
     const encrypted = encrypt(original);
 
-    const result = parseProcessingUrl(
-      `/insecure/resize:fill:480:360/enc/${encrypted}`,
-    );
+    const result = parseProcessingUrl(`/resize:fill:480:360/enc/${encrypted}`);
 
     expect(result.sourceUrl).toBe(original);
     expect(result.resize).toEqual({ type: "fill", width: 480, height: 360 });
