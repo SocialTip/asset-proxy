@@ -16,7 +16,7 @@ interface VideoMeta {
 function probeVideo(filePath: string): VideoMeta {
   const raw = execSync(
     `ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate -show_entries format=duration -of json "${filePath}"`,
-    { encoding: "utf-8" },
+    { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
   );
   const parsed = JSON.parse(raw);
   const stream = parsed.streams[0];
@@ -34,6 +34,7 @@ function extractFrame(videoPath: string): Buffer {
   const framePath = join(tmp, "frame.png");
   execSync(
     `ffmpeg -hide_banner -y -i "${videoPath}" -frames:v 1 -f image2 "${framePath}"`,
+    { stdio: ["pipe", "pipe", "pipe"] },
   );
   return execSync(`cat "${framePath}"`);
 }
