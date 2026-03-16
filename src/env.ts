@@ -15,7 +15,10 @@ const envSchema = z.object({
    *  When unset, encrypted source URLs are not supported. */
   SOURCE_URL_ENCRYPTION_KEY: z
     .string()
-    .regex(/^[0-9a-fA-F]{64}$/, "Must be a 32-byte hex-encoded string (64 hex characters)")
+    .regex(
+      /^[0-9a-fA-F]{64}$/,
+      "Must be a 32-byte hex-encoded string (64 hex characters)",
+    )
     .transform((v) => Buffer.from(v, "hex"))
     .optional(),
 });

@@ -18,13 +18,13 @@ A video processing service with an [imgproxy](https://docs.imgproxy.net/usage/pr
 
 ### Resize types
 
-| Type        | Behaviour                                                        |
-| ----------- | ---------------------------------------------------------------- |
-| `fit`       | Scale to fit within the box, preserving aspect ratio (default)   |
-| `fill`      | Scale to cover the box, cropping the excess                      |
-| `fill-down` | Like `fill`, but never upscales                                  |
-| `force`     | Stretch to exact dimensions, ignoring aspect ratio               |
-| `auto`      | Uses `fill` when orientations match, otherwise `fit`             |
+| Type        | Behaviour                                                      |
+| ----------- | -------------------------------------------------------------- |
+| `fit`       | Scale to fit within the box, preserving aspect ratio (default) |
+| `fill`      | Scale to cover the box, cropping the excess                    |
+| `fill-down` | Like `fill`, but never upscales                                |
+| `force`     | Stretch to exact dimensions, ignoring aspect ratio             |
+| `auto`      | Uses `fill` when orientations match, otherwise `fit`           |
 
 The shorthand `rs` is also accepted (e.g. `rs:fill:480:360`).
 
@@ -73,11 +73,11 @@ Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud
 
 ## Environment variables
 
-| Variable   | Default | Description                                                        |
-| ---------- | ------- | ------------------------------------------------------------------ |
-| `PORT`     | `8080`  | Server listen port                                                 |
-| `SKIP_GPU` | —       | Set to `1` to fall back to CPU encoding. Without this, GPU is required and the process will fail if NVENC is not available. |
-| `SOURCE_URL_ENCRYPTION_KEY` | — | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs. When unset, encrypted URLs are not supported. |
+| Variable                    | Default | Description                                                                                                                               |
+| --------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                      | `8080`  | Server listen port                                                                                                                        |
+| `SKIP_GPU`                  | —       | Set to `1` to fall back to CPU encoding. Without this, GPU is required and the process will fail if NVENC is not available.               |
+| `SOURCE_URL_ENCRYPTION_KEY` | —       | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs. When unset, encrypted URLs are not supported. |
 
 ## Health check
 

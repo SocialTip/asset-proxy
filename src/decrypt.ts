@@ -26,7 +26,10 @@ export function decryptSourceUrl(encoded: string): string {
   const ciphertext = data.subarray(16);
 
   const decipher = createDecipheriv("aes-256-cbc", key, iv);
-  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  const decrypted = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]);
 
   return decrypted.toString("utf-8");
 }
