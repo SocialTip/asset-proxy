@@ -1,6 +1,7 @@
 import { Storage } from "@google-cloud/storage";
 import express from "express";
 import { env } from "./env.js";
+import { HTTPError } from "./error.js";
 import { gpuReady, processVideo } from "./ffmpeg.js";
 import { logger } from "./logger.js";
 import { processImage } from "./sharp.js";
@@ -27,7 +28,9 @@ function assertOriginAllowed(sourceUrl: string): void {
 
   const origin = extractOrigin(sourceUrl);
   if (!ALLOWED_ORIGINS.has(origin)) {
-    throw new Error(`Origin not allowed: ${origin}`);
+    throw new HTTPError(`Origin not allowed: ${origin}`, {
+      code: "FORBIDDEN",
+    });
   }
 }
 
@@ -44,7 +47,9 @@ async function resolveGcsUrl(gsUrl: string): Promise<string> {
   const withoutScheme = gsUrl.slice("gs://".length);
   const slashIdx = withoutScheme.indexOf("/");
   if (slashIdx === -1) {
-    throw new Error("Invalid gs:// URL: missing object path");
+    throw new HTTPError("Invalid gs:// URL: missing object path", {
+      code: "BAD_REQUEST",
+    });
   }
 
   const bucket = withoutScheme.slice(0, slashIdx);
@@ -63,59 +68,64 @@ async function resolveGcsUrl(gsUrl: string): Promise<string> {
 }
 
 async function handleRequest(req: express.Request, res: express.Response) {
-  try {
-    const pathAfterSignature = verifySignature(req.path);
-    const parsed = parseProcessingUrl(pathAfterSignature);
+  const pathAfterSignature = verifySignature(req.path);
+  const parsed = parseProcessingUrl(pathAfterSignature);
 
-    assertOriginAllowed(parsed.sourceUrl);
+  assertOriginAllowed(parsed.sourceUrl);
 
-    // Resolve gs:// URLs to signed HTTP URLs
-    const sourceUrl = parsed.sourceUrl.startsWith("gs://")
-      ? await resolveGcsUrl(parsed.sourceUrl)
-      : parsed.sourceUrl;
+  // Resolve gs:// URLs to signed HTTP URLs
+  const sourceUrl = parsed.sourceUrl.startsWith("gs://")
+    ? await resolveGcsUrl(parsed.sourceUrl)
+    : parsed.sourceUrl;
 
-    if (isImageUrl(parsed)) {
-      const buffer = await processImage(sourceUrl, parsed);
+  if (isImageUrl(parsed)) {
+    const buffer = await processImage(sourceUrl, parsed);
 
-      res.set(
-        "Content-Type",
-        CONTENT_TYPES[parsed.outputFormat] || "image/jpeg",
-      );
-      res.set("Cache-Control", env.CACHE_CONTROL);
-      res.send(buffer);
-    } else if (isVideoUrl(parsed)) {
-      const result = await processVideo(sourceUrl, parsed);
+    res.set("Content-Type", CONTENT_TYPES[parsed.outputFormat] || "image/jpeg");
+    res.set("Cache-Control", env.CACHE_CONTROL);
+    res.send(buffer);
+  } else if (isVideoUrl(parsed)) {
+    const result = await processVideo(sourceUrl, parsed);
 
-      res.set(
-        "Content-Type",
-        CONTENT_TYPES[parsed.outputFormat] || "video/mp4",
-      );
-      res.set("Cache-Control", env.CACHE_CONTROL);
-      result.pipe(res);
+    res.set("Content-Type", CONTENT_TYPES[parsed.outputFormat] || "video/mp4");
+    res.set("Cache-Control", env.CACHE_CONTROL);
+    result.pipe(res);
 
-      result.on("error", (err) => {
-        logger.error("ffmpeg stream error", { error: err.message });
-        if (!res.headersSent) {
-          res.status(500).send("Processing failed");
-        }
-      });
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    const status = message === "Invalid signature" ? 403 : 400;
-    logger.error("Request error", { error: message, status });
-    if (!res.headersSent) {
-      res.status(status).send(message);
-    }
+    result.on("error", (err) => {
+      logger.error("ffmpeg stream error", { error: err.message });
+      if (!res.headersSent) {
+        res.status(500).send("Processing failed");
+      }
+    });
   }
 }
 
-app.get("/insecure/{*rest}", handleRequest);
-app.get("/{signature}/{*rest}", handleRequest);
+app.get("/:signature/*rest", handleRequest);
 
 app.get("/health", (_req, res) => {
   res.send("ok");
 });
+
+// Error-handling middleware (4 params required for Express to recognise it)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use(
+  (
+    err: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    const status = err instanceof HTTPError ? err.status : 500;
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
+
+    logger.error("Request error", { error: message, status });
+
+    if (!res.headersSent) {
+      res.status(status).send(message);
+    }
+  },
+);
 
 async function start() {
   await gpuReady;

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
+import { HTTPError } from "./error.js";
 import type { OutputFormat, ResizingType, VideoUrl } from "./url-parser.js";
 
 export const gpuReady: Promise<boolean> = env.SKIP_GPU
@@ -57,7 +58,9 @@ export async function processVideo(
   parsed: VideoUrl,
 ): Promise<Readable> {
   if (!parsed.resize) {
-    throw new Error("Resize options are required for video processing");
+    throw new HTTPError("Resize options are required for video processing", {
+      code: "BAD_REQUEST",
+    });
   }
   return resizeVideo(sourceUrl, {
     resizingType: parsed.resize.type,
@@ -81,7 +84,9 @@ async function resizeVideo(
   }: ResizeParams,
 ): Promise<Readable> {
   if (width <= 0 && height <= 0) {
-    throw new Error("At least one of width or height must be specified");
+    throw new HTTPError("At least one of width or height must be specified", {
+      code: "BAD_REQUEST",
+    });
   }
 
   const gpu = await gpuReady;

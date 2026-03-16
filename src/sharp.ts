@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { HTTPError } from "./error.js";
 import type {
   Gravity,
   ImageFormat,
@@ -47,7 +48,9 @@ export async function processImage(
 ): Promise<Buffer> {
   const response = await fetch(sourceUrl);
   if (!response.ok) {
-    throw new Error(`Failed to fetch source image: ${response.status}`);
+    throw new HTTPError(`Failed to fetch source image: ${response.status}`, {
+      code: "BAD_GATEWAY",
+    });
   }
   const inputBuffer = Buffer.from(await response.arrayBuffer());
 
