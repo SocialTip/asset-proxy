@@ -48,5 +48,5 @@ app.get("/health", (_req, res) => {
 });
 
 app.listen(env.PORT, () => {
-  console.log(`st-assets listening on :${env.PORT}`);
+  console.log(`asset-proxy listening on :${env.PORT}`);
 });

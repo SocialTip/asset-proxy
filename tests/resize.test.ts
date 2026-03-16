@@ -23,7 +23,7 @@ function probeVideo(filePath: string): VideoMeta {
 }
 
 function extractFrame(videoPath: string): Buffer {
-  const tmp = mkdtempSync(join(tmpdir(), "st-assets-test-"));
+  const tmp = mkdtempSync(join(tmpdir(), "asset-proxy-test-"));
   const framePath = join(tmp, "frame.png");
   execSync(
     `ffmpeg -hide_banner -y -i "${videoPath}" -frames:v 1 -f image2 "${framePath}"`,
@@ -43,7 +43,7 @@ describe("video resize", () => {
     expect(buffer.length).toBeGreaterThan(0);
 
     // Write to temp file for ffprobe/ffmpeg analysis
-    const tmp = mkdtempSync(join(tmpdir(), "st-assets-test-"));
+    const tmp = mkdtempSync(join(tmpdir(), "asset-proxy-test-"));
     const videoPath = join(tmp, "output.mp4");
     writeFileSync(videoPath, buffer);
 

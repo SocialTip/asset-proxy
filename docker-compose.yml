@@ -1,5 +1,5 @@
 services:
-  st-assets:
+  asset-proxy:
     build:
       context: .
       target: base

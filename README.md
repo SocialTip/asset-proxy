@@ -80,19 +80,19 @@ yarn dev            # starts the server with hot reload on :8080
 ## Docker
 
 ```bash
-docker build -t st-assets .
+docker build -t asset-proxy .
 ```
 
 ### CPU only
 
 ```bash
-docker run -p 8080:8080 st-assets
+docker run -p 8080:8080 asset-proxy
 ```
 
 ### With GPU (NVIDIA)
 
 ```bash
-docker run --gpus all -p 8080:8080 st-assets
+docker run --gpus all -p 8080:8080 asset-proxy
 ```
 
 Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
