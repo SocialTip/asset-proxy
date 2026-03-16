@@ -1,9 +1,15 @@
 import { spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import { env } from "./env.js";
-import { logger } from "./logger.js";
 import { HTTPError } from "./error.js";
-import type { OutputFormat, ResizingType, VideoUrl } from "./url-parser.js";
+import { logger } from "./logger.js";
+import type {
+  ImageFormat,
+  ImageUrl,
+  OutputFormat,
+  ResizingType,
+  VideoUrl,
+} from "./url-parser.js";
 
 export const gpuReady: Promise<boolean> = env.SKIP_GPU
   ? Promise.resolve(false)
@@ -44,14 +50,7 @@ export const gpuReady: Promise<boolean> = env.SKIP_GPU
       });
     });
 
-interface ResizeParams {
-  resizingType: ResizingType;
-  width: number;
-  height: number;
-  framerate?: number;
-  trim?: number;
-  outputFormat?: OutputFormat;
-}
+// ── Video processing ─────────────────────────────────────────────────────────
 
 export async function processVideo(
   sourceUrl: string,
@@ -62,45 +61,62 @@ export async function processVideo(
       code: "BAD_REQUEST",
     });
   }
-  return resizeVideo(sourceUrl, {
-    resizingType: parsed.resize.type,
-    width: parsed.resize.width,
-    height: parsed.resize.height,
-    framerate: parsed.framerate,
-    trim: parsed.trim,
-    outputFormat: parsed.outputFormat,
+  return runFfmpeg(
+    buildVideoArgs(sourceUrl, {
+      resizingType: parsed.resize.type,
+      width: parsed.resize.width,
+      height: parsed.resize.height,
+      framerate: parsed.framerate,
+      trim: parsed.trim,
+      outputFormat: parsed.outputFormat,
+      gpu: await gpuReady,
+    }),
+  );
+}
+
+// ── Image processing ─────────────────────────────────────────────────────────
+
+export async function processImage(
+  sourceUrl: string,
+  parsed: ImageUrl,
+): Promise<Buffer> {
+  // AVIF muxer requires seekable output — use a temp file
+  if (parsed.outputFormat === "avif") {
+    const { mkdtempSync } = await import("node:fs");
+    const { readFile, rm } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
+    const outPath = join(dir, "output.avif");
+
+    const args = buildImageArgs(sourceUrl, parsed, outPath);
+    const stream = runFfmpeg(args);
+
+    await new Promise<void>((resolve, reject) => {
+      stream.on("end", resolve);
+      stream.on("error", reject);
+      stream.resume(); // drain stdout (will be empty since output goes to file)
+    });
+
+    const buffer = await readFile(outPath);
+    await rm(dir, { recursive: true, force: true });
+    return buffer;
+  }
+
+  const stream = runFfmpeg(buildImageArgs(sourceUrl, parsed));
+
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
   });
 }
 
-async function resizeVideo(
-  sourceUrl: string,
-  {
-    resizingType,
-    width,
-    height,
-    framerate,
-    trim,
-    outputFormat = "mp4",
-  }: ResizeParams,
-): Promise<Readable> {
-  if (width <= 0 && height <= 0) {
-    throw new HTTPError("At least one of width or height must be specified", {
-      code: "BAD_REQUEST",
-    });
-  }
+// ── Shared ffmpeg runner ─────────────────────────────────────────────────────
 
-  const gpu = await gpuReady;
-  const args = buildFfmpegArgs({
-    sourceUrl,
-    resizingType,
-    width,
-    height,
-    gpu,
-    framerate,
-    trim,
-    outputFormat,
-  });
-
+function runFfmpeg(args: string[]): Readable {
   const proc = spawn("ffmpeg", args);
 
   let stderr = "";
@@ -125,21 +141,21 @@ async function resizeVideo(
   return proc.stdout;
 }
 
-interface FfmpegArgsParams extends ResizeParams {
-  sourceUrl: string;
+// ── Video arg builder ────────────────────────────────────────────────────────
+
+interface VideoParams {
+  resizingType: ResizingType;
+  width: number;
+  height: number;
+  framerate?: number;
+  trim?: number;
+  outputFormat: OutputFormat;
   gpu: boolean;
 }
 
-function buildFfmpegArgs({
-  sourceUrl,
-  resizingType,
-  width,
-  height,
-  gpu,
-  framerate,
-  trim,
-  outputFormat = "mp4",
-}: FfmpegArgsParams): string[] {
+function buildVideoArgs(sourceUrl: string, params: VideoParams): string[] {
+  const { resizingType, width, height, gpu, framerate, trim, outputFormat } =
+    params;
   const args = ["-hide_banner", "-y"];
 
   if (gpu) {
@@ -148,7 +164,6 @@ function buildFfmpegArgs({
 
   args.push("-i", sourceUrl);
 
-  // Trim: limit output duration
   if (trim !== undefined) {
     args.push("-t", String(trim));
   }
@@ -156,7 +171,6 @@ function buildFfmpegArgs({
   const filter = buildScaleFilter({ resizingType, width, height, gpu });
   args.push("-vf", filter);
 
-  // Framerate
   if (framerate !== undefined) {
     args.push("-r", String(framerate));
   }
@@ -178,6 +192,135 @@ function buildFfmpegArgs({
 
   return args;
 }
+
+// ── Image arg builder ────────────────────────────────────────────────────────
+
+function buildImageArgs(
+  sourceUrl: string,
+  parsed: ImageUrl,
+  outputPath?: string,
+): string[] {
+  const args = ["-hide_banner", "-y", "-i", sourceUrl];
+  const filters: string[] = [];
+
+  // Crop (before resize, per imgproxy behaviour)
+  if (parsed.crop && (parsed.crop.width > 0 || parsed.crop.height > 0)) {
+    const cw = Math.round(parsed.crop.width);
+    const ch = Math.round(parsed.crop.height);
+    filters.push(`crop=${cw}:${ch}`);
+  }
+
+  // Resize
+  if (parsed.resize && (parsed.resize.width > 0 || parsed.resize.height > 0)) {
+    filters.push(
+      buildScaleFilter({
+        resizingType: parsed.resize.type,
+        width: parsed.resize.width,
+        height: parsed.resize.height,
+        gpu: false,
+      }),
+    );
+  }
+
+  // Rotate
+  if (parsed.rotate) {
+    switch (parsed.rotate) {
+      case 90:
+        filters.push("transpose=1");
+        break;
+      case 180:
+        filters.push("hflip,vflip");
+        break;
+      case 270:
+        filters.push("transpose=2");
+        break;
+    }
+  }
+
+  // Blur
+  if (parsed.blur && parsed.blur > 0) {
+    filters.push(`gblur=sigma=${parsed.blur}`);
+  }
+
+  // Sharpen
+  if (parsed.sharpen && parsed.sharpen > 0) {
+    const s = parsed.sharpen;
+    filters.push(`unsharp=5:5:${s}:5:5:0`);
+  }
+
+  // Padding with background
+  if (parsed.padding) {
+    const { top, right, bottom, left } = parsed.padding;
+    const colour = parsed.background ? rgbToHex(parsed.background) : "black@0";
+    // pad adds to dimensions: new_w = in_w + left + right, new_h = in_h + top + bottom
+    filters.push(
+      `pad=iw+${left + right}:ih+${top + bottom}:${left}:${top}:${colour}`,
+    );
+  }
+
+  // AVIF (YUV420) requires even dimensions
+  if (parsed.outputFormat === "avif") {
+    filters.push("pad=ceil(iw/2)*2:ceil(ih/2)*2");
+  }
+
+  if (filters.length > 0) {
+    args.push("-vf", filters.join(","));
+  }
+
+  // Strip metadata
+  if (parsed.stripMetadata !== false) {
+    args.push("-map_metadata", "-1");
+  }
+
+  // Output format and codec
+  args.push("-frames:v", "1");
+  appendImageOutputArgs(args, parsed.outputFormat, parsed.quality);
+  args.push(outputPath ?? "pipe:1");
+
+  return args;
+}
+
+function appendImageOutputArgs(
+  args: string[],
+  format: ImageFormat,
+  quality?: number,
+): void {
+  switch (format) {
+    case "jpg":
+      args.push("-f", "image2", "-c:v", "mjpeg");
+      if (quality !== undefined) {
+        // ffmpeg mjpeg uses qscale 2-31 (2=best), map 1-100 → 31-2
+        args.push("-q:v", String(Math.round(31 - (quality / 100) * 29)));
+      }
+      break;
+    case "png":
+      args.push("-f", "image2", "-c:v", "png");
+      break;
+    case "webp":
+      args.push("-f", "webp", "-c:v", "libwebp");
+      if (quality !== undefined) {
+        args.push("-quality", String(quality));
+      }
+      break;
+    case "avif":
+      args.push("-f", "avif", "-c:v", "libaom-av1", "-still-picture", "1");
+      if (quality !== undefined) {
+        // libaom-av1 uses crf 0-63 (0=best), map 1-100 → 63-0
+        args.push("-crf", String(Math.round(63 - (quality / 100) * 63)));
+      }
+      break;
+    case "gif":
+      args.push("-f", "gif");
+      break;
+  }
+}
+
+function rgbToHex(c: { r: number; g: number; b: number }): string {
+  const hex = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${hex(c.r)}${hex(c.g)}${hex(c.b)}`;
+}
+
+// ── Shared scale filter builder ──────────────────────────────────────────────
 
 interface ScaleFilterParams {
   resizingType: ResizingType;
