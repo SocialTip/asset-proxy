@@ -16,7 +16,7 @@ function encrypt(url: string): string {
 }
 
 vi.stubEnv("SOURCE_URL_ENCRYPTION_KEY", TEST_KEY_HEX);
-const { parseProcessingUrl, inferMediaType } =
+const { parseProcessingUrl, isImageUrl, isVideoUrl } =
   await import("../src/url-parser.js");
 
 describe("parseProcessingUrl", () => {
@@ -84,7 +84,7 @@ describe("parseProcessingUrl", () => {
       parseProcessingUrl(
         "/resize:fill:480:360/fr:0/plain/https://example.com/video.mp4",
       ),
-    ).toThrow("Invalid framerate");
+    ).toThrow();
   });
 
   it("rejects invalid trim", () => {
@@ -92,7 +92,20 @@ describe("parseProcessingUrl", () => {
       parseProcessingUrl(
         "/resize:fill:480:360/tr:-5/plain/https://example.com/video.mp4",
       ),
-    ).toThrow("Invalid trim duration");
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [ZodError: [
+        {
+          "origin": "number",
+          "code": "too_small",
+          "minimum": 0,
+          "inclusive": false,
+          "path": [
+            "trim"
+          ],
+          "message": "Too small: expected number to be >0"
+        }
+      ]]
+    `);
   });
 
   it("parses @webm output format", () => {
@@ -286,32 +299,34 @@ describe("image processing options", () => {
   });
 });
 
-describe("inferMediaType", () => {
+describe("isImageUrl / isVideoUrl", () => {
   it("returns image for image output formats", () => {
     const result = parseProcessingUrl(
       "/w:300/plain/https://example.com/photo.bmp@webp",
     );
-    expect(inferMediaType(result)).toBe("image");
+    expect(isImageUrl(result)).toBe(true);
+    expect(isVideoUrl(result)).toBe(false);
   });
 
   it("returns video for video output formats", () => {
     const result = parseProcessingUrl(
       "/resize:fill:480:360/plain/https://example.com/video.mp4@mp4",
     );
-    expect(inferMediaType(result)).toBe("video");
+    expect(isVideoUrl(result)).toBe(true);
+    expect(isImageUrl(result)).toBe(false);
   });
 
   it("returns image when source URL has image extension", () => {
     const result = parseProcessingUrl(
       "/w:300/plain/https://example.com/photo.png",
     );
-    expect(inferMediaType(result)).toBe("image");
+    expect(isImageUrl(result)).toBe(true);
   });
 
   it("returns video when framerate is set", () => {
     const result = parseProcessingUrl(
       "/resize:fill:480:360/fr:30/plain/https://example.com/file",
     );
-    expect(inferMediaType(result)).toBe("video");
+    expect(isVideoUrl(result)).toBe(true);
   });
 });

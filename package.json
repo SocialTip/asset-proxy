@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:up": "docker compose up -d --build --wait",
+    "test:restart": "docker compose down && docker compose up -d --build --wait",
     "test:down": "docker compose down",
     "lint": "eslint .",
     "format": "prettier --write .",

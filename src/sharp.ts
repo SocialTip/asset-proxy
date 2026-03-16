@@ -2,7 +2,7 @@ import sharp from "sharp";
 import type {
   Gravity,
   ImageFormat,
-  ParsedUrl,
+  ImageUrl,
   ResizingType,
 } from "./url-parser.js";
 
@@ -43,7 +43,7 @@ function mapGravity(
 
 export async function processImage(
   sourceUrl: string,
-  parsed: ParsedUrl,
+  parsed: ImageUrl,
 ): Promise<Buffer> {
   const response = await fetch(sourceUrl);
   if (!response.ok) {
@@ -52,7 +52,7 @@ export async function processImage(
   const inputBuffer = Buffer.from(await response.arrayBuffer());
 
   let pipeline = sharp(inputBuffer);
-  const outputFormat = parsed.outputFormat as ImageFormat;
+  const outputFormat = parsed.outputFormat;
 
   // Auto-rotate based on EXIF (default on, unless explicitly disabled)
   if (parsed.autoRotate !== false) {

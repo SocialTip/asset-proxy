@@ -5,7 +5,7 @@ import { gpuReady, resizeVideo } from "./ffmpeg.js";
 import { logger } from "./logger.js";
 import { processImage } from "./sharp.js";
 import { verifySignature } from "./signature.js";
-import { inferMediaType, parseProcessingUrl } from "./url-parser.js";
+import { isImageUrl, parseProcessingUrl } from "./url-parser.js";
 
 const CONTENT_TYPES: Record<string, string> = {
   mp4: "video/mp4",
@@ -74,9 +74,7 @@ async function handleRequest(req: express.Request, res: express.Response) {
       ? await resolveGcsUrl(parsed.sourceUrl)
       : parsed.sourceUrl;
 
-    const mediaType = inferMediaType(parsed);
-
-    if (mediaType === "image") {
+    if (isImageUrl(parsed)) {
       const buffer = await processImage(sourceUrl, parsed);
 
       res.set(
