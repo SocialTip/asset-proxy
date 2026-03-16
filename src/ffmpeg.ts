@@ -1,43 +1,46 @@
 import { spawn } from "node:child_process";
 import type { Readable } from "node:stream";
+import { env } from "./env.js";
 import type { ResizingType } from "./url-parser.js";
 
-const USE_GPU = process.env.FFMPEG_GPU !== "0";
+const gpuReady: Promise<boolean> = env.SKIP_GPU
+  ? Promise.resolve(false)
+  : new Promise((resolve) => {
+      const proc = spawn("ffmpeg", [
+        "-hide_banner",
+        "-hwaccel",
+        "cuda",
+        "-f",
+        "lavfi",
+        "-i",
+        "nullsrc=s=16x16:d=0.1",
+        "-c:v",
+        "h264_nvenc",
+        "-f",
+        "null",
+        "-",
+      ]);
 
-let gpuAvailable: boolean | undefined;
+      proc.on("close", (code) => {
+        const available = code === 0;
+        if (available) {
+          console.log("GPU acceleration: enabled (NVENC)");
+          resolve(true);
+        } else {
+          console.error(
+            "GPU acceleration is required but not available. Set env.SKIP_GPU=1 to use CPU encoding.",
+          );
+          process.exit(1);
+        }
+      });
 
-async function isGpuAvailable(): Promise<boolean> {
-  if (gpuAvailable !== undefined) return gpuAvailable;
-
-  return new Promise((resolve) => {
-    const proc = spawn("ffmpeg", [
-      "-hide_banner",
-      "-hwaccel",
-      "cuda",
-      "-f",
-      "lavfi",
-      "-i",
-      "nullsrc=s=16x16:d=0.1",
-      "-c:v",
-      "h264_nvenc",
-      "-f",
-      "null",
-      "-",
-    ]);
-
-    proc.on("close", (code) => {
-      gpuAvailable = code === 0;
-      if (gpuAvailable) console.log("GPU acceleration: enabled (NVENC)");
-      else console.log("GPU acceleration: not available, using CPU");
-      resolve(gpuAvailable);
+      proc.on("error", () => {
+        console.error(
+          "GPU acceleration is required but ffmpeg could not be started. Set env.SKIP_GPU=1 to use CPU encoding.",
+        );
+        process.exit(1);
+      });
     });
-
-    proc.on("error", () => {
-      gpuAvailable = false;
-      resolve(false);
-    });
-  });
-}
 
 interface ResizeParams {
   resizingType: ResizingType;
@@ -53,7 +56,7 @@ export async function resizeVideo(
     throw new Error("At least one of width or height must be specified");
   }
 
-  const gpu = USE_GPU && (await isGpuAvailable());
+  const gpu = await gpuReady;
   const args = buildFfmpegArgs({ sourceUrl, resizingType, width, height, gpu });
 
   const proc = spawn("ffmpeg", args);

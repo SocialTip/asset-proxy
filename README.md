@@ -59,10 +59,10 @@ Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud
 
 ## Environment variables
 
-| Variable     | Default | Description                              |
-| ------------ | ------- | ---------------------------------------- |
-| `PORT`       | `8080`  | Server listen port                       |
-| `FFMPEG_GPU` | `1`     | Set to `0` to disable GPU probe/use      |
+| Variable   | Default | Description                                                        |
+| ---------- | ------- | ------------------------------------------------------------------ |
+| `PORT`     | `8080`  | Server listen port                                                 |
+| `SKIP_GPU` | —       | Set to `1` to fall back to CPU encoding. Without this, GPU is required and the process will fail if NVENC is not available. |
 
 ## Health check
 

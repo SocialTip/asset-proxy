@@ -1,9 +1,9 @@
 import express from "express";
+import { env } from "./env.js";
 import { parseProcessingUrl } from "./url-parser.js";
 import { resizeVideo } from "./ffmpeg.js";
 
 const app = express();
-const PORT = process.env.PORT || 8080;
 
 app.get("/insecure/*", async (req, res) => {
   try {
@@ -38,6 +38,6 @@ app.get("/health", (_req, res) => {
   res.send("ok");
 });
 
-app.listen(PORT, () => {
-  console.log(`st-assets listening on :${PORT}`);
+app.listen(env.PORT, () => {
+  console.log(`st-assets listening on :${env.PORT}`);
 });
