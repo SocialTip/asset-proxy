@@ -1,18 +1,68 @@
+import { Storage } from "@google-cloud/storage";
 import express from "express";
 import { env } from "./env.js";
-import { parseProcessingUrl } from "./url-parser.js";
 import { gpuReady, resizeVideo } from "./ffmpeg.js";
 import { logger } from "./logger.js";
 import { verifySignature } from "./signature.js";
+import { parseProcessingUrl } from "./url-parser.js";
 
-const app = express();
+const gcs = new Storage();
 
-async function handleResize(req: express.Request, res: express.Response) {
+export const app = express();
+
+function assertOriginAllowed(sourceUrl: string): void {
+  const { ALLOWED_ORIGINS } = env;
+  if (!ALLOWED_ORIGINS) return;
+
+  const origin = extractOrigin(sourceUrl);
+  if (!ALLOWED_ORIGINS.has(origin)) {
+    throw new Error(`Origin not allowed: ${origin}`);
+  }
+}
+
+function extractOrigin(sourceUrl: string): string {
+  if (sourceUrl.startsWith("gs://")) {
+    const bucket = sourceUrl.slice("gs://".length).split("/")[0];
+    return `gs://${bucket}`;
+  }
+  const url = new URL(sourceUrl);
+  return url.origin;
+}
+
+async function resolveGcsUrl(gsUrl: string): Promise<string> {
+  const withoutScheme = gsUrl.slice("gs://".length);
+  const slashIdx = withoutScheme.indexOf("/");
+  if (slashIdx === -1) {
+    throw new Error("Invalid gs:// URL: missing object path");
+  }
+
+  const bucket = withoutScheme.slice(0, slashIdx);
+  const objectPath = withoutScheme.slice(slashIdx + 1);
+
+  const [signedUrl] = await gcs
+    .bucket(bucket)
+    .file(objectPath)
+    .getSignedUrl({
+      version: "v4",
+      action: "read",
+      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+    });
+
+  return signedUrl;
+}
+
+async function handleRequest(req: express.Request, res: express.Response) {
   try {
     const pathAfterSignature = verifySignature(req.path);
     const parsed = parseProcessingUrl(pathAfterSignature);
 
-    const result = await resizeVideo(parsed.sourceUrl, {
+    assertOriginAllowed(parsed.sourceUrl);
+
+    const sourceUrl = parsed.sourceUrl.startsWith("gs://")
+      ? await resolveGcsUrl(parsed.sourceUrl)
+      : parsed.sourceUrl;
+
+    const result = await resizeVideo(sourceUrl, {
       resizingType: parsed.resize.type,
       width: parsed.resize.width,
       height: parsed.resize.height,
@@ -41,8 +91,8 @@ async function handleResize(req: express.Request, res: express.Response) {
   }
 }
 
-app.get("/insecure/{*rest}", handleResize);
-app.get("/{signature}/{*rest}", handleResize);
+app.get("/insecure/{*rest}", handleRequest);
+app.get("/{signature}/{*rest}", handleRequest);
 
 app.get("/health", (_req, res) => {
   res.send("ok");

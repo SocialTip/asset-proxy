@@ -97,15 +97,33 @@ docker run --gpus all -p 8080:8080 asset-proxy
 
 Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
 
+## Testing
+
+Unit tests run directly:
+
+```bash
+yarn test
+```
+
+Integration tests require a running service via Docker Compose. This starts the asset-proxy container (CPU mode) alongside an nginx file server that serves test fixtures:
+
+```bash
+yarn test:up      # start containers (builds image, waits for healthy)
+yarn test         # run all tests (unit + integration)
+yarn test:down    # stop and remove containers
+```
+
 ## Environment variables
 
-| Variable                    | Default | Description                                                                                                                               |
-| --------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                      | `8080`  | Server listen port                                                                                                                        |
-| `SKIP_GPU`                  | —       | Set to `1` to fall back to CPU encoding. Without this, GPU is required and the process will fail if NVENC is not available.               |
-| `SIGNING_KEY`               | —       | Hex-encoded HMAC-SHA256 key for URL signature verification. When set, all requests must be signed.                                        |
-| `SIGNING_SALT`              | —       | Hex-encoded salt prepended to the path before HMAC signing. Required when `SIGNING_KEY` is set.                                           |
-| `SOURCE_URL_ENCRYPTION_KEY` | —       | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs. When unset, encrypted URLs are not supported. |
+| Variable                    | Default                               | Description                                                                                                                               |
+| --------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                      | `8080`                                | Server listen port                                                                                                                        |
+| `SKIP_GPU`                  | —                                     | Set to `1` to fall back to CPU encoding. Without this, GPU is required and the process will fail if NVENC is not available.               |
+| `SIGNING_KEY`               | —                                     | Hex-encoded HMAC-SHA256 key for URL signature verification. Must be set together with `SIGNING_SALT`.                                     |
+| `SIGNING_SALT`              | —                                     | Hex-encoded salt prepended to the path before HMAC signing. Must be set together with `SIGNING_KEY`.                                      |
+| `SOURCE_URL_ENCRYPTION_KEY` | —                                     | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs. When unset, encrypted URLs are not supported. |
+| `ALLOWED_ORIGINS`           | —                                     | Comma-separated list of allowed source URL origins (e.g. `https://example.com,gs://my-bucket`). When unset, all origins are permitted.    |
+| `CACHE_CONTROL`             | `public, max-age=31536000, immutable` | Cache-Control header value for successful responses.                                                                                      |
 
 ## Health check
 
