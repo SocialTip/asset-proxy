@@ -2,9 +2,11 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SERVICE_URL, waitForService } from "./setup.js";
 
-const SERVICE_URL = process.env.SERVICE_URL ?? "http://localhost:8080";
 const SOURCE_URL = "http://file-server/test-video.mp4";
+
+beforeAll(waitForService);
 
 interface VideoMeta {
   width: number;
