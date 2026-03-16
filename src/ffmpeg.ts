@@ -3,7 +3,7 @@ import type { Readable } from "node:stream";
 import { env } from "./env.js";
 import type { OutputFormat, ResizingType } from "./url-parser.js";
 
-const gpuReady: Promise<boolean> = env.SKIP_GPU
+export const gpuReady: Promise<boolean> = env.SKIP_GPU
   ? Promise.resolve(false)
   : new Promise((resolve) => {
       const proc = spawn("ffmpeg", [
