@@ -1,0 +1,142 @@
+# assets-proxy
+
+A video processing service with an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses ffmpeg with optional NVIDIA GPU acceleration.
+
+## URL format
+
+```
+/<signature>/<options>/plain/<source_url>[@<format>]
+/<signature>/<options>/enc/<encrypted_source_url>[@<format>]
+```
+
+The signature segment is always required structurally. When `SIGNING_KEY` and `SIGNING_SALT` are not set, any value is accepted (e.g. `_`). When they are set, the signature is validated as described below.
+
+**Examples:**
+
+```
+/_/resize:fill:480:360/plain/https://example.com/my-video.mp4
+/_/resize:fill:480:360/fr:30/tr:10/plain/https://example.com/my-video.mp4@webm
+/oKfUtW34Dvo.../resize:fill:480:360/enc/dGhpcyBpcyBhIGJhc2U2NC...
+```
+
+### Processing options
+
+Options are path segments between the signature and the source URL.
+
+#### Resize — `resize:<type>:<width>:<height>` (shorthand `rs`)
+
+| Type        | Behaviour                                                      |
+| ----------- | -------------------------------------------------------------- |
+| `fit`       | Scale to fit within the box, preserving aspect ratio (default) |
+| `fill`      | Scale to cover the box, cropping the excess                    |
+| `fill-down` | Like `fill`, but never upscales                                |
+| `force`     | Stretch to exact dimensions, ignoring aspect ratio             |
+| `auto`      | Uses `fill` when orientations match, otherwise `fit`           |
+
+#### Framerate — `framerate:<fps>` (shorthand `fr`)
+
+Sets the output framerate. Example: `fr:30`.
+
+#### Trim — `trim:<seconds>` (shorthand `tr`)
+
+Limits output duration to the given number of seconds. Example: `tr:10`.
+
+### Output format
+
+Append `@mp4` or `@webm` to the source URL to choose the output container format. Default is `mp4`.
+
+- **`mp4`** — H.264 video, audio copied through
+- **`webm`** — VP9 video, Opus audio
+
+### Source URLs
+
+#### Plain HTTP(S) URLs
+
+Use the `/plain/` prefix: `/plain/https://example.com/video.mp4`
+
+#### Google Cloud Storage (`gs://`)
+
+Use `gs://` URLs directly: `/plain/gs://my-bucket/path/to/video.mp4`
+
+Authenticated via Application Default Credentials. A temporary signed URL is generated for ffmpeg.
+
+#### Encrypted source URLs
+
+Source URLs can be encrypted using AES-256-CBC, following the [imgproxy encrypted source URL format](https://docs.imgproxy.net/usage/encrypting_source_url):
+
+1. Pad the source URL with PKCS#7 to 16-byte alignment
+2. Generate a 16-byte IV
+3. Encrypt with AES-256-CBC using the key and IV
+4. Concatenate: `IV + ciphertext`
+5. Encode with URL-safe Base64
+
+Use the `/enc/` prefix instead of `/plain/` in the URL path. Requires `SOURCE_URL_ENCRYPTION_KEY` to be set.
+
+### URL signing
+
+URLs can be signed with HMAC-SHA256, following the [imgproxy URL signing format](https://docs.imgproxy.net/usage/signing_url). The signature is the first path segment and covers everything after it:
+
+1. Take the path after the signature (e.g. `/resize:fill:480:360/plain/https://example.com/video.mp4`)
+2. Compute HMAC-SHA256 of: `salt + path`
+3. Encode the digest with URL-safe Base64
+
+When `SIGNING_KEY` and `SIGNING_SALT` are not set, the signature segment is still required but any value is accepted.
+
+## Development
+
+Requires [asdf](https://asdf-vm.com/) with the `nodejs` plugin.
+
+```bash
+asdf install        # installs Node version from .tool-versions
+corepack enable     # enables yarn
+yarn install
+yarn dev            # starts the server with hot reload on :8080
+```
+
+## Docker
+
+```bash
+docker build -t asset-proxy .
+```
+
+### CPU only
+
+```bash
+docker run -p 8080:8080 asset-proxy
+```
+
+### With GPU (NVIDIA)
+
+```bash
+docker run --gpus all -p 8080:8080 asset-proxy
+```
+
+Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
+
+## Testing
+
+Integration tests require a running service via Docker Compose. This starts the asset-proxy container (CPU mode) alongside an nginx file server that serves test fixtures:
+
+```bash
+yarn test:up      # start containers (builds image, waits for healthy)
+yarn test         # run all tests (unit + integration)
+yarn test:down    # stop and remove containers
+```
+
+## Environment variables
+
+| Variable                    | Default                               | Description                                                                                                                               |
+| --------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                      | `8080`                                | Server listen port                                                                                                                        |
+| `SKIP_GPU`                  | —                                     | Set to `1` to fall back to CPU encoding. Without this, GPU is required and the process will fail if NVENC is not available.               |
+| `SIGNING_KEY`               | —                                     | Hex-encoded HMAC-SHA256 key for URL signature verification. Must be set together with `SIGNING_SALT`.                                     |
+| `SIGNING_SALT`              | —                                     | Hex-encoded salt prepended to the path before HMAC signing. Must be set together with `SIGNING_KEY`.                                      |
+| `SOURCE_URL_ENCRYPTION_KEY` | —                                     | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs. When unset, encrypted URLs are not supported. |
+| `ALLOWED_ORIGINS`           | —                                     | Comma-separated list of allowed source URL origins (e.g. `https://example.com,gs://my-bucket`). When unset, all origins are permitted.    |
+| `CACHE_CONTROL`             | `public, max-age=31536000, immutable` | Cache-Control header value for successful responses.                                                                                      |
+
+## Health check
+
+```
+GET /health → 200 ok
+```

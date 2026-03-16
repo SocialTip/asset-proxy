@@ -1,0 +1,2 @@
+# Keep in sync with NODE_VERSION in Dockerfile
+nodejs 24.13.0
