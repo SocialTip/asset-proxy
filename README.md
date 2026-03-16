@@ -115,12 +115,6 @@ Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud
 
 ## Testing
 
-Unit tests run directly:
-
-```bash
-yarn test
-```
-
 Integration tests require a running service via Docker Compose. This starts the asset-proxy container (CPU mode) alongside an nginx file server that serves test fixtures:
 
 ```bash

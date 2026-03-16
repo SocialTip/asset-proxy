@@ -2,28 +2,10 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const SERVICE_URL = process.env.SERVICE_URL ?? "http://localhost:8080";
 const SOURCE_URL = "http://file-server/test-video.mp4";
-
-async function waitForServer(url: string, timeoutMs = 30_000) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const res = await fetch(`${url}/health`);
-      if (res.ok) return;
-    } catch {
-      // not ready yet
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(
-    `Server at ${url} did not become ready within ${timeoutMs}ms`,
-  );
-}
-
-beforeAll(() => waitForServer(SERVICE_URL));
 
 interface VideoMeta {
   width: number;
