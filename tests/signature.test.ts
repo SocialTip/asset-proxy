@@ -13,26 +13,20 @@ function sign(path: string): string {
   return hmac.digest("base64url");
 }
 
-vi.stubEnv("SIGNING_KEY", TEST_KEY_HEX);
-vi.stubEnv("SIGNING_SALT", TEST_SALT_HEX);
+vi.hoisted(() => {
+  process.env.SIGNING_KEY = "736563726574";
+  process.env.SIGNING_SALT = "68656c6c6f";
+});
+
 const { verifySignature } = await import("../src/signature.js");
 
-describe("verifySignature", () => {
+describe("verifySignature (keys configured)", () => {
   it("accepts a valid signature", () => {
     const path = "/resize:fill:480:360/plain/https://example.com/video.mp4";
     const signature = sign(path);
 
     const result = verifySignature(`/${signature}${path}`);
     expect(result).toBe(path);
-  });
-
-  it("accepts /insecure/ prefix", () => {
-    const result = verifySignature(
-      "/insecure/resize:fill:480:360/plain/https://example.com/video.mp4",
-    );
-    expect(result).toBe(
-      "/resize:fill:480:360/plain/https://example.com/video.mp4",
-    );
   });
 
   it("rejects an invalid signature", () => {

@@ -5,11 +5,18 @@ A video processing service with an [imgproxy](https://docs.imgproxy.net/usage/pr
 ## URL format
 
 ```
-/<signature>/resize:<type>:<width>:<height>/plain/<source_url>
-/<signature>/resize:<type>:<width>:<height>/enc/<encrypted_source_url>
+/<signature>/<options>/plain/<source_url>
+/<signature>/<options>/enc/<encrypted_source_url>
 ```
 
-Use `insecure` as the signature to skip verification (only when `SIGNING_KEY` is not set).
+The signature segment is always required structurally. When `SIGNING_KEY` and `SIGNING_SALT` are not set, any value is accepted (e.g. `_`). When they are set, the signature is validated as described below.
+
+**Examples:**
+
+```
+/_/resize:fill:480:360/plain/https://example.com/my-video.mp4
+/oKfUtW34Dvo.../resize:fill:480:360/enc/dGhpcyBpcyBhIGJhc2U2NC...
+```
 
 **Examples:**
 

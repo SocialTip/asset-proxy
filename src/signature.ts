@@ -4,10 +4,10 @@ import { env } from "./env.js";
 /**
  * Verifies the HMAC-SHA256 signature of a request path.
  *
- * The signature is the first path segment. It is a URL-safe Base64 encoded
- * HMAC-SHA256 digest of: salt + rest_of_path (everything after the signature segment).
- *
- * When SIGNING_KEY is not configured, only `/insecure/` prefixed paths are accepted.
+ * The signature is the first path segment. When SIGNING_KEY / SIGNING_SALT are
+ * not configured the segment is structurally required but any value is accepted.
+ * When keys are configured the signature is validated as a URL-safe Base64
+ * encoded HMAC-SHA256 digest of: salt + rest_of_path.
  */
 export function verifySignature(path: string): string {
   // Strip leading slash, split into [signature, ...rest]
@@ -20,16 +20,11 @@ export function verifySignature(path: string): string {
   const signature = withoutLeadingSlash.slice(0, slashIdx);
   const restOfPath = withoutLeadingSlash.slice(slashIdx); // includes leading /
 
-  if (signature === "insecure") {
-    return restOfPath;
-  }
-
   const { SIGNING_KEY, SIGNING_SALT } = env;
-  if (!SIGNING_KEY) {
-    throw new Error("Signed URLs are not supported: SIGNING_KEY is not set");
-  }
-  if (!SIGNING_SALT) {
-    throw new Error("Signed URLs are not supported: SIGNING_SALT is not set");
+
+  // When keys are not configured, accept any signature value
+  if (!SIGNING_KEY || !SIGNING_SALT) {
+    return restOfPath;
   }
 
   const expected = sign(restOfPath, SIGNING_KEY, SIGNING_SALT);
