@@ -1,3 +1,5 @@
+import { decryptSourceUrl } from "./decrypt.js";
+
 export interface ResizeOptions {
   type: ResizingType;
   width: number;
@@ -22,27 +24,42 @@ export interface ParsedUrl {
 /**
  * Parses an imgproxy-format URL path.
  *
- * Expected format:
+ * Supported formats:
  *   /insecure/resize:<type>:<width>:<height>/plain/<source_url>
+ *   /insecure/resize:<type>:<width>:<height>/enc/<encrypted_source_url>
  *
- * Shorthand "rs" is also accepted:
- *   /insecure/rs:<type>:<width>:<height>/plain/<source_url>
+ * Shorthand "rs" is also accepted.
  */
 export function parseProcessingUrl(path: string): ParsedUrl {
   const withoutPrefix = path.replace(/^\/insecure\//, "");
 
+  // Try /plain/ first, then /enc/
   const plainIdx = withoutPrefix.indexOf("/plain/");
-  if (plainIdx === -1) {
+  const encIdx = withoutPrefix.indexOf("/enc/");
+
+  let optionsPart: string;
+  let sourceUrl: string;
+  let encrypted = false;
+
+  if (plainIdx !== -1) {
+    optionsPart = withoutPrefix.slice(0, plainIdx);
+    sourceUrl = withoutPrefix.slice(plainIdx + "/plain/".length);
+  } else if (encIdx !== -1) {
+    optionsPart = withoutPrefix.slice(0, encIdx);
+    sourceUrl = withoutPrefix.slice(encIdx + "/enc/".length);
+    encrypted = true;
+  } else {
     throw new Error(
-      "Unsupported URL format: only /plain/ source URLs are supported",
+      "Unsupported URL format: expected /plain/ or /enc/ source URL",
     );
   }
 
-  const optionsPart = withoutPrefix.slice(0, plainIdx);
-  const sourceUrl = withoutPrefix.slice(plainIdx + "/plain/".length);
-
   if (!sourceUrl) {
     throw new Error("Missing source URL");
+  }
+
+  if (encrypted) {
+    sourceUrl = decryptSourceUrl(sourceUrl);
   }
 
   const resize = parseResizeOption(optionsPart);

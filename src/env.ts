@@ -10,6 +10,14 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => !!v),
+
+  /** 32-byte hex-encoded AES-256-CBC key for decrypting encrypted source URLs (/enc/ format).
+   *  When unset, encrypted source URLs are not supported. */
+  SOURCE_URL_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, "Must be a 32-byte hex-encoded string (64 hex characters)")
+    .transform((v) => Buffer.from(v, "hex"))
+    .optional(),
 });
 
 export const env = envSchema.parse(process.env);

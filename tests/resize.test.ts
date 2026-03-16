@@ -56,4 +56,5 @@ describe("video resize", () => {
     const frame = extractFrame(videoPath);
     expect(frame).toMatchImageSnapshot();
   });
+
 });
