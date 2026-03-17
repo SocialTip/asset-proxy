@@ -148,7 +148,7 @@ function runFfmpeg(args: string[]): Readable {
 
 // ── Video arg builder ────────────────────────────────────────────────────────
 
-interface VideoParams {
+export interface VideoParams {
   resizingType: ResizingType;
   resizingAlgorithm?: ResizingAlgorithm;
   cropAspectRatio?: number;
@@ -160,7 +160,11 @@ interface VideoParams {
   gpu: boolean;
 }
 
-function buildVideoArgs(sourceUrl: string, params: VideoParams): string[] {
+/** @internal Exported for testing only. */
+export function buildVideoArgs(
+  sourceUrl: string,
+  params: VideoParams,
+): string[] {
   const {
     resizingType,
     resizingAlgorithm,
