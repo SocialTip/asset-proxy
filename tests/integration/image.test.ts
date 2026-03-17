@@ -65,6 +65,57 @@ describe("image resize", () => {
   });
 });
 
+describe("resize options", () => {
+  it("standalone resizing type (t:force)", async () => {
+    const buffer = await fetchImage("/t:force/w:80/h:120");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(80);
+    expect(meta.height).toBe(120);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("zoom doubles dimensions", async () => {
+    const buffer = await fetchImage("/rs:fit:50:50/z:2");
+    const meta = await sharp(buffer).metadata();
+    // 50x50 * zoom 2 = fit into 100x100 → 100x75
+    expect(meta.width).toBe(100);
+    expect(meta.height).toBe(75);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("dpr scales dimensions and padding", async () => {
+    const buffer = await fetchImage("/rs:fit:50:50/pd:5/dpr:2");
+    const meta = await sharp(buffer).metadata();
+    // 50x50 * dpr 2 = fit into 100x100 → 100x75, padding 10 each → 120x95
+    expect(meta.width).toBe(120);
+    expect(meta.height).toBe(95);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("min-width enforces minimum output width", async () => {
+    const buffer = await fetchImage("/w:50/mw:100");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBeGreaterThanOrEqual(100);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("min-height enforces minimum output height", async () => {
+    const buffer = await fetchImage("/h:30/mh:75");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.height).toBeGreaterThanOrEqual(75);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("extend pads to fill target dimensions", async () => {
+    // Source is 200x150, fit into 200x200 gives 200x150, extend pads to 200x200
+    const buffer = await fetchImage("/rs:fit:200:200/ex:1/bg:0000ff");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(200);
+    expect(meta.height).toBe(200);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+});
+
 describe("image transforms", () => {
   it("rotates 90 degrees", async () => {
     const buffer = await fetchImage("/w:100/rot:90");
