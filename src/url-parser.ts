@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { decryptSourceUrl } from "./decrypt.js";
+import { HTTPError } from "./error.js";
 
 // ── Zod enums & primitives ───────────────────────────────────────────────────
 
@@ -73,6 +74,14 @@ const zBackground = z.string().transform((v) => {
   };
 });
 
+/** Schema for options that are recognised but not yet implemented. */
+const notImplemented = (name: string) =>
+  z.string().transform(() => {
+    throw new HTTPError(`Option '${name}' is not implemented`, {
+      code: "BAD_REQUEST",
+    });
+  });
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const VIDEO_FORMATS = new Set<string>(["mp4", "webm"]);
@@ -83,9 +92,15 @@ const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|avif|gif|svg|bmp|tiff?)$/i;
 const SHORTHANDS: Record<string, string> = {
   rs: "resize",
   s: "size",
+  t: "resizing_type",
   w: "width",
   h: "height",
+  mw: "min_width",
+  mh: "min_height",
+  z: "zoom",
   el: "enlarge",
+  ex: "extend",
+  exar: "extend_aspect_ratio",
   c: "crop",
   g: "gravity",
   q: "quality",
@@ -99,6 +114,9 @@ const SHORTHANDS: Record<string, string> = {
   f: "format",
   fr: "framerate",
   tr: "trim",
+  // Pro shorthands (parsed but rejected)
+  ra: "resizing_algorithm",
+  car: "crop_aspect_ratio",
 };
 
 // ── Options schema (raw segments → canonical options) ────────────────────────
@@ -125,9 +143,44 @@ const rawOptionsSchema = z
       })
       .optional(),
 
+    resizing_type: resizingType.optional(),
     width: z.coerce.number().int().optional(),
     height: z.coerce.number().int().optional(),
+    min_width: z.coerce.number().int().optional(),
+    min_height: z.coerce.number().int().optional(),
+
+    zoom: z
+      .string()
+      .transform((v) => {
+        const parts = v.split(":");
+        const x = parseFloat(parts[0]) || 1;
+        const y = parts[1] !== undefined ? parseFloat(parts[1]) || 1 : x;
+        return { x, y };
+      })
+      .optional(),
+
+    dpr: z.coerce.number().positive().optional(),
     enlarge: zBool.optional(),
+
+    extend: z
+      .string()
+      .transform((v) => {
+        const parts = v.split(":");
+        const enabled =
+          parts[0] === "1" || parts[0] === "t" || parts[0] === "true";
+        return { enabled, gravity: gravity.safeParse(parts[1]).data ?? "ce" };
+      })
+      .optional(),
+
+    extend_aspect_ratio: z
+      .string()
+      .transform((v) => {
+        const parts = v.split(":");
+        const enabled =
+          parts[0] === "1" || parts[0] === "t" || parts[0] === "true";
+        return { enabled, gravity: gravity.safeParse(parts[1]).data ?? "ce" };
+      })
+      .optional(),
 
     crop: z
       .string()
@@ -171,23 +224,68 @@ const rawOptionsSchema = z
 
     framerate: zPositiveFloat.optional(),
     trim: zPositiveFloat.optional(),
+
+    // Pro options — recognised but not implemented
+    resizing_algorithm: notImplemented("resizing_algorithm").optional(),
+    crop_aspect_ratio: notImplemented("crop_aspect_ratio").optional(),
   })
   .passthrough();
 
 const optionsSchema = rawOptionsSchema.transform((data) => {
+  let resizeType = data.resize?.type ?? data.resizing_type ?? ("fit" as const);
   let resize = data.resize;
   const w = data.size?.width ?? data.width;
   const h = data.size?.height ?? data.height;
 
+  // Apply standalone resizing_type
+  if (data.resizing_type && resize) {
+    resize = { ...resize, type: data.resizing_type };
+    resizeType = data.resizing_type;
+  }
+
   if (!resize && (w || h)) {
-    resize = { type: "fit" as const, width: w ?? 0, height: h ?? 0 };
+    resize = { type: resizeType, width: w ?? 0, height: h ?? 0 };
   } else if (resize) {
     if (w) resize.width = w;
     if (h) resize.height = h;
   }
 
+  // Apply zoom multiplier to dimensions
+  if (data.zoom && resize) {
+    resize = {
+      ...resize,
+      width: resize.width ? Math.round(resize.width * data.zoom.x) : 0,
+      height: resize.height ? Math.round(resize.height * data.zoom.y) : 0,
+    };
+  }
+
+  // Apply dpr multiplier to dimensions and padding
+  let padding = data.padding;
+  if (data.dpr && data.dpr !== 1) {
+    const d = data.dpr;
+    if (resize) {
+      resize = {
+        ...resize,
+        width: resize.width ? Math.round(resize.width * d) : 0,
+        height: resize.height ? Math.round(resize.height * d) : 0,
+      };
+    }
+    if (padding) {
+      padding = {
+        top: Math.round(padding.top * d),
+        right: Math.round(padding.right * d),
+        bottom: Math.round(padding.bottom * d),
+        left: Math.round(padding.left * d),
+      };
+    }
+  }
+
   return {
     resize,
+    minWidth: data.min_width,
+    minHeight: data.min_height,
+    extend: data.extend,
+    extendAspectRatio: data.extend_aspect_ratio,
     framerate: data.framerate,
     trim: data.trim,
     quality: data.quality,
@@ -196,7 +294,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     rotate: data.rotate,
     autoRotate: data.auto_rotate,
     background: data.background,
-    padding: data.padding,
+    padding,
     stripMetadata: data.strip_metadata,
     crop: data.crop,
     gravity: data.gravity,
@@ -211,6 +309,12 @@ const parsedUrlSchema = z.object({
   resize: resizeOptions.optional(),
   sourceUrl: z.string(),
   outputFormat,
+  minWidth: z.number().optional(),
+  minHeight: z.number().optional(),
+  extend: z.object({ enabled: z.boolean(), gravity: gravity }).optional(),
+  extendAspectRatio: z
+    .object({ enabled: z.boolean(), gravity: gravity })
+    .optional(),
   framerate: z.number().optional(),
   trim: z.number().optional(),
   quality: z.number().optional(),
@@ -333,6 +437,10 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     resize: options.resize,
     sourceUrl,
     outputFormat: format,
+    minWidth: options.minWidth,
+    minHeight: options.minHeight,
+    extend: options.extend,
+    extendAspectRatio: options.extendAspectRatio,
     framerate: options.framerate,
     trim: options.trim,
     quality: options.quality,
