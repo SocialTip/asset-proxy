@@ -5,7 +5,7 @@ import { HTTPError } from "./error.js";
 // ── Zod enums & primitives ───────────────────────────────────────────────────
 
 const resizingType = z.enum(["fit", "fill", "fill-down", "force", "auto"]);
-export type ResizingType = z.infer<typeof resizingType>;
+export type ResizingType = z.output<typeof resizingType>;
 
 const cpuAlgorithms = [
   "nearest",
@@ -69,9 +69,9 @@ const zResizingAlgorithm = z.string().transform((v): ResizingAlgorithm => {
 const videoFormat = z.enum(["mp4", "webm"]);
 const imageFormat = z.enum(["jpg", "png", "webp", "avif", "gif"]);
 const outputFormat = z.union([videoFormat, imageFormat]);
-export type VideoFormat = z.infer<typeof videoFormat>;
-export type ImageFormat = z.infer<typeof imageFormat>;
-export type OutputFormat = z.infer<typeof outputFormat>;
+export type VideoFormat = z.output<typeof videoFormat>;
+export type ImageFormat = z.output<typeof imageFormat>;
+export type OutputFormat = z.output<typeof outputFormat>;
 
 export type MediaType = "video" | "image";
 
@@ -86,10 +86,17 @@ const compassGravity = z.enum([
   "sowe",
   "ce",
 ]);
-export type CompassGravity = z.infer<typeof compassGravity>;
+export type CompassGravity = z.output<typeof compassGravity>;
 
-export type FocusPointGravity = { type: "fp"; x: number; y: number };
-export type Gravity = CompassGravity | FocusPointGravity;
+const focusPointGravity = z.object({
+  type: z.literal("fp"),
+  x: z.number(),
+  y: z.number(),
+});
+export type FocusPointGravity = z.output<typeof focusPointGravity>;
+
+const gravitySchema = z.union([compassGravity, focusPointGravity]);
+export type Gravity = z.output<typeof gravitySchema>;
 
 const zGravity = z.string().transform((v): Gravity => {
   if (v.startsWith("fp:")) {
@@ -131,11 +138,12 @@ const sides = z.object({
 });
 
 const resizeOptions = z.object({
+  /** Resize mode: fit, fill, fill-down, force, or auto. */
   type: resizingType,
   width: z.number(),
   height: z.number(),
 });
-export type ResizeOptions = z.infer<typeof resizeOptions>;
+export type ResizeOptions = z.output<typeof resizeOptions>;
 
 const zBool = z
   .string()
@@ -206,6 +214,7 @@ const SHORTHANDS: Record<string, string> = {
   sm: "strip_metadata",
   f: "format",
   fr: "framerate",
+  ct: "cut",
   tr: "trim",
   ra: "resizing_algorithm",
   op: "objects_position",
@@ -328,7 +337,21 @@ const rawOptionsSchema = z
       .optional(),
 
     framerate: zPositiveFloat.optional(),
-    trim: zPositiveFloat.optional(),
+    cut: zPositiveFloat.optional(),
+
+    trim: z
+      .string()
+      .transform((v) => {
+        const [threshold, colour, equalHor, equalVert] = v.split(":");
+        return {
+          threshold: parseFloat(threshold) || 0,
+          colour: colour || undefined,
+          equalHor: equalHor === "1" || equalHor === "t" || equalHor === "true",
+          equalVert:
+            equalVert === "1" || equalVert === "t" || equalVert === "true",
+        };
+      })
+      .optional(),
 
     resizing_algorithm: zResizingAlgorithm.optional(),
     objects_position: notImplemented("objects_position").optional(),
@@ -407,6 +430,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     extend: data.extend,
     extendAspectRatio: data.extend_aspect_ratio,
     framerate: data.framerate,
+    cut: data.cut,
     trim: data.trim,
     quality: data.quality,
     blur: data.blur,
@@ -427,41 +451,80 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
 // ── ParsedUrl schema ─────────────────────────────────────────────────────────
 
 const parsedUrlSchema = z.object({
+  /** Resize dimensions and mode (fit, fill, fill-down, force, auto). */
   resize: resizeOptions.optional(),
-  resizingAlgorithm: z.any().optional(),
+  /** The source image/video URL to process. */
   sourceUrl: z.string(),
+  /** Output format: jpg, png, webp, avif, gif, mp4, webm. */
   outputFormat,
+  /** Minimum output width — upscales if the result would be narrower. */
   minWidth: z.number().optional(),
+  /** Minimum output height — upscales if the result would be shorter. */
   minHeight: z.number().optional(),
+  /** Pad undersized images to fill the target resize dimensions. */
   extend: z
     .object({ enabled: z.boolean(), gravity: compassGravity })
     .optional(),
+  /** Extend the image to match the target aspect ratio. */
   extendAspectRatio: z
     .object({ enabled: z.boolean(), gravity: compassGravity })
     .optional(),
+  /** Output framerate in fps (video only). */
   framerate: z.number().optional(),
-  trim: z.number().optional(),
+  /** Limit output duration in seconds (video only). */
+  cut: z.number().optional(),
+  /** Remove uniform borders from an image via cropdetect. */
+  trim: z
+    .object({
+      /** Colour similarity tolerance (0–255). */
+      threshold: z.number(),
+      /** Hex colour to trim. Auto-detected if omitted. */
+      colour: z.string().optional(),
+      /** Trim equal amounts from left and right. */
+      equalHor: z.boolean(),
+      /** Trim equal amounts from top and bottom. */
+      equalVert: z.boolean(),
+    })
+    .optional(),
+  /** Output quality 1–100 for lossy formats (JPEG, WebP, AVIF). */
   quality: z.number().optional(),
+  /** Gaussian blur sigma. */
   blur: z.number().optional(),
+  /** Sharpening sigma. */
   sharpen: z.number().optional(),
+  /** Rotation angle: 0, 90, 180, or 270 degrees. */
   rotate: z.number().optional(),
+  /** Rotate based on EXIF orientation data. */
   autoRotate: z.boolean().optional(),
+  /** Background colour (RGB) for padding, extend, and alpha flattening. */
   background: rgb.optional(),
+  /** Canvas padding in pixels: top, right, bottom, left. */
   padding: sides.optional(),
+  /** Remove EXIF and other metadata from the output. */
   stripMetadata: z.boolean().optional(),
+  /** Extract a region before resizing (width, height, optional gravity). */
   crop: z
     .object({
       width: z.number(),
       height: z.number(),
-      gravity: z.any().optional(),
+      gravity: gravitySchema.optional(),
     })
     .optional(),
+  /** Crop to a target aspect ratio (width/height as a float). */
   cropAspectRatio: z.number().optional(),
-  gravity: z.any().optional(),
+  /** Anchor point for crop: compass direction or focus point. */
+  gravity: gravitySchema.optional(),
+  /** Allow upscaling when the image is smaller than the target. */
   enlarge: z.boolean().optional(),
 });
 
-export type ParsedUrl = z.infer<typeof parsedUrlSchema>;
+type ParsedUrlBase = z.output<typeof parsedUrlSchema>;
+
+/** Fully parsed URL including fields not validated by the Zod schema. */
+export type ParsedUrl = ParsedUrlBase & {
+  /** Scaling algorithm — CPU (sws_flags) or GPU (scale_cuda/scale_npp). */
+  resizingAlgorithm?: ResizingAlgorithm;
+};
 
 export type ImageUrl = ParsedUrl & { outputFormat: ImageFormat };
 export type VideoUrl = ParsedUrl & { outputFormat: VideoFormat };
@@ -469,7 +532,7 @@ export type VideoUrl = ParsedUrl & { outputFormat: VideoFormat };
 export function isImageUrl(parsed: ParsedUrl): parsed is ImageUrl {
   if (IMAGE_FORMATS.has(parsed.outputFormat)) return true;
   if (VIDEO_FORMATS.has(parsed.outputFormat)) return false;
-  if (parsed.framerate !== undefined || parsed.trim !== undefined) return false;
+  if (parsed.framerate !== undefined || parsed.cut !== undefined) return false;
   if (IMAGE_EXTENSIONS.test(parsed.sourceUrl)) return true;
   return false;
 }
@@ -558,9 +621,8 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     }
   }
 
-  return parsedUrlSchema.parse({
+  const parsed = parsedUrlSchema.parse({
     resize: options.resize,
-    resizingAlgorithm: options.resizingAlgorithm,
     sourceUrl,
     outputFormat: format,
     minWidth: options.minWidth,
@@ -568,6 +630,7 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     extend: options.extend,
     extendAspectRatio: options.extendAspectRatio,
     framerate: options.framerate,
+    cut: options.cut,
     trim: options.trim,
     quality: options.quality,
     blur: options.blur,
@@ -582,4 +645,9 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     gravity: options.gravity,
     enlarge: options.enlarge,
   });
+
+  return {
+    ...parsed,
+    resizingAlgorithm: options.resizingAlgorithm,
+  };
 }

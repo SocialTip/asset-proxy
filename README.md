@@ -114,9 +114,13 @@ Alternative to the `@suffix` for specifying output format.
 
 Sets the output framerate. Example: `fr:30`.
 
-#### Trim — `trim:<seconds>` (shorthand `tr`) — video only
+#### Trim — `trim:<threshold>:<colour>:<equal_hor>:<equal_vert>` (shorthand `tr`)
 
-Limits output duration to the given number of seconds. Example: `tr:10`.
+Remove borders from an image using colour similarity detection. The threshold (required) controls how similar a pixel must be to the border colour to be trimmed (0–255). Optional parameters: hex colour to trim (defaults to auto-detect), `equal_hor` and `equal_vert` (1/t/true) to trim equal amounts from opposite sides. Example: `trim:10:ffffff:1:1`. Note: requires a two-pass ffmpeg analysis and increases processing time.
+
+#### Cut — `cut:<seconds>` (shorthand `ct`) — video only
+
+Limits output duration to the given number of seconds. Example: `ct:10`.
 
 ### Output format
 

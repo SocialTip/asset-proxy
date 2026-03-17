@@ -54,7 +54,7 @@ async function fetchVideo(
 
 describe("video resize", () => {
   it("resizes to 128x128 fill with framerate and trim", async () => {
-    const url = `${SERVICE_URL}/insecure/resize:fill:128:128/fr:15/tr:1/plain/${SOURCE_URL}`;
+    const url = `${SERVICE_URL}/insecure/resize:fill:128:128/fr:15/ct:1/plain/${SOURCE_URL}`;
     const res = await fetch(url);
 
     expect(res.status).toBe(200);
@@ -82,7 +82,7 @@ describe("video resize", () => {
 
   it("crop_aspect_ratio crops video to 1:1", async () => {
     const { videoPath } = await fetchVideo(
-      "/resize:force:128:128/car:1:1/fr:15/tr:1",
+      "/resize:force:128:128/car:1:1/fr:15/ct:1",
     );
     const meta = probeVideo(videoPath);
     // After crop to 1:1 then resize to 128x128
