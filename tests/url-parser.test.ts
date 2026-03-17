@@ -83,7 +83,20 @@ describe("parseProcessingUrl", () => {
       parseProcessingUrl(
         "/resize:fill:480:360/fr:0/plain/https://example.com/video.mp4",
       ),
-    ).toThrow();
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [ZodError: [
+        {
+          "origin": "number",
+          "code": "too_small",
+          "minimum": 0,
+          "inclusive": false,
+          "path": [
+            "framerate"
+          ],
+          "message": "Too small: expected number to be >0"
+        }
+      ]]
+    `);
   });
 
   it("rejects invalid trim", () => {
@@ -91,7 +104,20 @@ describe("parseProcessingUrl", () => {
       parseProcessingUrl(
         "/resize:fill:480:360/tr:-5/plain/https://example.com/video.mp4",
       ),
-    ).toThrow();
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [ZodError: [
+        {
+          "origin": "number",
+          "code": "too_small",
+          "minimum": 0,
+          "inclusive": false,
+          "path": [
+            "trim"
+          ],
+          "message": "Too small: expected number to be >0"
+        }
+      ]]
+    `);
   });
 
   it("parses @webm output format", () => {
