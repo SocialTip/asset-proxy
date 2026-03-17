@@ -21,7 +21,7 @@ jobs:
           path: repo
 
       - name: Link test fixtures into nginx
-        run: rm -rf nginx/html ; ln -s ${{ github.workspace }}/repo/tests/fixtures nginx/html
+        run: sudo rm -rf nginx/html && sudo ln -s ${{ github.workspace }}/repo/tests/fixtures nginx/html
 
       - uses: actions/setup-node@v4
         with:
