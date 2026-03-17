@@ -200,10 +200,63 @@ describe("resizing_algorithm", () => {
   });
 });
 
+describe("gravity", () => {
+  it("parses compass gravity", () => {
+    const result = parseProcessingUrl(
+      "/c:100:75/g:nowe/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(result.gravity).toBe("nowe");
+  });
+
+  it("parses focus point gravity", () => {
+    const result = parseProcessingUrl(
+      "/c:100:75/g:fp:0.3:0.7/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(result.gravity).toEqual({ type: "fp", x: 0.3, y: 0.7 });
+  });
+
+  it("parses focus point gravity in crop", () => {
+    const result = parseProcessingUrl(
+      "/c:100:75:fp:0.5:0.5/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(result.crop?.gravity).toEqual({ type: "fp", x: 0.5, y: 0.5 });
+  });
+
+  it("rejects focus point with out-of-range values", () => {
+    expect(() =>
+      parseProcessingUrl(
+        "/g:fp:1.5:0.5/w:100/plain/https://example.com/photo.jpg",
+      ),
+    ).toThrow("between 0 and 1");
+  });
+
+  it("rejects smart gravity as not implemented", () => {
+    expect(() =>
+      parseProcessingUrl("/g:sm/w:100/plain/https://example.com/photo.jpg"),
+    ).toThrow("not implemented");
+  });
+
+  it("rejects object gravity as not implemented", () => {
+    expect(() =>
+      parseProcessingUrl(
+        "/g:obj:face/w:100/plain/https://example.com/photo.jpg",
+      ),
+    ).toThrow("not implemented");
+  });
+});
+
 describe("pro options return 400", () => {
   it("rejects crop_aspect_ratio", () => {
     expect(() =>
       parseProcessingUrl("/car:16:9/w:100/plain/https://example.com/photo.jpg"),
+    ).toThrow("not implemented");
+  });
+
+  it("rejects objects_position", () => {
+    expect(() =>
+      parseProcessingUrl(
+        "/op:0.5:0.5/w:100/plain/https://example.com/photo.jpg",
+      ),
     ).toThrow("not implemented");
   });
 });

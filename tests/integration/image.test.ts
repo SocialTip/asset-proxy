@@ -154,6 +154,22 @@ describe("image transforms", () => {
     expect(meta.width).toBe(100);
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
+
+  it("crops with compass gravity (nowe)", async () => {
+    const buffer = await fetchImage("/c:100:75:nowe");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(100);
+    expect(meta.height).toBe(75);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("crops with focus point gravity", async () => {
+    const buffer = await fetchImage("/c:100:75/g:fp:0.8:0.8");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(100);
+    expect(meta.height).toBe(75);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
 });
 
 describe("image padding and background", () => {
