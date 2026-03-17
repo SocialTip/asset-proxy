@@ -9,6 +9,11 @@ services:
       - ALLOWED_ORIGINS=http://file-server
     ports:
       - "8080:8080"
+    volumes:
+      - ./src:/app/src:ro
+      - ./package.json:/app/package.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+    command: ["npx", "tsx", "--watch", "src/index.ts"]
     depends_on:
       - file-server
 

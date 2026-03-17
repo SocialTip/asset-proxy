@@ -221,6 +221,32 @@ function buildImageArgs(
     );
   }
 
+  // Min width / min height — ensure output is at least this large
+  if (parsed.minWidth && parsed.minWidth > 0) {
+    filters.push(
+      `scale=max(iw\\,${parsed.minWidth}):ih:force_original_aspect_ratio=increase`,
+    );
+  }
+  if (parsed.minHeight && parsed.minHeight > 0) {
+    filters.push(
+      `scale=iw:max(ih\\,${parsed.minHeight}):force_original_aspect_ratio=increase`,
+    );
+  }
+
+  // Extend — pad undersized images to fill target dimensions
+  if (parsed.extend?.enabled && parsed.resize) {
+    const tw = parsed.resize.width || 0;
+    const th = parsed.resize.height || 0;
+    if (tw > 0 || th > 0) {
+      const w = tw > 0 ? String(tw) : "iw";
+      const h = th > 0 ? String(th) : "ih";
+      const colour = parsed.background
+        ? rgbToHex(parsed.background)
+        : "black@0";
+      filters.push(`pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:${colour}`);
+    }
+  }
+
   // Rotate
   if (parsed.rotate) {
     switch (parsed.rotate) {

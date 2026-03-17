@@ -144,6 +144,22 @@ describe("parseProcessingUrl", () => {
   });
 });
 
+describe("pro options return 400", () => {
+  it("rejects resizing_algorithm", () => {
+    expect(() =>
+      parseProcessingUrl(
+        "/ra:lanczos3/w:100/plain/https://example.com/photo.jpg",
+      ),
+    ).toThrow("not implemented");
+  });
+
+  it("rejects crop_aspect_ratio", () => {
+    expect(() =>
+      parseProcessingUrl("/car:16:9/w:100/plain/https://example.com/photo.jpg"),
+    ).toThrow("not implemented");
+  });
+});
+
 describe("isImageUrl / isVideoUrl", () => {
   it("returns image for image output formats", () => {
     const result = parseProcessingUrl(
