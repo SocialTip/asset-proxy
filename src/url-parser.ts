@@ -75,7 +75,7 @@ export type OutputFormat = z.infer<typeof outputFormat>;
 
 export type MediaType = "video" | "image";
 
-const gravity = z.enum([
+const compassGravity = z.enum([
   "no",
   "so",
   "ea",
@@ -86,7 +86,41 @@ const gravity = z.enum([
   "sowe",
   "ce",
 ]);
-export type Gravity = z.infer<typeof gravity>;
+export type CompassGravity = z.infer<typeof compassGravity>;
+
+export type FocusPointGravity = { type: "fp"; x: number; y: number };
+export type Gravity = CompassGravity | FocusPointGravity;
+
+const zGravity = z.string().transform((v): Gravity => {
+  if (v.startsWith("fp:")) {
+    const [, xStr, yStr] = v.split(":");
+    const x = parseFloat(xStr);
+    const y = parseFloat(yStr);
+    if (
+      Number.isNaN(x) ||
+      Number.isNaN(y) ||
+      x < 0 ||
+      x > 1 ||
+      y < 0 ||
+      y > 1
+    ) {
+      throw new HTTPError(
+        "Focus point gravity requires x and y values between 0 and 1: gravity:fp:<x>:<y>",
+        { code: "BAD_REQUEST" },
+      );
+    }
+    return { type: "fp", x, y };
+  }
+  if (v.startsWith("sm") || v.startsWith("obj")) {
+    throw new HTTPError(
+      `Gravity type '${v.split(":")[0]}' is not implemented`,
+      {
+        code: "BAD_REQUEST",
+      },
+    );
+  }
+  return compassGravity.parse(v);
+});
 
 const rgb = z.object({ r: z.number(), g: z.number(), b: z.number() });
 const sides = z.object({
@@ -174,6 +208,7 @@ const SHORTHANDS: Record<string, string> = {
   fr: "framerate",
   tr: "trim",
   ra: "resizing_algorithm",
+  op: "objects_position",
   // Pro shorthands (parsed but rejected)
   car: "crop_aspect_ratio",
 };
@@ -227,7 +262,10 @@ const rawOptionsSchema = z
         const parts = v.split(":");
         const enabled =
           parts[0] === "1" || parts[0] === "t" || parts[0] === "true";
-        return { enabled, gravity: gravity.safeParse(parts[1]).data ?? "ce" };
+        return {
+          enabled,
+          gravity: compassGravity.safeParse(parts[1]).data ?? ("ce" as const),
+        };
       })
       .optional(),
 
@@ -237,23 +275,31 @@ const rawOptionsSchema = z
         const parts = v.split(":");
         const enabled =
           parts[0] === "1" || parts[0] === "t" || parts[0] === "true";
-        return { enabled, gravity: gravity.safeParse(parts[1]).data ?? "ce" };
+        return {
+          enabled,
+          gravity: compassGravity.safeParse(parts[1]).data ?? ("ce" as const),
+        };
       })
       .optional(),
 
     crop: z
       .string()
       .transform((v) => {
-        const [w, h, g] = v.split(":");
+        const [w, h, ...rest] = v.split(":");
+        const gStr = rest.join(":");
+        let cropGravity: Gravity | undefined;
+        if (gStr) {
+          cropGravity = zGravity.parse(gStr);
+        }
         return {
           width: parseFloat(w) || 0,
           height: parseFloat(h) || 0,
-          gravity: gravity.safeParse(g).data,
+          gravity: cropGravity,
         };
       })
       .optional(),
 
-    gravity: gravity.optional(),
+    gravity: zGravity.optional(),
     quality: z.coerce.number().int().optional(),
     blur: z.coerce.number().optional(),
     sharpen: z.coerce.number().optional(),
@@ -285,6 +331,7 @@ const rawOptionsSchema = z
     trim: zPositiveFloat.optional(),
 
     resizing_algorithm: zResizingAlgorithm.optional(),
+    objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: notImplemented("crop_aspect_ratio").optional(),
   })
   .passthrough();
@@ -371,9 +418,11 @@ const parsedUrlSchema = z.object({
   outputFormat,
   minWidth: z.number().optional(),
   minHeight: z.number().optional(),
-  extend: z.object({ enabled: z.boolean(), gravity: gravity }).optional(),
+  extend: z
+    .object({ enabled: z.boolean(), gravity: compassGravity })
+    .optional(),
   extendAspectRatio: z
-    .object({ enabled: z.boolean(), gravity: gravity })
+    .object({ enabled: z.boolean(), gravity: compassGravity })
     .optional(),
   framerate: z.number().optional(),
   trim: z.number().optional(),
@@ -389,10 +438,10 @@ const parsedUrlSchema = z.object({
     .object({
       width: z.number(),
       height: z.number(),
-      gravity: gravity.optional(),
+      gravity: z.any().optional(),
     })
     .optional(),
-  gravity: gravity.optional(),
+  gravity: z.any().optional(),
   enlarge: z.boolean().optional(),
 });
 

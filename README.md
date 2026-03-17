@@ -64,7 +64,11 @@ Extract a region before resizing. Values less than 1 are treated as relative to 
 
 #### Gravity — `gravity:<type>` (shorthand `g`)
 
-Anchor point for resize and crop: `no`, `so`, `ea`, `we`, `noea`, `nowe`, `soea`, `sowe`, `ce`.
+Anchor point for crop operations.
+
+**Compass gravity:** `no` (north), `so` (south), `ea` (east), `we` (west), `noea`, `nowe`, `soea`, `sowe`, `ce` (centre).
+
+**Focus point gravity:** `fp:<x>:<y>` where x and y are floats between 0 and 1 representing the focus point. Example: `g:fp:0.3:0.7`. The crop window is centred on the focus point, clamped to image bounds.
 
 #### Quality — `quality:<1-100>` (shorthand `q`)
 

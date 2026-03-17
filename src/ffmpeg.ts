@@ -9,6 +9,8 @@ import { env } from "./env.js";
 import { HTTPError } from "./error.js";
 import { logger } from "./logger.js";
 import type {
+  CompassGravity,
+  Gravity,
   ImageFormat,
   ImageUrl,
   OutputFormat,
@@ -257,7 +259,9 @@ function buildImageArgs(
   if (parsed.crop && (parsed.crop.width > 0 || parsed.crop.height > 0)) {
     const cw = Math.round(parsed.crop.width);
     const ch = Math.round(parsed.crop.height);
-    filters.push(`crop=${cw}:${ch}`);
+    const g = parsed.crop.gravity ?? parsed.gravity;
+    const { x, y } = gravityOffsets(g, cw, ch);
+    filters.push(`crop=${cw}:${ch}:${x}:${y}`);
   }
 
   // Resize
@@ -395,6 +399,49 @@ function appendImageOutputArgs(
 function rgbToHex(c: { r: number; g: number; b: number }): string {
   const hex = (n: number) => n.toString(16).padStart(2, "0");
   return `#${hex(c.r)}${hex(c.g)}${hex(c.b)}`;
+}
+
+/** Return ffmpeg crop x:y offset expressions for the given gravity. */
+function gravityOffsets(
+  g: Gravity | undefined,
+  cw: number,
+  ch: number,
+): { x: string; y: string } {
+  if (!g) return { x: "(iw-ow)/2", y: "(ih-oh)/2" }; // centre default
+
+  if (typeof g === "object" && g.type === "fp") {
+    // Focus point: centre crop on (x, y) fraction, clamped to image bounds
+    return {
+      x: `min(max(iw*${g.x}-${cw}/2\\,0)\\,iw-${cw})`,
+      y: `min(max(ih*${g.y}-${ch}/2\\,0)\\,ih-${ch})`,
+    };
+  }
+
+  const compass = g as CompassGravity;
+  const cx = "(iw-ow)/2";
+  const cy = "(ih-oh)/2";
+  switch (compass) {
+    case "ce":
+      return { x: cx, y: cy };
+    case "no":
+      return { x: cx, y: "0" };
+    case "so":
+      return { x: cx, y: "ih-oh" };
+    case "ea":
+      return { x: "iw-ow", y: cy };
+    case "we":
+      return { x: "0", y: cy };
+    case "noea":
+      return { x: "iw-ow", y: "0" };
+    case "nowe":
+      return { x: "0", y: "0" };
+    case "soea":
+      return { x: "iw-ow", y: "ih-oh" };
+    case "sowe":
+      return { x: "0", y: "ih-oh" };
+    default:
+      return { x: cx, y: cy };
+  }
 }
 
 // ── Shared scale filter builder ──────────────────────────────────────────────
