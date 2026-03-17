@@ -7,6 +7,65 @@ import { HTTPError } from "./error.js";
 const resizingType = z.enum(["fit", "fill", "fill-down", "force", "auto"]);
 export type ResizingType = z.infer<typeof resizingType>;
 
+const cpuAlgorithms = [
+  "nearest",
+  "linear",
+  "cubic",
+  "lanczos2",
+  "lanczos3",
+] as const;
+const gpuScalers = ["scale_cuda", "scale_npp"] as const;
+type CpuAlgorithm = (typeof cpuAlgorithms)[number];
+type GpuScaler = (typeof gpuScalers)[number];
+
+export type ResizingAlgorithm =
+  | { mode: "cpu"; algorithm: CpuAlgorithm }
+  | { mode: "gpu"; scaler: GpuScaler; algorithm?: CpuAlgorithm };
+
+const cpuAlgorithmSet = new Set<string>(cpuAlgorithms);
+const gpuScalerSet = new Set<string>(gpuScalers);
+
+const zResizingAlgorithm = z.string().transform((v): ResizingAlgorithm => {
+  if (v.startsWith("gpu:")) {
+    const parts = v.slice(4).split(":");
+    const scaler = parts[0];
+    if (!gpuScalerSet.has(scaler)) {
+      throw new HTTPError(
+        `Invalid GPU scaler '${scaler}': expected one of ${gpuScalers.join(", ")}`,
+        { code: "BAD_REQUEST" },
+      );
+    }
+    const algo = parts[1];
+    if (algo !== undefined) {
+      if (!cpuAlgorithmSet.has(algo)) {
+        throw new HTTPError(
+          `Invalid interpolation algorithm '${algo}': expected one of ${cpuAlgorithms.join(", ")}`,
+          { code: "BAD_REQUEST" },
+        );
+      }
+      if (scaler !== "scale_npp") {
+        throw new HTTPError(
+          "Interpolation algorithm is only supported with scale_npp",
+          { code: "BAD_REQUEST" },
+        );
+      }
+      return {
+        mode: "gpu",
+        scaler: scaler as GpuScaler,
+        algorithm: algo as CpuAlgorithm,
+      };
+    }
+    return { mode: "gpu", scaler: scaler as GpuScaler };
+  }
+  if (!cpuAlgorithmSet.has(v)) {
+    throw new HTTPError(
+      `Invalid resizing algorithm '${v}': expected one of ${cpuAlgorithms.join(", ")} or gpu:<scaler>[:<algorithm>]`,
+      { code: "BAD_REQUEST" },
+    );
+  }
+  return { mode: "cpu", algorithm: v as CpuAlgorithm };
+});
+
 const videoFormat = z.enum(["mp4", "webm"]);
 const imageFormat = z.enum(["jpg", "png", "webp", "avif", "gif"]);
 const outputFormat = z.union([videoFormat, imageFormat]);
@@ -114,8 +173,8 @@ const SHORTHANDS: Record<string, string> = {
   f: "format",
   fr: "framerate",
   tr: "trim",
-  // Pro shorthands (parsed but rejected)
   ra: "resizing_algorithm",
+  // Pro shorthands (parsed but rejected)
   car: "crop_aspect_ratio",
 };
 
@@ -225,8 +284,7 @@ const rawOptionsSchema = z
     framerate: zPositiveFloat.optional(),
     trim: zPositiveFloat.optional(),
 
-    // Pro options — recognised but not implemented
-    resizing_algorithm: notImplemented("resizing_algorithm").optional(),
+    resizing_algorithm: zResizingAlgorithm.optional(),
     crop_aspect_ratio: notImplemented("crop_aspect_ratio").optional(),
   })
   .passthrough();
@@ -282,6 +340,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
 
   return {
     resize,
+    resizingAlgorithm: data.resizing_algorithm,
     minWidth: data.min_width,
     minHeight: data.min_height,
     extend: data.extend,
@@ -307,6 +366,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
 
 const parsedUrlSchema = z.object({
   resize: resizeOptions.optional(),
+  resizingAlgorithm: z.any().optional(),
   sourceUrl: z.string(),
   outputFormat,
   minWidth: z.number().optional(),
@@ -435,6 +495,7 @@ export function parseProcessingUrl(path: string): ParsedUrl {
 
   return parsedUrlSchema.parse({
     resize: options.resize,
+    resizingAlgorithm: options.resizingAlgorithm,
     sourceUrl,
     outputFormat: format,
     minWidth: options.minWidth,
