@@ -14,23 +14,29 @@ jobs:
         ports:
           - 80:80
         volumes:
-          - /srv/nginx:/usr/share/nginx
+          - ${{ github.workspace }}/nginx:/usr/share/nginx
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: repo
 
       - name: Link test fixtures into nginx
-        run: rm -rf /srv/nginx/html ; ln -s ${{ github.workspace }}/tests/fixtures /srv/nginx/html
+        run: rm -rf nginx/html ; ln -s ${{ github.workspace }}/repo/tests/fixtures nginx/html
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .tool-versions
+          node-version-file: repo/.tool-versions
           cache: yarn
+          cache-dependency-path: repo/yarn.lock
 
       - run: yarn install --immutable
+        working-directory: repo
 
       - run: yarn typecheck
+        working-directory: repo
 
       - run: yarn lint
+        working-directory: repo
 
       - name: Install ffmpeg
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
@@ -40,6 +46,7 @@ jobs:
 
       - name: Start asset-proxy
         run: nohup npx tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
+        working-directory: repo
         env:
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -49,6 +56,7 @@ jobs:
         run: timeout 30 bash -c 'until curl -sf http://localhost:8080/health; do sleep 1; done'
 
       - run: yarn test
+        working-directory: repo
 
       - name: Print asset-proxy logs
         if: failure()
