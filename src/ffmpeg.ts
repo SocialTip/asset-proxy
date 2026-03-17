@@ -1,4 +1,8 @@
 import { spawn } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Readable } from "node:stream";
 import { env } from "./env.js";
 import { HTTPError } from "./error.js";
@@ -82,11 +86,6 @@ export async function processImage(
 ): Promise<Buffer> {
   // AVIF muxer requires seekable output — use a temp file
   if (parsed.outputFormat === "avif") {
-    const { mkdtempSync } = await import("node:fs");
-    const { readFile, rm } = await import("node:fs/promises");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
-
     const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
     const outPath = join(dir, "output.avif");
 

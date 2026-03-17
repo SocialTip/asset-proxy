@@ -127,7 +127,7 @@ describe("image output formats", () => {
   it("converts to avif", async () => {
     const { buffer, res } = await fetchImageWithFormat("/w:100", "avif");
     expect(res.headers.get("content-type")).toBe("image/avif");
-    expect(buffer.length).toBeGreaterThan(0);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
   });
 
   it("defaults to jpg for image sources", async () => {
