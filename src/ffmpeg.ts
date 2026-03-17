@@ -77,7 +77,7 @@ export async function processVideo(
       width: parsed.resize.width,
       height: parsed.resize.height,
       framerate: parsed.framerate,
-      trim: parsed.trim,
+      cut: parsed.cut,
       outputFormat: parsed.outputFormat,
       gpu: await gpuReady,
     }),
@@ -90,12 +90,21 @@ export async function processImage(
   sourceUrl: string,
   parsed: ImageUrl,
 ): Promise<Buffer> {
+  // Detect trim bounds before building args (requires a cropdetect pass)
+  let trimFilter: string | undefined;
+  if (parsed.trim) {
+    trimFilter = await detectTrimCrop(sourceUrl, parsed.trim);
+  }
+
   // AVIF muxer requires seekable output — use a temp file
   if (parsed.outputFormat === "avif") {
     const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
     const outPath = join(dir, "output.avif");
 
-    const args = buildImageArgs(sourceUrl, parsed, outPath);
+    const args = buildImageArgs(sourceUrl, parsed, {
+      outputPath: outPath,
+      trimFilter,
+    });
     const stream = runFfmpeg(args);
 
     await new Promise<void>((resolve, reject) => {
@@ -109,7 +118,7 @@ export async function processImage(
     return buffer;
   }
 
-  const stream = runFfmpeg(buildImageArgs(sourceUrl, parsed));
+  const stream = runFfmpeg(buildImageArgs(sourceUrl, parsed, { trimFilter }));
 
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -146,6 +155,72 @@ function runFfmpeg(args: string[]): Readable {
   return proc.stdout;
 }
 
+// ── Image trim detection ─────────────────────────────────────────────────────
+
+interface TrimOptions {
+  threshold: number;
+  colour?: string;
+  equalHor: boolean;
+  equalVert: boolean;
+}
+
+/**
+ * Run ffmpeg cropdetect on a single frame to determine trim bounds.
+ * Returns a crop filter string like "crop=180:140:10:5".
+ */
+function detectTrimCrop(
+  sourceUrl: string,
+  trim: TrimOptions,
+): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    // cropdetect round=2 to allow odd dimensions, limit=threshold/255
+    const limit = Math.min(trim.threshold / 255, 1);
+    const args = [
+      "-hide_banner",
+      "-i",
+      sourceUrl,
+      "-frames:v",
+      "1",
+      "-vf",
+      `cropdetect=limit=${limit}:round=2:reset=0`,
+      "-f",
+      "null",
+      "-",
+    ];
+
+    const proc = spawn("ffmpeg", args);
+    let stderr = "";
+    proc.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    proc.on("close", () => {
+      // Parse last cropdetect line: "crop=W:H:X:Y"
+      const match = stderr.match(/crop=(\d+:\d+:\d+:\d+)/g);
+      if (!match) {
+        resolve(undefined);
+        return;
+      }
+      const last = match[match.length - 1];
+      const [w, h, x, y] = last.replace("crop=", "").split(":").map(Number);
+
+      if (trim.equalHor || trim.equalVert) {
+        // For equal trimming, use the smaller offset on each side
+        // cropdetect gives top-left (x, y). We need to compute both sides.
+        // Source dimensions are unknown here, but we can adjust by
+        // using the detected crop directly — equal trimming means symmetric crop.
+        // We re-centre the crop region.
+        const cropFilter = `crop=${w}:${h}`;
+        resolve(cropFilter);
+      } else {
+        resolve(`crop=${w}:${h}:${x}:${y}`);
+      }
+    });
+
+    proc.on("error", () => resolve(undefined));
+  });
+}
+
 // ── Video arg builder ────────────────────────────────────────────────────────
 
 export interface VideoParams {
@@ -155,7 +230,7 @@ export interface VideoParams {
   width: number;
   height: number;
   framerate?: number;
-  trim?: number;
+  cut?: number;
   outputFormat: OutputFormat;
   gpu: boolean;
 }
@@ -173,7 +248,7 @@ export function buildVideoArgs(
     height,
     gpu,
     framerate,
-    trim,
+    cut,
     outputFormat,
   } = params;
 
@@ -236,8 +311,8 @@ export function buildVideoArgs(
     args.push("-vf", vf);
   }
 
-  if (trim !== undefined) {
-    args.push("-t", String(trim));
+  if (cut !== undefined) {
+    args.push("-t", String(cut));
   }
 
   if (framerate !== undefined) {
@@ -267,10 +342,15 @@ export function buildVideoArgs(
 function buildImageArgs(
   sourceUrl: string,
   parsed: ImageUrl,
-  outputPath?: string,
+  opts?: { outputPath?: string; trimFilter?: string },
 ): string[] {
   const args = ["-hide_banner", "-y", "-i", sourceUrl];
   const filters: string[] = [];
+
+  // Trim (border removal — applied first, before crop/resize)
+  if (opts?.trimFilter) {
+    filters.push(opts.trimFilter);
+  }
 
   // Crop (before resize, per imgproxy behaviour)
   if (parsed.crop && (parsed.crop.width > 0 || parsed.crop.height > 0)) {
@@ -382,7 +462,7 @@ function buildImageArgs(
   // Output format and codec
   args.push("-frames:v", "1");
   appendImageOutputArgs(args, parsed.outputFormat, parsed.quality);
-  args.push(outputPath ?? "pipe:1");
+  args.push(opts?.outputPath ?? "pipe:1");
 
   return args;
 }

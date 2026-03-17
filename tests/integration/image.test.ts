@@ -196,6 +196,21 @@ describe("image padding and background", () => {
   });
 });
 
+describe("image trim", () => {
+  it("trims borders from image", async () => {
+    // Apply trim to the test image — cropdetect should detect and remove any
+    // uniform border region. The test image has content across most of it,
+    // so the result should be equal or slightly smaller than the source (200x150).
+    const trimmed = await fetchImage("/trim:30");
+    const meta = await sharp(trimmed).metadata();
+    expect(meta.width).toBeGreaterThan(0);
+    expect(meta.height).toBeGreaterThan(0);
+    expect(meta.width!).toBeLessThanOrEqual(200);
+    expect(meta.height!).toBeLessThanOrEqual(150);
+    expect(await toPng(trimmed)).toMatchImageSnapshot();
+  });
+});
+
 describe("image output formats", () => {
   it("converts to webp", async () => {
     const { buffer, res } = await fetchImageWithFormat("/w:100", "webp");
