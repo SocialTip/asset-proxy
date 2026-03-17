@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
@@ -438,12 +439,10 @@ function buildScaleFilter({
 
   if (gpu) {
     // Only called with an explicit GPU scaler (cuvid default is handled via -resize in buildVideoArgs)
-    if (resizingAlgorithm?.mode !== "gpu") {
-      throw new HTTPError(
-        "buildScaleFilter with gpu=true requires an explicit GPU scaler",
-        { code: "INTERNAL_ERROR" },
-      );
-    }
+    assert(
+      resizingAlgorithm?.mode === "gpu",
+      "buildScaleFilter with gpu=true requires an explicit GPU scaler",
+    );
     scaleName = resizingAlgorithm.scaler;
     if (resizingAlgorithm.algorithm) {
       flagsSuffix = `:interp_algo=${NPP_INTERP_ALGO[resizingAlgorithm.algorithm]}`;
