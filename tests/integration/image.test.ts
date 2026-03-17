@@ -170,6 +170,14 @@ describe("image transforms", () => {
     expect(meta.height).toBe(75);
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
+
+  it("crop_aspect_ratio crops to 1:1", async () => {
+    // Source is 200x150 → crop to 1:1 → 150x150
+    const buffer = await fetchImage("/car:1:1");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(meta.height);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
 });
 
 describe("image padding and background", () => {
