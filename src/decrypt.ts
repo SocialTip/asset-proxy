@@ -1,5 +1,6 @@
 import { createDecipheriv } from "node:crypto";
 import { env } from "./env.js";
+import { HTTPError } from "./error.js";
 
 /**
  * Decrypts an encrypted source URL.
@@ -10,15 +11,18 @@ import { env } from "./env.js";
 export function decryptSourceUrl(encoded: string): string {
   const key = env.SOURCE_URL_ENCRYPTION_KEY;
   if (!key) {
-    throw new Error(
+    throw new HTTPError(
       "Encrypted source URLs are not supported: SOURCE_URL_ENCRYPTION_KEY is not set",
+      { code: "BAD_REQUEST" },
     );
   }
 
   const data = Buffer.from(encoded, "base64url");
 
   if (data.length < 32) {
-    throw new Error("Encrypted payload too short");
+    throw new HTTPError("Encrypted payload too short", {
+      code: "BAD_REQUEST",
+    });
   }
 
   // First 16 bytes are the IV, rest is ciphertext

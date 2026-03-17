@@ -1,46 +1,266 @@
+import { z } from "zod/v4";
 import { decryptSourceUrl } from "./decrypt.js";
 
-export interface ResizeOptions {
-  type: ResizingType;
-  width: number;
-  height: number;
-}
+// ── Zod enums & primitives ───────────────────────────────────────────────────
 
-export type ResizingType = "fit" | "fill" | "fill-down" | "force" | "auto";
+const resizingType = z.enum(["fit", "fill", "fill-down", "force", "auto"]);
+export type ResizingType = z.infer<typeof resizingType>;
 
-const VALID_RESIZE_TYPES = new Set<string>([
-  "fit",
-  "fill",
-  "fill-down",
-  "force",
-  "auto",
+const videoFormat = z.enum(["mp4", "webm"]);
+const imageFormat = z.enum(["jpg", "png", "webp", "avif", "gif"]);
+const outputFormat = z.union([videoFormat, imageFormat]);
+export type VideoFormat = z.infer<typeof videoFormat>;
+export type ImageFormat = z.infer<typeof imageFormat>;
+export type OutputFormat = z.infer<typeof outputFormat>;
+
+export type MediaType = "video" | "image";
+
+const gravity = z.enum([
+  "no",
+  "so",
+  "ea",
+  "we",
+  "noea",
+  "nowe",
+  "soea",
+  "sowe",
+  "ce",
 ]);
+export type Gravity = z.infer<typeof gravity>;
 
-export type OutputFormat = "mp4" | "webm";
+const rgb = z.object({ r: z.number(), g: z.number(), b: z.number() });
+const sides = z.object({
+  top: z.number(),
+  right: z.number(),
+  bottom: z.number(),
+  left: z.number(),
+});
 
-export interface ParsedUrl {
-  resize: ResizeOptions;
-  sourceUrl: string;
-  framerate?: number;
-  trim?: number;
-  outputFormat: OutputFormat;
+const resizeOptions = z.object({
+  type: resizingType,
+  width: z.number(),
+  height: z.number(),
+});
+export type ResizeOptions = z.infer<typeof resizeOptions>;
+
+const zBool = z
+  .string()
+  .transform((v) => v === "1" || v === "t" || v === "true");
+
+const zPositiveFloat = z.coerce.number().positive();
+
+const zBackground = z.string().transform((v) => {
+  const parts = v.split(":");
+  if (parts.length === 1) {
+    const hex = parts[0].replace(/^#/, "");
+    if (hex.length === 3) {
+      return {
+        r: parseInt(hex[0] + hex[0], 16),
+        g: parseInt(hex[1] + hex[1], 16),
+        b: parseInt(hex[2] + hex[2], 16),
+      };
+    }
+    return {
+      r: parseInt(hex.slice(0, 2), 16),
+      g: parseInt(hex.slice(2, 4), 16),
+      b: parseInt(hex.slice(4, 6), 16),
+    };
+  }
+  return {
+    r: parseInt(parts[0], 10) || 0,
+    g: parseInt(parts[1], 10) || 0,
+    b: parseInt(parts[2], 10) || 0,
+  };
+});
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const VIDEO_FORMATS = new Set<string>(["mp4", "webm"]);
+const IMAGE_FORMATS = new Set<string>(["jpg", "png", "webp", "avif", "gif"]);
+const ALL_FORMATS = new Set<string>([...VIDEO_FORMATS, ...IMAGE_FORMATS]);
+const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|avif|gif|svg|bmp|tiff?)$/i;
+
+const SHORTHANDS: Record<string, string> = {
+  rs: "resize",
+  s: "size",
+  w: "width",
+  h: "height",
+  el: "enlarge",
+  c: "crop",
+  g: "gravity",
+  q: "quality",
+  bl: "blur",
+  sh: "sharpen",
+  rot: "rotate",
+  ar: "auto_rotate",
+  bg: "background",
+  pd: "padding",
+  sm: "strip_metadata",
+  f: "format",
+  fr: "framerate",
+  tr: "trim",
+};
+
+// ── Options schema (raw segments → canonical options) ────────────────────────
+
+const rawOptionsSchema = z
+  .object({
+    resize: z
+      .string()
+      .transform((v) => {
+        const [type = "fit", w, h] = v.split(":");
+        return {
+          type: resizingType.parse(type),
+          width: parseInt(w, 10) || 0,
+          height: parseInt(h, 10) || 0,
+        };
+      })
+      .optional(),
+
+    size: z
+      .string()
+      .transform((v) => {
+        const [w, h] = v.split(":");
+        return { width: parseInt(w, 10) || 0, height: parseInt(h, 10) || 0 };
+      })
+      .optional(),
+
+    width: z.coerce.number().int().optional(),
+    height: z.coerce.number().int().optional(),
+    enlarge: zBool.optional(),
+
+    crop: z
+      .string()
+      .transform((v) => {
+        const [w, h, g] = v.split(":");
+        return {
+          width: parseFloat(w) || 0,
+          height: parseFloat(h) || 0,
+          gravity: gravity.safeParse(g).data,
+        };
+      })
+      .optional(),
+
+    gravity: gravity.optional(),
+    quality: z.coerce.number().int().optional(),
+    blur: z.coerce.number().optional(),
+    sharpen: z.coerce.number().optional(),
+    rotate: z.coerce.number().int().optional(),
+    auto_rotate: zBool.optional(),
+    background: zBackground.optional(),
+
+    padding: z
+      .string()
+      .transform((v) => {
+        const parts = v.split(":").map((p) => parseInt(p, 10) || 0);
+        const top = parts[0];
+        const right = parts[1] ?? top;
+        const bottom = parts[2] ?? top;
+        const left = parts[3] ?? right;
+        return { top, right, bottom, left };
+      })
+      .optional(),
+
+    strip_metadata: zBool.optional(),
+
+    format: z
+      .string()
+      .transform((v) => (v === "jpeg" ? "jpg" : v))
+      .pipe(z.string().refine((v) => ALL_FORMATS.has(v)))
+      .optional(),
+
+    framerate: zPositiveFloat.optional(),
+    trim: zPositiveFloat.optional(),
+  })
+  .passthrough();
+
+const optionsSchema = rawOptionsSchema.transform((data) => {
+  let resize = data.resize;
+  const w = data.size?.width ?? data.width;
+  const h = data.size?.height ?? data.height;
+
+  if (!resize && (w || h)) {
+    resize = { type: "fit" as const, width: w ?? 0, height: h ?? 0 };
+  } else if (resize) {
+    if (w) resize.width = w;
+    if (h) resize.height = h;
+  }
+
+  return {
+    resize,
+    framerate: data.framerate,
+    trim: data.trim,
+    quality: data.quality,
+    blur: data.blur,
+    sharpen: data.sharpen,
+    rotate: data.rotate,
+    autoRotate: data.auto_rotate,
+    background: data.background,
+    padding: data.padding,
+    stripMetadata: data.strip_metadata,
+    crop: data.crop,
+    gravity: data.gravity,
+    enlarge: data.enlarge,
+    formatOverride: data.format as OutputFormat | undefined,
+  };
+});
+
+// ── ParsedUrl schema ─────────────────────────────────────────────────────────
+
+const parsedUrlSchema = z.object({
+  resize: resizeOptions.optional(),
+  sourceUrl: z.string(),
+  outputFormat,
+  framerate: z.number().optional(),
+  trim: z.number().optional(),
+  quality: z.number().optional(),
+  blur: z.number().optional(),
+  sharpen: z.number().optional(),
+  rotate: z.number().optional(),
+  autoRotate: z.boolean().optional(),
+  background: rgb.optional(),
+  padding: sides.optional(),
+  stripMetadata: z.boolean().optional(),
+  crop: z
+    .object({
+      width: z.number(),
+      height: z.number(),
+      gravity: gravity.optional(),
+    })
+    .optional(),
+  gravity: gravity.optional(),
+  enlarge: z.boolean().optional(),
+});
+
+export type ParsedUrl = z.infer<typeof parsedUrlSchema>;
+
+export type ImageUrl = ParsedUrl & { outputFormat: ImageFormat };
+export type VideoUrl = ParsedUrl & { outputFormat: VideoFormat };
+
+export function isImageUrl(parsed: ParsedUrl): parsed is ImageUrl {
+  if (IMAGE_FORMATS.has(parsed.outputFormat)) return true;
+  if (VIDEO_FORMATS.has(parsed.outputFormat)) return false;
+  if (parsed.framerate !== undefined || parsed.trim !== undefined) return false;
+  if (IMAGE_EXTENSIONS.test(parsed.sourceUrl)) return true;
+  return false;
 }
+
+export function isVideoUrl(parsed: ParsedUrl): parsed is VideoUrl {
+  return !isImageUrl(parsed);
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Parses an imgproxy-format processing path (after signature has been stripped).
  *
  * Supported formats:
- *   /resize:<type>:<width>:<height>/plain/<source_url>[@<format>]
- *   /resize:<type>:<width>:<height>/enc/<encrypted_source_url>[@<format>]
- *
- * Shorthand "rs" is also accepted.
- * Additional options: framerate:<fps> (fr), trim:<seconds> (tr).
- * Output format suffix: @mp4 (default), @webm.
+ *   /<options>/plain/<source_url>[@<format>]
+ *   /<options>/enc/<encrypted_source_url>[@<format>]
  */
 export function parseProcessingUrl(path: string): ParsedUrl {
   const withoutPrefix = path.replace(/^\//, "");
 
-  // Try /plain/ first, then /enc/
   const plainIdx = withoutPrefix.indexOf("/plain/");
   const encIdx = withoutPrefix.indexOf("/enc/");
 
@@ -65,68 +285,66 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     throw new Error("Missing source URL");
   }
 
-  // Parse output format suffix from the source URL
-  let outputFormat: OutputFormat = "mp4";
-  const formatMatch = sourceUrl.match(/@(mp4|webm)$/);
+  // Parse @format suffix from source URL
+  let format: OutputFormat = "mp4";
+  let hasFormatSuffix = false;
+  const formatMatch = sourceUrl.match(/@([a-z0-9]+)$/);
   if (formatMatch) {
-    outputFormat = formatMatch[1] as OutputFormat;
-    sourceUrl = sourceUrl.slice(0, -formatMatch[0].length);
+    let fmt = formatMatch[1];
+    if (fmt === "jpeg") fmt = "jpg";
+    if (ALL_FORMATS.has(fmt)) {
+      format = fmt as OutputFormat;
+      sourceUrl = sourceUrl.slice(0, -formatMatch[0].length);
+      hasFormatSuffix = true;
+    }
   }
 
   if (encrypted) {
     sourceUrl = decryptSourceUrl(sourceUrl);
   }
 
-  const options = parseOptions(optionsPart);
+  // Parse option segments into a { name: value } record, then validate with Zod
+  const raw = Object.fromEntries(
+    optionsPart
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => {
+        const idx = segment.indexOf(":");
+        if (idx === -1) return [segment, ""];
+        const name = segment.slice(0, idx);
+        const value = segment.slice(idx + 1);
+        return [SHORTHANDS[name] ?? name, value];
+      }),
+  );
 
-  return { ...options, sourceUrl, outputFormat };
-}
+  const options = optionsSchema.parse(raw);
 
-interface ParsedOptions {
-  resize: ResizeOptions;
-  framerate?: number;
-  trim?: number;
-}
+  if (options.formatOverride) {
+    format = options.formatOverride;
+  }
 
-function parseOptions(optionsStr: string): ParsedOptions {
-  const segments = optionsStr.split("/").filter(Boolean);
-
-  let resize: ResizeOptions | undefined;
-  let framerate: number | undefined;
-  let trim: number | undefined;
-
-  for (const segment of segments) {
-    const parts = segment.split(":");
-    const name = parts[0];
-
-    if (name === "resize" || name === "rs") {
-      const type = parts[1] || "fit";
-      if (!VALID_RESIZE_TYPES.has(type)) {
-        throw new Error(`Invalid resizing type: ${type}`);
-      }
-      resize = {
-        type: type as ResizingType,
-        width: parseInt(parts[2], 10) || 0,
-        height: parseInt(parts[3], 10) || 0,
-      };
-    } else if (name === "framerate" || name === "fr") {
-      const value = parseFloat(parts[1]);
-      if (isNaN(value) || value <= 0) {
-        throw new Error(`Invalid framerate: ${parts[1]}`);
-      }
-      framerate = value;
-    } else if (name === "trim" || name === "tr") {
-      const value = parseFloat(parts[1]);
-      if (isNaN(value) || value <= 0) {
-        throw new Error(`Invalid trim duration: ${parts[1]}`);
-      }
-      trim = value;
+  if (!hasFormatSuffix && !options.formatOverride) {
+    if (IMAGE_EXTENSIONS.test(sourceUrl)) {
+      format = "jpg";
     }
   }
 
-  if (!resize) {
-    throw new Error("No resize option found in URL");
-  }
-
-  return { resize, framerate, trim };
+  return parsedUrlSchema.parse({
+    resize: options.resize,
+    sourceUrl,
+    outputFormat: format,
+    framerate: options.framerate,
+    trim: options.trim,
+    quality: options.quality,
+    blur: options.blur,
+    sharpen: options.sharpen,
+    rotate: options.rotate,
+    autoRotate: options.autoRotate,
+    background: options.background,
+    padding: options.padding,
+    stripMetadata: options.stripMetadata,
+    crop: options.crop,
+    gravity: options.gravity,
+    enlarge: options.enlarge,
+  });
 }

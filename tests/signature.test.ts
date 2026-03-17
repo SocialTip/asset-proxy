@@ -1,5 +1,4 @@
 import { createHmac } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
 
 const TEST_KEY_HEX = "736563726574"; // "secret"
 const TEST_SALT_HEX = "68656c6c6f"; // "hello"

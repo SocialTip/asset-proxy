@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vitest";
 import { verifySignature } from "../src/signature.js";
 
 describe("verifySignature (keys not configured)", () => {

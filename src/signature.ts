@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "./env.js";
+import { HTTPError } from "./error.js";
 
 /**
  * Verifies the HMAC-SHA256 signature of a request path.
@@ -14,7 +15,9 @@ export function verifySignature(path: string): string {
   const withoutLeadingSlash = path.slice(1);
   const slashIdx = withoutLeadingSlash.indexOf("/");
   if (slashIdx === -1) {
-    throw new Error("Invalid URL: missing path segments");
+    throw new HTTPError("Invalid URL: missing path segments", {
+      code: "BAD_REQUEST",
+    });
   }
 
   const signature = withoutLeadingSlash.slice(0, slashIdx);
@@ -36,7 +39,9 @@ export function verifySignature(path: string): string {
     sigBuf.length !== expectedBuf.length ||
     !timingSafeEqual(sigBuf, expectedBuf)
   ) {
-    throw new Error("Invalid signature");
+    throw new HTTPError("Invalid signature", {
+      code: "FORBIDDEN",
+    });
   }
 
   return restOfPath;

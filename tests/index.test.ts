@@ -1,5 +1,4 @@
 import request from "supertest";
-import { describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
   process.env.SKIP_GPU = "1";
@@ -25,7 +24,7 @@ describe("origin allowlist", () => {
       "/insecure/resize:fill:128:128/plain/https://evil.com/video.mp4",
     );
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(403);
     expect(res.text).toContain("Origin not allowed");
   });
 });

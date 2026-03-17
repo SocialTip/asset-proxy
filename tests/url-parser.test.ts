@@ -1,5 +1,4 @@
 import { createCipheriv, randomBytes } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
 
 const TEST_KEY_HEX =
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -16,7 +15,8 @@ function encrypt(url: string): string {
 }
 
 vi.stubEnv("SOURCE_URL_ENCRYPTION_KEY", TEST_KEY_HEX);
-const { parseProcessingUrl } = await import("../src/url-parser.js");
+const { parseProcessingUrl, isImageUrl, isVideoUrl } =
+  await import("../src/url-parser.js");
 
 describe("parseProcessingUrl", () => {
   it("parses a plain source URL", () => {
@@ -67,7 +67,7 @@ describe("parseProcessingUrl", () => {
     expect(result.trim).toBe(5.5);
   });
 
-  it("parses all options together", () => {
+  it("parses all video options together", () => {
     const result = parseProcessingUrl(
       "/rs:fill:480:360/fr:30/tr:10/plain/https://example.com/video.mp4@webm",
     );
@@ -83,7 +83,20 @@ describe("parseProcessingUrl", () => {
       parseProcessingUrl(
         "/resize:fill:480:360/fr:0/plain/https://example.com/video.mp4",
       ),
-    ).toThrow("Invalid framerate");
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [ZodError: [
+        {
+          "origin": "number",
+          "code": "too_small",
+          "minimum": 0,
+          "inclusive": false,
+          "path": [
+            "framerate"
+          ],
+          "message": "Too small: expected number to be >0"
+        }
+      ]]
+    `);
   });
 
   it("rejects invalid trim", () => {
@@ -91,7 +104,20 @@ describe("parseProcessingUrl", () => {
       parseProcessingUrl(
         "/resize:fill:480:360/tr:-5/plain/https://example.com/video.mp4",
       ),
-    ).toThrow("Invalid trim duration");
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [ZodError: [
+        {
+          "origin": "number",
+          "code": "too_small",
+          "minimum": 0,
+          "inclusive": false,
+          "path": [
+            "trim"
+          ],
+          "message": "Too small: expected number to be >0"
+        }
+      ]]
+    `);
   });
 
   it("parses @webm output format", () => {
@@ -110,10 +136,42 @@ describe("parseProcessingUrl", () => {
     expect(result.sourceUrl).toBe("https://example.com/video.mov");
   });
 
-  it("defaults to mp4 when no format suffix", () => {
+  it("defaults to mp4 when no format suffix on video", () => {
     const result = parseProcessingUrl(
       "/resize:fill:480:360/plain/https://example.com/video.mp4",
     );
     expect(result.outputFormat).toBe("mp4");
+  });
+});
+
+describe("isImageUrl / isVideoUrl", () => {
+  it("returns image for image output formats", () => {
+    const result = parseProcessingUrl(
+      "/w:300/plain/https://example.com/photo.bmp@webp",
+    );
+    expect(isImageUrl(result)).toBe(true);
+    expect(isVideoUrl(result)).toBe(false);
+  });
+
+  it("returns video for video output formats", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/plain/https://example.com/video.mp4@mp4",
+    );
+    expect(isVideoUrl(result)).toBe(true);
+    expect(isImageUrl(result)).toBe(false);
+  });
+
+  it("returns image when source URL has image extension", () => {
+    const result = parseProcessingUrl(
+      "/w:300/plain/https://example.com/photo.png",
+    );
+    expect(isImageUrl(result)).toBe(true);
+  });
+
+  it("returns video when framerate is set", () => {
+    const result = parseProcessingUrl(
+      "/resize:fill:480:360/fr:30/plain/https://example.com/file",
+    );
+    expect(isVideoUrl(result)).toBe(true);
   });
 });
