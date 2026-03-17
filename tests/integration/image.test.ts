@@ -63,6 +63,22 @@ describe("image resize", () => {
     expect(meta.height).toBe(75);
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
+
+  it("resizing_algorithm:lanczos3 applies lanczos scaling", async () => {
+    const buffer = await fetchImage("/rs:fit:100:100/ra:lanczos3");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(100);
+    expect(meta.height).toBe(75);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("resizing_algorithm:nearest applies nearest-neighbour scaling", async () => {
+    const buffer = await fetchImage("/rs:fit:100:100/ra:nearest");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(100);
+    expect(meta.height).toBe(75);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
 });
 
 describe("resize options", () => {

@@ -144,15 +144,63 @@ describe("parseProcessingUrl", () => {
   });
 });
 
-describe("pro options return 400", () => {
-  it("rejects resizing_algorithm", () => {
-    expect(() =>
-      parseProcessingUrl(
-        "/ra:lanczos3/w:100/plain/https://example.com/photo.jpg",
-      ),
-    ).toThrow("not implemented");
+describe("resizing_algorithm", () => {
+  it("parses CPU resizing_algorithm", () => {
+    const result = parseProcessingUrl(
+      "/ra:lanczos3/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(result.resizingAlgorithm).toEqual({
+      mode: "cpu",
+      algorithm: "lanczos3",
+    });
   });
 
+  it("parses GPU scaler", () => {
+    const result = parseProcessingUrl(
+      "/ra:gpu:scale_npp/resize:fill:480:360/plain/https://example.com/video.mp4",
+    );
+    expect(result.resizingAlgorithm).toEqual({
+      mode: "gpu",
+      scaler: "scale_npp",
+    });
+  });
+
+  it("parses GPU scaler with interpolation algorithm", () => {
+    const result = parseProcessingUrl(
+      "/ra:gpu:scale_npp:cubic/resize:fill:480:360/plain/https://example.com/video.mp4",
+    );
+    expect(result.resizingAlgorithm).toEqual({
+      mode: "gpu",
+      scaler: "scale_npp",
+      algorithm: "cubic",
+    });
+  });
+
+  it("rejects interpolation algorithm on non-npp GPU scaler", () => {
+    expect(() =>
+      parseProcessingUrl(
+        "/ra:gpu:scale_cuda:cubic/w:100/plain/https://example.com/video.mp4",
+      ),
+    ).toThrow("only supported with scale_npp");
+  });
+
+  it("defaults to no resizing algorithm (cuvid used at runtime for GPU video)", () => {
+    const result = parseProcessingUrl(
+      "/resize:force:480:360/plain/https://example.com/video.mp4",
+    );
+    expect(result.resizingAlgorithm).toBeUndefined();
+  });
+
+  it("rejects invalid resizing_algorithm", () => {
+    expect(() =>
+      parseProcessingUrl(
+        "/ra:invalid/w:100/plain/https://example.com/photo.jpg",
+      ),
+    ).toThrow();
+  });
+});
+
+describe("pro options return 400", () => {
   it("rejects crop_aspect_ratio", () => {
     expect(() =>
       parseProcessingUrl("/car:16:9/w:100/plain/https://example.com/photo.jpg"),

@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
@@ -11,6 +12,7 @@ import type {
   ImageFormat,
   ImageUrl,
   OutputFormat,
+  ResizingAlgorithm,
   ResizingType,
   VideoUrl,
 } from "./url-parser.js";
@@ -68,6 +70,7 @@ export async function processVideo(
   return runFfmpeg(
     buildVideoArgs(sourceUrl, {
       resizingType: parsed.resize.type,
+      resizingAlgorithm: parsed.resizingAlgorithm,
       width: parsed.resize.width,
       height: parsed.resize.height,
       framerate: parsed.framerate,
@@ -144,6 +147,7 @@ function runFfmpeg(args: string[]): Readable {
 
 interface VideoParams {
   resizingType: ResizingType;
+  resizingAlgorithm?: ResizingAlgorithm;
   width: number;
   height: number;
   framerate?: number;
@@ -153,22 +157,69 @@ interface VideoParams {
 }
 
 function buildVideoArgs(sourceUrl: string, params: VideoParams): string[] {
-  const { resizingType, width, height, gpu, framerate, trim, outputFormat } =
-    params;
+  const {
+    resizingType,
+    resizingAlgorithm,
+    width,
+    height,
+    gpu,
+    framerate,
+    trim,
+    outputFormat,
+  } = params;
   const args = ["-hide_banner", "-y"];
 
   if (gpu) {
     args.push("-hwaccel", "cuda", "-hwaccel_output_format", "cuda");
-  }
 
-  args.push("-i", sourceUrl);
+    if (resizingAlgorithm?.mode === "gpu") {
+      // Explicit GPU scaler — use -vf with the chosen scale filter
+      args.push("-i", sourceUrl);
+      const filter = buildScaleFilter({
+        resizingType,
+        resizingAlgorithm,
+        width,
+        height,
+        gpu: true,
+      });
+      args.push("-vf", filter);
+    } else if (resizingAlgorithm?.mode === "cpu") {
+      throw new HTTPError(
+        "CPU resizing algorithms are not supported with GPU acceleration — use gpu:scale_cuda or gpu:scale_npp, or disable GPU",
+        { code: "BAD_REQUEST" },
+      );
+    } else {
+      // Default cuvid resize via -resize decoder flag (force mode only)
+      if (resizingType !== "force") {
+        throw new HTTPError(
+          `Resize type '${resizingType}' is not supported with default GPU resize — specify ra:gpu:scale_cuda or ra:gpu:scale_npp for ${resizingType} mode`,
+          { code: "BAD_REQUEST" },
+        );
+      }
+      if (width <= 0 || height <= 0) {
+        throw new HTTPError(
+          "Both width and height are required for default GPU resize",
+          { code: "BAD_REQUEST" },
+        );
+      }
+      args.push("-resize", `${width}x${height}`);
+      args.push("-i", sourceUrl);
+    }
+  } else {
+    args.push("-i", sourceUrl);
+    const filter = buildScaleFilter({
+      resizingType,
+      resizingAlgorithm,
+      width,
+      height,
+      gpu: false,
+    });
+    args.push("-vf", filter);
+  }
 
   if (trim !== undefined) {
     args.push("-t", String(trim));
   }
-
-  const filter = buildScaleFilter({ resizingType, width, height, gpu });
-  args.push("-vf", filter);
 
   if (framerate !== undefined) {
     args.push("-r", String(framerate));
@@ -214,6 +265,7 @@ function buildImageArgs(
     filters.push(
       buildScaleFilter({
         resizingType: parsed.resize.type,
+        resizingAlgorithm: parsed.resizingAlgorithm,
         width: parsed.resize.width,
         height: parsed.resize.height,
         gpu: false,
@@ -349,50 +401,94 @@ function rgbToHex(c: { r: number; g: number; b: number }): string {
 
 interface ScaleFilterParams {
   resizingType: ResizingType;
+  resizingAlgorithm?: ResizingAlgorithm;
   width: number;
   height: number;
   gpu: boolean;
 }
 
+const CPU_ALGORITHM_FLAGS: Record<string, string> = {
+  nearest: "neighbor",
+  linear: "bilinear",
+  cubic: "bicubic",
+  lanczos2: "lanczos",
+  lanczos3: "lanczos",
+};
+
+const NPP_INTERP_ALGO: Record<string, string> = {
+  nearest: "nn",
+  linear: "linear",
+  cubic: "cubic",
+  lanczos2: "lanczos",
+  lanczos3: "lanczos",
+};
+
 function buildScaleFilter({
   resizingType,
+  resizingAlgorithm,
   width,
   height,
   gpu,
 }: ScaleFilterParams): string {
-  const scaleName = gpu ? "scale_cuda" : "scale";
   const w = width > 0 ? width : -1;
   const h = height > 0 ? height : -1;
+
+  // Determine scale filter name and algorithm suffix
+  let scaleName: string;
+  let flagsSuffix = "";
+
+  if (gpu) {
+    // Only called with an explicit GPU scaler (cuvid default is handled via -resize in buildVideoArgs)
+    assert(
+      resizingAlgorithm?.mode === "gpu",
+      "buildScaleFilter with gpu=true requires an explicit GPU scaler",
+    );
+    scaleName = resizingAlgorithm.scaler;
+    if (resizingAlgorithm.algorithm) {
+      flagsSuffix = `:interp_algo=${NPP_INTERP_ALGO[resizingAlgorithm.algorithm]}`;
+    }
+  } else {
+    if (resizingAlgorithm?.mode === "gpu") {
+      throw new HTTPError(
+        "GPU resizing algorithms (gpu:*) are only available for video processing with GPU acceleration — use CPU algorithms for image thumbnails",
+        { code: "BAD_REQUEST" },
+      );
+    }
+    scaleName = "scale";
+    if (resizingAlgorithm?.mode === "cpu") {
+      flagsSuffix = `:flags=${CPU_ALGORITHM_FLAGS[resizingAlgorithm.algorithm]}`;
+    }
+  }
 
   switch (resizingType) {
     case "fit":
       if (gpu) {
-        return `${scaleName}=w='min(${width || 99999},iw*min(${width || 99999}/iw\\,${height || 99999}/ih))':h='min(${height || 99999},ih*min(${width || 99999}/iw\\,${height || 99999}/ih))'`;
+        return `${scaleName}=w='min(${width || 99999},iw*min(${width || 99999}/iw\\,${height || 99999}/ih))':h='min(${height || 99999},ih*min(${width || 99999}/iw\\,${height || 99999}/ih))'${flagsSuffix}`;
       }
-      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=decrease`;
+      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=decrease${flagsSuffix}`;
 
     case "fill":
       if (gpu) {
-        return `${scaleName}=w='max(${width},iw*max(${width}/iw\\,${height}/ih))':h='max(${height},ih*max(${width}/iw\\,${height}/ih))',hwdownload,format=nv12,crop=${width}:${height},hwupload_cuda`;
+        return `${scaleName}=w='max(${width},iw*max(${width}/iw\\,${height}/ih))':h='max(${height},ih*max(${width}/iw\\,${height}/ih))'${flagsSuffix},hwdownload,format=nv12,crop=${width}:${height},hwupload_cuda`;
       }
-      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase,crop=${width}:${height}`;
+      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop=${width}:${height}`;
 
     case "fill-down":
       if (gpu) {
-        return `${scaleName}=w='min(iw,max(${width},iw*max(${width}/iw\\,${height}/ih)))':h='min(ih,max(${height},ih*max(${width}/iw\\,${height}/ih)))',hwdownload,format=nv12,crop='min(${width},iw)':'min(${height},ih)',hwupload_cuda`;
+        return `${scaleName}=w='min(iw,max(${width},iw*max(${width}/iw\\,${height}/ih)))':h='min(ih,max(${height},ih*max(${width}/iw\\,${height}/ih)))'${flagsSuffix},hwdownload,format=nv12,crop='min(${width},iw)':'min(${height},ih)',hwupload_cuda`;
       }
-      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase,crop='min(${width},iw)':'min(${height},ih)'`;
+      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width},iw)':'min(${height},ih)'`;
 
     case "force":
-      return `${scaleName}=${width}:${height}`;
+      return `${scaleName}=${width}:${height}${flagsSuffix}`;
 
     case "auto":
       if (gpu) {
-        return `hwdownload,format=nv12,scale=${w}:${h}:force_original_aspect_ratio='if(gt(dar,${width}/${height}),1,2)'`;
+        return `hwdownload,format=nv12,scale=${w}:${h}:force_original_aspect_ratio='if(gt(dar,${width}/${height}),1,2)'${flagsSuffix}`;
       }
-      return `scale=${w}:${h}:force_original_aspect_ratio='if(gt(dar,${width}/${height}),1,2)'`;
+      return `scale=${w}:${h}:force_original_aspect_ratio='if(gt(dar,${width}/${height}),1,2)'${flagsSuffix}`;
 
     default:
-      return `${scaleName}=${w}:${h}`;
+      return `${scaleName}=${w}:${h}${flagsSuffix}`;
   }
 }

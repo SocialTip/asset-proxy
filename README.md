@@ -44,6 +44,16 @@ Shorthand for setting width and height without specifying resize type (defaults 
 
 Set dimensions individually. When used without a `resize` segment, defaults to `fit`.
 
+#### Resizing Algorithm — `resizing_algorithm:<algorithm>` (shorthand `ra`)
+
+Controls the scaling algorithm. Supports CPU and GPU modes:
+
+**CPU algorithms** (for images and video thumbnails): `nearest`, `linear`, `cubic`, `lanczos2`, `lanczos3`. Example: `ra:lanczos3`.
+
+**GPU scalers** (video processing with GPU acceleration only): `gpu:scale_cuda`, `gpu:scale_npp`. When no resizing algorithm is specified, GPU video resize uses the cuvid decoder's built-in resize (`-resize`), which only supports `force` mode with both width and height specified. To use other resize modes (fit, fill, fill-down, auto) with GPU, specify an explicit GPU scaler. The `scale_npp` scaler also supports an interpolation algorithm suffix: `gpu:scale_npp:cubic`, `gpu:scale_npp:lanczos3`, etc. Available `scale_npp` interpolation algorithms: `nearest`, `linear`, `cubic`, `lanczos2`, `lanczos3`.
+
+GPU scaler variants are not available when extracting image thumbnails — use the CPU algorithms instead.
+
 #### Enlarge — `enlarge:1` (shorthand `el`)
 
 Allow upscaling when the image is smaller than the target dimensions. Off by default.
