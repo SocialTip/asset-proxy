@@ -1,9 +1,7 @@
 import sharp from "sharp";
-import { SERVICE_URL, waitForService } from "./setup.js";
+import { SERVICE_URL } from "./setup.js";
 
 const SOURCE_URL = "http://file-server/test-image.png";
-
-beforeAll(waitForService);
 
 async function fetchImage(path: string) {
   const url = `${SERVICE_URL}/insecure${path}/plain/${SOURCE_URL}`;
