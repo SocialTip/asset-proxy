@@ -14,11 +14,12 @@ jobs:
         ports:
           - 80:80
         volumes:
-          - ${{ github.workspace }}/tests/fixtures:/usr/share/nginx/html:ro
+          - /srv/nginx:/usr/share/nginx
     steps:
       - uses: actions/checkout@v4
-        with:
-          clean: false
+
+      - name: Link test fixtures into nginx
+        run: rm -rf /srv/nginx/html ; ln -s ${{ github.workspace }}/tests/fixtures /srv/nginx/html
 
       - uses: actions/setup-node@v4
         with:
