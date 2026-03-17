@@ -8,6 +8,13 @@ on:
 jobs:
   test:
     runs-on: warp-ubuntu-latest-x64-2x
+    services:
+      file-server:
+        image: nginx:alpine
+        ports:
+          - 80:80
+        volumes:
+          - ${{ github.workspace }}/tests/fixtures:/usr/share/nginx/html:ro
     steps:
       - uses: actions/checkout@v4
 
@@ -22,11 +29,24 @@ jobs:
 
       - run: yarn lint
 
-      - name: Start test containers
-        run: docker compose up -d --build --wait
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Map file-server hostname
+        run: echo "127.0.0.1 file-server" | sudo tee -a /etc/hosts
+
+      - name: Start asset-proxy
+        run: nohup npx tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
+        env:
+          SKIP_GPU: "1"
+          SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          ALLOWED_ORIGINS: "http://file-server"
+
+      - name: Wait for asset-proxy
+        run: timeout 30 bash -c 'until curl -sf http://localhost:8080/health; do sleep 1; done'
 
       - run: yarn test
 
-      - name: Stop test containers
-        if: always()
-        run: docker compose down
+      - name: Print asset-proxy logs
+        if: failure()
+        run: cat /tmp/asset-proxy.log
