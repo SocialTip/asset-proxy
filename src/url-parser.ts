@@ -332,7 +332,21 @@ const rawOptionsSchema = z
 
     resizing_algorithm: zResizingAlgorithm.optional(),
     objects_position: notImplemented("objects_position").optional(),
-    crop_aspect_ratio: notImplemented("crop_aspect_ratio").optional(),
+    crop_aspect_ratio: z
+      .string()
+      .transform((v) => {
+        const [w, h] = v.split(":");
+        const width = parseFloat(w);
+        const height = parseFloat(h);
+        if (!width || !height || width <= 0 || height <= 0) {
+          throw new HTTPError(
+            "crop_aspect_ratio requires two positive numbers: car:<width>:<height>",
+            { code: "BAD_REQUEST" },
+          );
+        }
+        return width / height;
+      })
+      .optional(),
   })
   .passthrough();
 
@@ -403,6 +417,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     padding,
     stripMetadata: data.strip_metadata,
     crop: data.crop,
+    cropAspectRatio: data.crop_aspect_ratio,
     gravity: data.gravity,
     enlarge: data.enlarge,
     formatOverride: data.format as OutputFormat | undefined,
@@ -441,6 +456,7 @@ const parsedUrlSchema = z.object({
       gravity: z.any().optional(),
     })
     .optional(),
+  cropAspectRatio: z.number().optional(),
   gravity: z.any().optional(),
   enlarge: z.boolean().optional(),
 });
@@ -562,6 +578,7 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     padding: options.padding,
     stripMetadata: options.stripMetadata,
     crop: options.crop,
+    cropAspectRatio: options.cropAspectRatio,
     gravity: options.gravity,
     enlarge: options.enlarge,
   });

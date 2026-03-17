@@ -39,6 +39,19 @@ function extractFrame(videoPath: string): Buffer {
   return execSync(`cat "${framePath}"`);
 }
 
+async function fetchVideo(
+  path: string,
+): Promise<{ buffer: Buffer; videoPath: string }> {
+  const url = `${SERVICE_URL}/insecure${path}/plain/${SOURCE_URL}`;
+  const res = await fetch(url);
+  expect(res.status).toBe(200);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const tmp = mkdtempSync(join(tmpdir(), "asset-proxy-test-"));
+  const videoPath = join(tmp, "output.mp4");
+  writeFileSync(videoPath, buffer);
+  return { buffer, videoPath };
+}
+
 describe("video resize", () => {
   it("resizes to 128x128 fill with framerate and trim", async () => {
     const url = `${SERVICE_URL}/insecure/resize:fill:128:128/fr:15/tr:1/plain/${SOURCE_URL}`;
@@ -63,6 +76,18 @@ describe("video resize", () => {
     expect(meta.duration).toBeLessThanOrEqual(1.5);
 
     // Snapshot first frame
+    const frame = extractFrame(videoPath);
+    expect(frame).toMatchImageSnapshot();
+  });
+
+  it("crop_aspect_ratio crops video to 1:1", async () => {
+    const { videoPath } = await fetchVideo(
+      "/resize:force:128:128/car:1:1/fr:15/tr:1",
+    );
+    const meta = probeVideo(videoPath);
+    // After crop to 1:1 then resize to 128x128
+    expect(meta.width).toBe(128);
+    expect(meta.height).toBe(128);
     const frame = extractFrame(videoPath);
     expect(frame).toMatchImageSnapshot();
   });

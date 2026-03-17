@@ -73,6 +73,7 @@ export async function processVideo(
     buildVideoArgs(sourceUrl, {
       resizingType: parsed.resize.type,
       resizingAlgorithm: parsed.resizingAlgorithm,
+      cropAspectRatio: parsed.cropAspectRatio,
       width: parsed.resize.width,
       height: parsed.resize.height,
       framerate: parsed.framerate,
@@ -150,6 +151,7 @@ function runFfmpeg(args: string[]): Readable {
 interface VideoParams {
   resizingType: ResizingType;
   resizingAlgorithm?: ResizingAlgorithm;
+  cropAspectRatio?: number;
   width: number;
   height: number;
   framerate?: number;
@@ -162,6 +164,7 @@ function buildVideoArgs(sourceUrl: string, params: VideoParams): string[] {
   const {
     resizingType,
     resizingAlgorithm,
+    cropAspectRatio,
     width,
     height,
     gpu,
@@ -169,6 +172,11 @@ function buildVideoArgs(sourceUrl: string, params: VideoParams): string[] {
     trim,
     outputFormat,
   } = params;
+
+  // Build crop aspect ratio filter expression if needed
+  const carFilter = cropAspectRatio
+    ? `crop='if(gt(dar\\,${cropAspectRatio})\\,ih*${cropAspectRatio}\\,iw)':'if(gt(dar\\,${cropAspectRatio})\\,ih\\,iw/${cropAspectRatio})'`
+    : "";
   const args = ["-hide_banner", "-y"];
 
   if (gpu) {
@@ -177,14 +185,15 @@ function buildVideoArgs(sourceUrl: string, params: VideoParams): string[] {
     if (resizingAlgorithm?.mode === "gpu") {
       // Explicit GPU scaler — use -vf with the chosen scale filter
       args.push("-i", sourceUrl);
-      const filter = buildScaleFilter({
+      const scaleFilter = buildScaleFilter({
         resizingType,
         resizingAlgorithm,
         width,
         height,
         gpu: true,
       });
-      args.push("-vf", filter);
+      const vf = carFilter ? `${carFilter},${scaleFilter}` : scaleFilter;
+      args.push("-vf", vf);
     } else if (resizingAlgorithm?.mode === "cpu") {
       throw new HTTPError(
         "CPU resizing algorithms are not supported with GPU acceleration — use gpu:scale_cuda or gpu:scale_npp, or disable GPU",
@@ -206,17 +215,21 @@ function buildVideoArgs(sourceUrl: string, params: VideoParams): string[] {
       }
       args.push("-resize", `${width}x${height}`);
       args.push("-i", sourceUrl);
+      if (carFilter) {
+        args.push("-vf", carFilter);
+      }
     }
   } else {
     args.push("-i", sourceUrl);
-    const filter = buildScaleFilter({
+    const scaleFilter = buildScaleFilter({
       resizingType,
       resizingAlgorithm,
       width,
       height,
       gpu: false,
     });
-    args.push("-vf", filter);
+    const vf = carFilter ? `${carFilter},${scaleFilter}` : scaleFilter;
+    args.push("-vf", vf);
   }
 
   if (trim !== undefined) {
@@ -262,6 +275,15 @@ function buildImageArgs(
     const g = parsed.crop.gravity ?? parsed.gravity;
     const { x, y } = gravityOffsets(g, cw, ch);
     filters.push(`crop=${cw}:${ch}:${x}:${y}`);
+  }
+
+  // Crop to aspect ratio
+  if (parsed.cropAspectRatio) {
+    const r = parsed.cropAspectRatio;
+    // If source is wider than target ratio, crop width; otherwise crop height
+    filters.push(
+      `crop='if(gt(dar\\,${r})\\,ih*${r}\\,iw)':'if(gt(dar\\,${r})\\,ih\\,iw/${r})'`,
+    );
   }
 
   // Resize

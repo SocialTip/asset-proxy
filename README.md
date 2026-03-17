@@ -62,6 +62,10 @@ Allow upscaling when the image is smaller than the target dimensions. Off by def
 
 Extract a region before resizing. Values less than 1 are treated as relative to source dimensions.
 
+#### Crop Aspect Ratio — `crop_aspect_ratio:<width>:<height>` (shorthand `car`)
+
+Crop the image or video to the given aspect ratio before any other processing. Example: `car:16:9`, `car:1:1`.
+
 #### Gravity — `gravity:<type>` (shorthand `g`)
 
 Anchor point for crop operations.
