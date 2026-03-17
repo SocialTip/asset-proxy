@@ -17,6 +17,8 @@ jobs:
           - ${{ github.workspace }}/tests/fixtures:/usr/share/nginx/html:ro
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: false
 
       - uses: actions/setup-node@v4
         with:
