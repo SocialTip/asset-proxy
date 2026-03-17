@@ -6,3 +6,7 @@ export const gpuReady = Promise.resolve(false);
 export const processVideo = vi.fn(() =>
   Promise.resolve(Readable.from(Buffer.from("fake"))),
 );
+
+export const processImage = vi.fn(() =>
+  Promise.resolve(Buffer.from("fake-image")),
+);

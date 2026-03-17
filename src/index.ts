@@ -2,9 +2,8 @@ import { Storage } from "@google-cloud/storage";
 import express from "express";
 import { env } from "./env.js";
 import { HTTPError } from "./error.js";
-import { gpuReady, processVideo } from "./ffmpeg.js";
+import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
 import { logger } from "./logger.js";
-import { processImage } from "./sharp.js";
 import { verifySignature } from "./signature.js";
 import { isImageUrl, isVideoUrl, parseProcessingUrl } from "./url-parser.js";
 
@@ -107,12 +106,12 @@ app.get("/health", (_req, res) => {
 });
 
 // Error-handling middleware (4 params required for Express to recognise it)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use(
   (
     err: unknown,
     _req: express.Request,
     res: express.Response,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _next: express.NextFunction,
   ) => {
     const status = err instanceof HTTPError ? err.status : 500;
