@@ -211,6 +211,7 @@ const SHORTHANDS: Record<string, string> = {
   fl: "flip",
   ar: "auto_rotate",
   bg: "background",
+  bga: "background_alpha",
   pd: "padding",
   sm: "strip_metadata",
   f: "format",
@@ -326,6 +327,7 @@ const rawOptionsSchema = z
       .optional(),
     auto_rotate: zBool.optional(),
     background: zBackground.optional(),
+    background_alpha: z.coerce.number().min(0).max(1).optional(),
 
     padding: z
       .string()
@@ -450,6 +452,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     flip: data.flip,
     autoRotate: data.auto_rotate,
     background: data.background,
+    backgroundAlpha: data.background_alpha,
     padding,
     stripMetadata: data.strip_metadata,
     crop: data.crop,
@@ -512,6 +515,8 @@ const parsedUrlSchema = z.object({
   autoRotate: z.boolean().optional(),
   /** Background colour (RGB) for padding, extend, and alpha flattening. */
   background: rgb.optional(),
+  /** Background opacity (0–1). */
+  backgroundAlpha: z.number().optional(),
   /** Canvas padding in pixels: top, right, bottom, left. */
   padding: sides.optional(),
   /** Remove EXIF and other metadata from the output. */
@@ -653,6 +658,7 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     flip: options.flip,
     autoRotate: options.autoRotate,
     background: options.background,
+    backgroundAlpha: options.backgroundAlpha,
     padding: options.padding,
     stripMetadata: options.stripMetadata,
     crop: options.crop,

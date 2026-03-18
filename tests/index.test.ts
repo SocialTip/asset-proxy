@@ -312,6 +312,29 @@ describe("image ffmpeg args", () => {
     `);
   });
 
+  it("padding with background alpha", () => {
+    expect(imageArgs(plain("/w:100/pd:10/bg:ff0000/bga:0.5")))
+      .toMatchInlineSnapshot(`
+        [
+          "-hide_banner",
+          "-y",
+          "-i",
+          "https://example.com/photo.jpg",
+          "-vf",
+          "scale=100:-1:force_original_aspect_ratio=decrease,format=rgba,pad=iw+20:ih+20:10:10:#ff0000@0.5",
+          "-map_metadata",
+          "-1",
+          "-frames:v",
+          "1",
+          "-f",
+          "image2",
+          "-c:v",
+          "mjpeg",
+          "pipe:1",
+        ]
+      `);
+  });
+
   it("rotate 90", () => {
     expect(imageArgs(plain("/w:100/rot:90"))).toMatchInlineSnapshot(`
       [

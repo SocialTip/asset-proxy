@@ -413,6 +413,11 @@ function buildImageArgs(
     );
   }
 
+  // Convert to RGBA when background alpha is used (required for transparent pad)
+  if (parsed.backgroundAlpha !== undefined && parsed.backgroundAlpha < 1) {
+    filters.push("format=rgba");
+  }
+
   // Extend — pad undersized images to fill target dimensions
   if (parsed.extend?.enabled && parsed.resize) {
     const tw = parsed.resize.width || 0;
@@ -421,7 +426,7 @@ function buildImageArgs(
       const w = tw > 0 ? String(tw) : "iw";
       const h = th > 0 ? String(th) : "ih";
       const colour = parsed.background
-        ? rgbToHex(parsed.background)
+        ? rgbToHex(parsed.background, parsed.backgroundAlpha)
         : "black@0";
       filters.push(`pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:${colour}`);
     }
@@ -460,7 +465,9 @@ function buildImageArgs(
   // Padding with background
   if (parsed.padding) {
     const { top, right, bottom, left } = parsed.padding;
-    const colour = parsed.background ? rgbToHex(parsed.background) : "black@0";
+    const colour = parsed.background
+      ? rgbToHex(parsed.background, parsed.backgroundAlpha)
+      : "black@0";
     // pad adds to dimensions: new_w = in_w + left + right, new_h = in_h + top + bottom
     filters.push(
       `pad=iw+${left + right}:ih+${top + bottom}:${left}:${top}:${colour}`,
@@ -524,9 +531,14 @@ function appendImageOutputArgs(
   }
 }
 
-function rgbToHex(c: { r: number; g: number; b: number }): string {
+function rgbToHex(
+  c: { r: number; g: number; b: number },
+  alpha?: number,
+): string {
   const hex = (n: number) => n.toString(16).padStart(2, "0");
-  return `#${hex(c.r)}${hex(c.g)}${hex(c.b)}`;
+  const colour = `#${hex(c.r)}${hex(c.g)}${hex(c.b)}`;
+  if (alpha !== undefined && alpha < 1) return `${colour}@${alpha}`;
+  return colour;
 }
 
 /** Return ffmpeg crop x:y offset expressions for the given gravity. */
