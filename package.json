@@ -38,6 +38,7 @@
     "@types/jest-image-snapshot": "^6.4.1",
     "@types/node": "^25.5.0",
     "@types/supertest": "^7.2.0",
+    "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",

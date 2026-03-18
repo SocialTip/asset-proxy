@@ -16,7 +16,9 @@ FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_VERSION=24.13.0
-ENV FFMPEG_VERSION=7.1
+ENV FFMPEG_VERSION=7.0
+ENV FFMPEG_RELEASE=autobuild-2024-08-31-12-50
+ENV FFMPEG_BUILD=n7.0.2-6-g7e69129d2f
 ENV SKIP_GPU=
 
 RUN apt-get update && \
@@ -29,7 +31,7 @@ RUN apt-get update && \
     ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then FFMPEG_ARCH="linuxarm64"; NODE_ARCH="linux-arm64"; \
     else FFMPEG_ARCH="linux64"; NODE_ARCH="linux-x64"; fi && \
-    curl -fsSL https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n${FFMPEG_VERSION}-latest-${FFMPEG_ARCH}-gpl-${FFMPEG_VERSION}.tar.xz \
+    curl -fsSL https://github.com/BtbN/FFmpeg-Builds/releases/download/${FFMPEG_RELEASE}/ffmpeg-${FFMPEG_BUILD}-${FFMPEG_ARCH}-gpl-${FFMPEG_VERSION}.tar.xz \
       | tar -xJ --strip-components=1 -C /usr/local && \
     curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${NODE_ARCH}.tar.xz \
       | tar -xJ --strip-components=1 -C /usr/local && \
