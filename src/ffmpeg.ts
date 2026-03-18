@@ -95,6 +95,10 @@ const IMAGE_ONLY_OPTIONS: [
   ["gradient", "gradient"],
   ["monochrome", "monochrome"],
   ["duotone", "duotone"],
+  ["jpegOptions", "jpeg_options"],
+  ["pngOptions", "png_options"],
+  ["webpOptions", "webp_options"],
+  ["avifOptions", "avif_options"],
 ];
 
 function rejectImageOnlyOptions(parsed: import("./url-parser.js").ParsedUrl) {
@@ -256,6 +260,15 @@ export async function processImage(
     });
   } else if (aq?.method === "size" && aq.target) {
     buffer = await shrinkToMaxBytes(buffer, parsed.outputFormat, aq.target);
+  }
+
+  if (
+    parsed.jpegOptions ||
+    parsed.pngOptions ||
+    parsed.webpOptions ||
+    parsed.avifOptions
+  ) {
+    buffer = await applyFormatOptions(buffer, parsed);
   }
 
   if (
@@ -437,6 +450,59 @@ async function computeDssim(a: Buffer, b: Buffer): Promise<number> {
 }
 
 /** Binary search on quality using sharp to fit output under maxBytes. */
+/** Re-encode with format-specific options using sharp. */
+async function applyFormatOptions(
+  buffer: Buffer,
+  parsed: ImageUrl,
+): Promise<Buffer> {
+  let img = sharp(buffer);
+  switch (parsed.outputFormat) {
+    case "jpg": {
+      const opts = parsed.jpegOptions;
+      img = img.jpeg({
+        quality: parsed.quality,
+        progressive: opts?.progressive,
+        chromaSubsampling: opts?.noSubsample ? "4:4:4" : undefined,
+        trellisQuantisation: opts?.trellisQuant,
+        overshootDeringing: opts?.overshootDeringing,
+        optimiseScans: opts?.optimizeScans,
+        quantisationTable: opts?.quantTable,
+      });
+      break;
+    }
+    case "png": {
+      const opts = parsed.pngOptions;
+      img = img.png({
+        progressive: opts?.interlaced,
+        palette: opts?.quantize,
+        colours: opts?.quantizationColours,
+      });
+      break;
+    }
+    case "webp": {
+      const opts = parsed.webpOptions;
+      img = img.webp({
+        quality: parsed.quality,
+        effort: opts?.compression,
+        smartSubsample: opts?.smartSubsample,
+        preset: opts?.preset as never,
+      });
+      break;
+    }
+    case "avif": {
+      const opts = parsed.avifOptions;
+      img = img.avif({
+        quality: parsed.quality,
+        chromaSubsampling: opts?.subsample,
+      });
+      break;
+    }
+    default:
+      return buffer;
+  }
+  return img.toBuffer();
+}
+
 async function shrinkToMaxBytes(
   buffer: Buffer,
   format: ImageFormat,

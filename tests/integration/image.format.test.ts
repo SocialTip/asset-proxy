@@ -66,6 +66,76 @@ describe("image output formats", () => {
   });
 });
 
+describe("format-specific options", () => {
+  it("jpeg progressive encoding", async () => {
+    const buffer = await fetchImage("/w:100/jpgo:1");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.isProgressive).toBe(true);
+  });
+
+  it("jpeg no_subsample (4:4:4 chroma)", async () => {
+    const buffer = await fetchImage("/w:100/jpgo:0:1");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.chromaSubsampling).toBe("4:4:4");
+  });
+
+  it("png interlaced", async () => {
+    const { buffer } = await fetchImageWithFormat("/w:100/pngo:1", "png");
+    const meta = await sharp(buffer).metadata();
+    expect(meta.isProgressive).toBe(true);
+  });
+
+  it("png quantize reduces palette to 4 colours", async () => {
+    const normal = await fetchImageFrom("/w:200/f:png", BUTTERFLY_URL);
+    const quantized = await fetchImageFrom(
+      "/w:200/pngo:0:1:4/f:png",
+      BUTTERFLY_URL,
+    );
+    expect(quantized.length).toBeLessThan(normal.length);
+    expect(await toPng(quantized)).toMatchImageSnapshot();
+  });
+
+  it("jpeg trellis_quant and optimize_scans reduce file size", async () => {
+    const normal = await fetchImageFrom("/w:200/q:80", BUTTERFLY_URL);
+    // jpgo:0:0:1:0:1 = no progressive, no no_subsample, trellis_quant=1, no overshoot, optimize_scans=1
+    const optimised = await fetchImageFrom(
+      "/w:200/q:80/jpgo:0:0:1:0:1",
+      BUTTERFLY_URL,
+    );
+    expect(optimised.length).toBeLessThanOrEqual(normal.length);
+  });
+
+  it("webp high compression produces smaller file", async () => {
+    const low = await fetchImageFrom("/w:100/q:80/wpo:0/f:webp", BUTTERFLY_URL);
+    const high = await fetchImageFrom(
+      "/w:100/q:80/wpo:6/f:webp",
+      BUTTERFLY_URL,
+    );
+    expect(high.length).toBeLessThan(low.length);
+  });
+
+  it("webp smart_subsample is accepted", async () => {
+    const buffer = await fetchImageFrom(
+      "/w:100/q:80/wpo:0:1/f:webp",
+      BUTTERFLY_URL,
+    );
+    expect(buffer.length).toBeGreaterThan(0);
+  });
+
+  it("webp preset is accepted", async () => {
+    const buffer = await fetchImageFrom(
+      "/w:100/q:80/wpo:0:0:photo/f:webp",
+      BUTTERFLY_URL,
+    );
+    expect(buffer.length).toBeGreaterThan(0);
+  });
+
+  it("avif subsample 4:4:4", async () => {
+    const { buffer } = await fetchImageWithFormat("/w:100/avo:4:4:4", "avif");
+    expect(buffer.length).toBeGreaterThan(0);
+  });
+});
+
 describe("image quality", () => {
   it("low quality produces smaller file", async () => {
     const highQ = await fetchImage("/w:100/q:95");

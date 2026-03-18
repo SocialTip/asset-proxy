@@ -241,6 +241,10 @@ const SHORTHANDS: Record<string, string> = {
   st: "style",
   eth: "enforce_thumbnail",
   fq: "format_quality",
+  jpgo: "jpeg_options",
+  pngo: "png_options",
+  wpo: "webp_options",
+  avo: "avif_options",
   aq: "autoquality",
   mb: "max_bytes",
   op: "objects_position",
@@ -554,6 +558,79 @@ const rawOptionsSchema = z
     /** Max output size in bytes — degrades quality until under limit. */
     max_bytes: z.coerce.number().int().positive().optional(),
 
+    /** JPEG options. Format: `<progressive>:<no_subsample>:<trellis_quant>:<overshoot_deringing>:<optimize_scans>:<quant_table>`. */
+    jpeg_options: z
+      .string()
+      .transform((v) => {
+        const [
+          progressive,
+          noSubsample,
+          trellisQuant,
+          overshootDeringing,
+          optimizeScans,
+          quantTable,
+        ] = v.split(":");
+        return {
+          progressive:
+            progressive === "1" ||
+            progressive === "t" ||
+            progressive === "true",
+          noSubsample:
+            noSubsample === "1" ||
+            noSubsample === "t" ||
+            noSubsample === "true",
+          trellisQuant:
+            trellisQuant === "1" ||
+            trellisQuant === "t" ||
+            trellisQuant === "true",
+          overshootDeringing:
+            overshootDeringing === "1" ||
+            overshootDeringing === "t" ||
+            overshootDeringing === "true",
+          optimizeScans:
+            optimizeScans === "1" ||
+            optimizeScans === "t" ||
+            optimizeScans === "true",
+          quantTable: quantTable ? parseInt(quantTable, 10) : undefined,
+        };
+      })
+      .optional(),
+    /** PNG options. Format: `<interlaced>:<quantize>:<quantization_colours>`. */
+    png_options: z
+      .string()
+      .transform((v) => {
+        const [interlaced, quantize, colours] = v.split(":");
+        return {
+          interlaced:
+            interlaced === "1" || interlaced === "t" || interlaced === "true",
+          quantize: quantize === "1" || quantize === "t" || quantize === "true",
+          quantizationColours: colours ? parseInt(colours, 10) : undefined,
+        };
+      })
+      .optional(),
+    /** WebP options. Format: `<compression>:<smart_subsample>:<preset>`. */
+    webp_options: z
+      .string()
+      .transform((v) => {
+        const [compression, smartSubsample, preset] = v.split(":");
+        return {
+          compression: compression ? parseInt(compression, 10) : undefined,
+          smartSubsample:
+            smartSubsample === "1" ||
+            smartSubsample === "t" ||
+            smartSubsample === "true",
+          preset: preset || undefined,
+        };
+      })
+      .optional(),
+    /** AVIF options. Format: `<subsample>`. */
+    avif_options: z
+      .string()
+      .transform((v) => {
+        return { subsample: v || undefined };
+      })
+      .optional(),
+
     objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: z
       .string()
@@ -641,6 +718,10 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     formatQuality: data.format_quality,
     autoquality: data.autoquality,
     maxBytes: data.max_bytes,
+    jpegOptions: data.jpeg_options,
+    pngOptions: data.png_options,
+    webpOptions: data.webp_options,
+    avifOptions: data.avif_options,
     blur: data.blur,
     sharpen: data.sharpen,
     pixelate: data.pixelate,
@@ -736,6 +817,39 @@ const parsedUrlSchema = z.object({
     .optional(),
   /** Max output size in bytes — degrades quality to fit. */
   maxBytes: z.number().optional(),
+  /** JPEG encoder options. */
+  jpegOptions: z
+    .object({
+      progressive: z.boolean(),
+      noSubsample: z.boolean(),
+      trellisQuant: z.boolean(),
+      overshootDeringing: z.boolean(),
+      optimizeScans: z.boolean(),
+      quantTable: z.number().optional(),
+    })
+    .optional(),
+  /** PNG encoder options. */
+  pngOptions: z
+    .object({
+      interlaced: z.boolean(),
+      quantize: z.boolean(),
+      quantizationColours: z.number().optional(),
+    })
+    .optional(),
+  /** WebP encoder options. */
+  webpOptions: z
+    .object({
+      compression: z.number().optional(),
+      smartSubsample: z.boolean(),
+      preset: z.string().optional(),
+    })
+    .optional(),
+  /** AVIF encoder options. */
+  avifOptions: z
+    .object({
+      subsample: z.string().optional(),
+    })
+    .optional(),
   /** Gaussian blur sigma. */
   blur: z.number().optional(),
   /** Sharpening sigma. */
@@ -917,6 +1031,10 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     formatQuality: options.formatQuality,
     autoquality: options.autoquality,
     maxBytes: options.maxBytes,
+    jpegOptions: options.jpegOptions,
+    pngOptions: options.pngOptions,
+    webpOptions: options.webpOptions,
+    avifOptions: options.avifOptions,
     blur: options.blur,
     sharpen: options.sharpen,
     pixelate: options.pixelate,

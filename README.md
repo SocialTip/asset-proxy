@@ -218,6 +218,22 @@ Prefer embedded thumbnail over the full image when available. Uses exiftool for 
 
 Set the output DPI metadata. Example: `dpi:300`. Takes effect regardless of whether metadata stripping is enabled.
 
+#### JPEG Options — `jpeg_options:<progressive>:<no_subsample>:<trellis_quant>:<overshoot_deringing>:<optimize_scans>:<quant_table>` (shorthand `jpgo`)
+
+Format-specific JPEG encoding options. All arguments are optional booleans (1/t/true) except quant_table (integer). Example: `jpgo:1:0:1:1:1`.
+
+#### PNG Options — `png_options:<interlaced>:<quantize>:<quantization_colours>` (shorthand `pngo`)
+
+Format-specific PNG encoding options. Interlaced enables Adam7 interlacing, quantize enables palette mode, quantization_colours sets palette size. Example: `pngo:1:1:256`.
+
+#### WebP Options — `webp_options:<compression>:<smart_subsample>:<preset>` (shorthand `wpo`)
+
+Format-specific WebP encoding options. Compression is effort level (0-6), smart_subsample enables smart chroma subsampling. Example: `wpo:6:1`.
+
+#### AVIF Options — `avif_options:<subsample>` (shorthand `avo`)
+
+Format-specific AVIF encoding options. Subsample controls chroma subsampling (e.g. `4:2:0`, `4:4:4`). Example: `avo:4:4:4`.
+
 #### Not implemented
 
 The following imgproxy options are recognised but return 501 Not Implemented:
