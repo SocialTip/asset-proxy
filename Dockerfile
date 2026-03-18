@@ -22,6 +22,7 @@ ENV NODE_VERSION=24.13.0
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ffmpeg \
+      libimage-exiftool-perl \
       ca-certificates \
       curl \
       xz-utils && \
@@ -57,6 +58,7 @@ ENV NODE_VERSION=24.13.0
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ffmpeg \
+      libimage-exiftool-perl \
       ca-certificates \
       curl \
       xz-utils && \

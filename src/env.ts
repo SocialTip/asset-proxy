@@ -55,10 +55,26 @@ const envSchema = z
           : undefined,
       ),
 
-    /** Cache-Control header value for successful responses. */
-    CACHE_CONTROL: z
+    /** When true, strip EXIF/IPTC metadata from output images. Defaults to true. */
+    STRIP_METADATA: z
       .string()
-      .default("public, max-age=31536000, immutable"),
+      .optional()
+      .transform((v) => v === undefined || v === "1" || v === "true"),
+
+    /** When true, preserve copyright metadata even when stripping. Defaults to true. */
+    KEEP_COPYRIGHT: z
+      .string()
+      .optional()
+      .transform((v) => v === undefined || v === "1" || v === "true"),
+
+    /** When true, convert embedded ICC colour profile to sRGB and remove it. Defaults to true. */
+    STRIP_COLOR_PROFILE: z
+      .string()
+      .optional()
+      .transform((v) => v === undefined || v === "1" || v === "true"),
+
+    /** Cache-Control header value for successful responses. */
+    CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
   })
   .refine(
     (data) => {
