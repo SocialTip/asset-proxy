@@ -17,7 +17,7 @@ FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_VERSION=24.13.0
 ENV FFMPEG_VERSION=7.1
-ENV SKIP_GPU=0
+ENV SKIP_GPU=
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
