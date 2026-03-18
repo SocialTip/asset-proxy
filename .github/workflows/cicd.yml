@@ -67,9 +67,11 @@ jobs:
 
       - name: Install ffmpeg, exiftool, and heif-thumbnailer
         env:
-          FFMPEG_VERSION: "7.1"
+          FFMPEG_VERSION: "7.0"
+          FFMPEG_RELEASE: "autobuild-2024-08-31-12-50"
+          FFMPEG_BUILD: "n7.0.2-6-g7e69129d2f"
         run: |
-          curl -fsSL https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n${FFMPEG_VERSION}-latest-linux64-gpl-${FFMPEG_VERSION}.tar.xz \
+          curl -fsSL https://github.com/BtbN/FFmpeg-Builds/releases/download/${FFMPEG_RELEASE}/ffmpeg-${FFMPEG_BUILD}-linux64-gpl-${FFMPEG_VERSION}.tar.xz \
             | sudo tar -xJ --strip-components=1 -C /usr/local
           sudo apt-get update -qq && sudo apt-get install -y -qq libimage-exiftool-perl heif-thumbnailer
 
