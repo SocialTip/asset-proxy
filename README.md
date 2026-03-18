@@ -102,6 +102,10 @@ Convert to monochrome. Intensity is 0–1, colour is an optional hex base colour
 
 Apply duotone effect. Intensity is 0–1, colour1 for shadows, colour2 for highlights. Example: `dt:1:000033:ffcc00`.
 
+#### Pixelate — `pixelate:<size>` (shorthand `px`)
+
+Apply a pixelation effect with the given block size in pixels. Example: `px:10`.
+
 #### Blur — `blur:<sigma>` (shorthand `bl`)
 
 Gaussian blur. Example: `bl:5`.

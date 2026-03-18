@@ -449,6 +449,28 @@ describe("image ffmpeg args", () => {
     `);
   });
 
+  it("pixelate", () => {
+    expect(imageArgs(plain("/px:8"))).toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-i",
+        "https://example.com/photo.jpg",
+        "-vf",
+        "scale=iw/8:ih/8:flags=neighbor,scale=iw*8:ih*8:flags=neighbor",
+        "-map_metadata",
+        "-1",
+        "-frames:v",
+        "1",
+        "-f",
+        "image2",
+        "-c:v",
+        "mjpeg",
+        "pipe:1",
+      ]
+    `);
+  });
+
   it("brightness and saturation via adjust", () => {
     expect(imageArgs(plain("/a:50::0.5"))).toMatchInlineSnapshot(`
       [
