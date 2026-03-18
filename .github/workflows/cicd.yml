@@ -82,7 +82,7 @@ jobs:
       - run: yarn test --update
 
       - name: Check for snapshot changes
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         id: snapshots
         run: |
           if [ -n "$(git status --porcelain)" ]; then
@@ -90,21 +90,43 @@ jobs:
           fi
 
       - name: Create snapshot update PR
-        if: always() && github.event_name == 'pull_request'
+        if: always() && steps.snapshots.outputs.changed == 'true' && github.event_name == 'pull_request'
         id: snapshot-pr
-        uses: peter-evans/create-pull-request@v8
-        with:
-          branch: snapshot-update/${{ github.head_ref || github.ref_name }}
-          base: ${{ github.head_ref || github.ref_name }}
-          delete-branch: true
-          commit-message: "test: update image snapshots"
-          title: "Update image snapshots"
-          body: |
-            Automated snapshot update from [${{ github.workflow }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}?pr=${{ github.event.pull_request.number }})
-            Created from #${{ github.event.pull_request.number }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="snapshot-update/${{ github.head_ref || github.ref_name }}"
+          BASE="${{ github.head_ref || github.ref_name }}"
+          git checkout -B "$BRANCH"
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "test: update image snapshots"
+          git lfs push --all origin "$BRANCH"
+          git push --force-with-lease origin "$BRANCH"
+          if ! gh pr view "$BRANCH" --json number &>/dev/null; then
+            gh pr create \
+              --base "$BASE" \
+              --head "$BRANCH" \
+              --title "Update image snapshots" \
+              --body "$(cat <<EOF
+          Automated snapshot update from [${{ github.workflow }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}?pr=${{ github.event.pull_request.number }})
+          Created from #${{ github.event.pull_request.number }}
+          EOF
+          )"
+          fi
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Delete stale snapshot branch
+        if: always() && steps.snapshots.outputs.changed != 'true' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="snapshot-update/${{ github.head_ref || github.ref_name }}"
+          gh pr close "$BRANCH" --delete-branch 2>/dev/null || true
 
       - name: Fail if snapshots were outdated
-        if: steps.snapshot-pr.outputs.pull-request-number
+        if: steps.snapshot-pr.outputs.created == 'true'
         run: exit 1
 
       - name: Print asset-proxy logs
