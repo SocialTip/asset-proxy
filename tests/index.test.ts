@@ -30,6 +30,28 @@ function setupSpawnMock() {
   return proc;
 }
 
+function setupSpawnMockError() {
+  const stdout = new Readable({
+    read() {
+      // Emit error on first read attempt
+      process.nextTick(() =>
+        this.destroy(new Error("ffmpeg exited with code 1")),
+      );
+    },
+  });
+  const stderr = new Readable({ read() {} });
+  const proc = {
+    stdout,
+    stderr,
+    stdin: new Readable({ read() {} }),
+    kill: vi.fn(),
+    on: vi.fn(),
+    pid: 1,
+  };
+  mockSpawn.mockReturnValue(proc as never);
+  return proc;
+}
+
 vi.hoisted(() => {
   process.env.SKIP_GPU = "1";
   process.env.ALLOWED_ORIGINS = "http://file-server,https://example.com";
@@ -67,6 +89,18 @@ const vplain = (opts: string) => `${opts}/plain/${VSRC}`;
 
 beforeEach(() => {
   mockSpawn.mockReset();
+});
+
+describe("error handling", () => {
+  it("returns 500 with generic message when image processing fails", async () => {
+    setupSpawnMockError();
+    const res = await request(app)
+      .get("/insecure/w:100/plain/https://example.com/photo.jpg")
+      .buffer(true);
+
+    expect(res.status).toBe(500);
+    expect(res.text).toBe("Error processing image");
+  });
 });
 
 describe("origin allowlist", () => {
