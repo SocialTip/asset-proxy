@@ -315,6 +315,12 @@ docker run --gpus all -p 8080:8080 asset-proxy
 
 Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
 
+## Deployment
+
+CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`).
+
+Images are tagged with the commit SHA. Pushes to `main` are additionally tagged `latest`.
+
 ## Testing
 
 Integration tests require a running service via Docker Compose. This starts the asset-proxy container (CPU mode) alongside an nginx file server that serves test fixtures:
