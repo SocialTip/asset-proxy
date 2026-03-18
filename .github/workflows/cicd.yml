@@ -1,12 +1,16 @@
-name: CI
+name: CI/CD
 
 on:
   push:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: cicd-${{ github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  test:
+  ci:
     runs-on: warp-ubuntu-latest-x64-2x
     services:
       file-server:
@@ -79,3 +83,11 @@ jobs:
       - name: Print asset-proxy logs
         if: failure()
         run: cat /tmp/asset-proxy.log
+
+  cd:
+    if: github.event_name == 'push'
+    needs: ci
+    uses: ./.github/workflows/cd.yml
+    permissions:
+      contents: read
+      packages: write
