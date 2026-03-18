@@ -507,6 +507,9 @@ const rawOptionsSchema = z
     /** Text style (Pango markup). */
     style: notImplemented("style").optional(),
 
+    /** Set output DPI metadata. */
+    dpi: z.coerce.number().positive().optional(),
+
     objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: z
       .string()
@@ -604,6 +607,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     backgroundAlpha: data.background_alpha,
     padding,
     stripMetadata: data.strip_metadata,
+    dpi: data.dpi,
     keepCopyright: data.keep_copyright,
     stripColorProfile: data.strip_color_profile,
     crop: data.crop,
@@ -716,6 +720,8 @@ const parsedUrlSchema = z.object({
   keepCopyright: z.boolean().optional(),
   /** Convert ICC colour profile to sRGB and remove it. */
   stripColorProfile: z.boolean().optional(),
+  /** Output DPI metadata value. */
+  dpi: z.number().optional(),
   /** Extract a region before resizing (width, height, optional gravity). */
   crop: z
     .object({
@@ -859,6 +865,7 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     stripMetadata: options.stripMetadata,
     keepCopyright: options.keepCopyright,
     stripColorProfile: options.stripColorProfile,
+    dpi: options.dpi,
     crop: options.crop,
     cropAspectRatio: options.cropAspectRatio,
     gravity: options.gravity,

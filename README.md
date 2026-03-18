@@ -198,6 +198,10 @@ Remove borders from an image using colour similarity detection. The threshold (r
 
 Limits output duration to the given number of seconds. Example: `ct:10`.
 
+#### DPI — `dpi:<value>`
+
+Set the output DPI metadata. Example: `dpi:300`. Takes effect regardless of whether metadata stripping is enabled.
+
 #### Not implemented
 
 The following imgproxy options are recognised but return 501 Not Implemented:
