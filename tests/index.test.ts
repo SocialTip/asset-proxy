@@ -325,6 +325,30 @@ describe("image ffmpeg args", () => {
     `);
   });
 
+  it("format_quality overrides global quality", () => {
+    expect(imageArgs(plain("/w:100/q:80/fq:jpg:50"))).toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-i",
+        "https://example.com/photo.jpg",
+        "-vf",
+        "scale=100:-1:force_original_aspect_ratio=decrease",
+        "-map_metadata",
+        "-1",
+        "-frames:v",
+        "1",
+        "-f",
+        "image2",
+        "-c:v",
+        "mjpeg",
+        "-q:v",
+        "17",
+        "pipe:1",
+      ]
+    `);
+  });
+
   it("padding with background", () => {
     expect(imageArgs(plain("/w:100/pd:10/bg:ff0000"))).toMatchInlineSnapshot(`
       [
@@ -884,6 +908,14 @@ describe("validation errors", () => {
     setupSpawnMock();
     const res = await request(app).get(
       "/insecure/wmt:abc123/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(res.status).toBe(501);
+  });
+
+  it("rejects autoquality ml method with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/aq:ml:0.02/w:100/plain/https://example.com/photo.jpg",
     );
     expect(res.status).toBe(501);
   });

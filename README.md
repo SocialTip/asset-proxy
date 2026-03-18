@@ -98,6 +98,14 @@ Anchor point for crop operations.
 
 Output quality for lossy formats (JPEG, WebP, AVIF).
 
+#### Format Quality — `format_quality:<fmt1>:<q1>:<fmt2>:<q2>` (shorthand `fq`)
+
+Per-format quality overrides. Example: `fq:jpg:80:webp:90:avif:60`. Overrides the global `quality` setting for specific formats.
+
+#### Max Bytes — `max_bytes:<bytes>` (shorthand `mb`)
+
+Automatically degrade quality until the output fits under the given byte size. Applies to lossy formats only (jpg, webp, avif). Uses binary search on quality. Example: `mb:50000`.
+
 #### Adjust — `adjust:<brightness>:<contrast>:<saturation>` (shorthand `a`)
 
 Meta-option to set brightness, contrast, and saturation in one segment. All arguments are optional. Example: `a:50:1.2:0.8`.

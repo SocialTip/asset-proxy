@@ -5,6 +5,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
+import sharp from "sharp";
 import { env } from "./env.js";
 import { HTTPError } from "./error.js";
 import { logger } from "./logger.js";
@@ -120,12 +121,17 @@ export async function processImage(
     trimFilter = await detectTrimCrop(ffmpegInput, parsed.trim);
   }
 
+  // Resolve effective quality: format-specific > global > default
+  const effectiveQuality =
+    parsed.formatQuality?.[parsed.outputFormat] ?? parsed.quality;
+  const effectiveParsed = { ...parsed, quality: effectiveQuality };
+
   let buffer: Buffer;
 
   if (parsed.outputFormat === "avif") {
     const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
     const outPath = join(dir, "output.avif");
-    const args = buildImageArgs(ffmpegInput, parsed, {
+    const args = buildImageArgs(ffmpegInput, effectiveParsed, {
       outputPath: outPath,
       trimFilter,
     });
@@ -139,7 +145,7 @@ export async function processImage(
     await rm(dir, { recursive: true, force: true });
   } else {
     const stream = runFfmpeg(
-      buildImageArgs(ffmpegInput, parsed, { trimFilter }),
+      buildImageArgs(ffmpegInput, effectiveParsed, { trimFilter }),
     );
     buffer = await new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
@@ -147,6 +153,20 @@ export async function processImage(
       stream.on("end", () => resolve(Buffer.concat(chunks)));
       stream.on("error", reject);
     });
+  }
+
+  // TODO: autoquality (DSSIM) — binary search for quality that hits target DSSIM
+
+  if (
+    parsed.maxBytes &&
+    parsed.maxBytes > 0 &&
+    buffer.length > parsed.maxBytes
+  ) {
+    buffer = await shrinkToMaxBytes(
+      buffer,
+      parsed.outputFormat,
+      parsed.maxBytes,
+    );
   }
 
   const needsExiftool =
@@ -222,6 +242,44 @@ async function extractThumbnail(
 }
 
 /** Run exiftool on an image buffer to set/copy metadata. Only supports EXIF — XMP/IPTC are always stripped. */
+/** Binary search on quality using sharp to fit output under maxBytes. */
+async function shrinkToMaxBytes(
+  buffer: Buffer,
+  format: ImageFormat,
+  maxBytes: number,
+): Promise<Buffer> {
+  let lo = 1;
+  let hi = 99;
+  let best = buffer;
+
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    let img = sharp(buffer);
+    switch (format) {
+      case "jpg":
+        img = img.jpeg({ quality: mid });
+        break;
+      case "webp":
+        img = img.webp({ quality: mid });
+        break;
+      case "avif":
+        img = img.avif({ quality: mid });
+        break;
+      default:
+        return buffer;
+    }
+    const attempt = await img.toBuffer();
+    if (attempt.length <= maxBytes) {
+      best = attempt;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return best;
+}
+
 async function runExiftool(
   buffer: Buffer,
   opts: {

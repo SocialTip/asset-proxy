@@ -240,6 +240,9 @@ const SHORTHANDS: Record<string, string> = {
   wmsh: "watermark_shadow",
   st: "style",
   eth: "enforce_thumbnail",
+  fq: "format_quality",
+  aq: "autoquality",
+  mb: "max_bytes",
   op: "objects_position",
   // Pro shorthands (parsed but rejected)
   car: "crop_aspect_ratio",
@@ -513,6 +516,42 @@ const rawOptionsSchema = z
     /** Prefer embedded thumbnail over full image (HEIC/AVIF). */
     enforce_thumbnail: zBool.optional(),
 
+    /** Per-format quality. Format: `<fmt1>:<q1>:<fmt2>:<q2>:...`. */
+    format_quality: z
+      .string()
+      .transform((v) => {
+        const parts = v.split(":");
+        const result: Record<string, number> = {};
+        for (let i = 0; i < parts.length - 1; i += 2) {
+          const fmt = parts[i] === "jpeg" ? "jpg" : parts[i];
+          result[fmt] = parseInt(parts[i + 1], 10);
+        }
+        return result;
+      })
+      .optional(),
+    /** Autoquality. Format: `<method>:<target>:<min>:<max>:<allowed_error>`. */
+    autoquality: z
+      .string()
+      .transform((v) => {
+        const [method, target, min, max, err] = v.split(":");
+        if (method && method !== "dssim") {
+          throw new HTTPError(
+            `Autoquality method '${method}' is not implemented — only 'dssim' is supported`,
+            { code: "NOT_IMPLEMENTED" },
+          );
+        }
+        return {
+          method: (method || "dssim") as "dssim",
+          target: target ? parseFloat(target) : 0.02,
+          min: min ? parseInt(min, 10) : 70,
+          max: max ? parseInt(max, 10) : 80,
+          allowedError: err ? parseFloat(err) : 0.001,
+        };
+      })
+      .optional(),
+    /** Max output size in bytes — degrades quality until under limit. */
+    max_bytes: z.coerce.number().int().positive().optional(),
+
     objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: z
       .string()
@@ -597,6 +636,9 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     monochrome: data.monochrome,
     duotone: data.duotone,
     quality: data.quality,
+    formatQuality: data.format_quality,
+    autoquality: data.autoquality,
+    maxBytes: data.max_bytes,
     blur: data.blur,
     sharpen: data.sharpen,
     pixelate: data.pixelate,
@@ -678,6 +720,20 @@ const parsedUrlSchema = z.object({
     .optional(),
   /** Output quality 1–100 for lossy formats (JPEG, WebP, AVIF). */
   quality: z.number().optional(),
+  /** Per-format quality overrides: { jpg: 80, webp: 90, ... }. */
+  formatQuality: z.record(z.string(), z.number()).optional(),
+  /** Autoquality via DSSIM binary search. */
+  autoquality: z
+    .object({
+      method: z.literal("dssim"),
+      target: z.number(),
+      min: z.number(),
+      max: z.number(),
+      allowedError: z.number(),
+    })
+    .optional(),
+  /** Max output size in bytes — degrades quality to fit. */
+  maxBytes: z.number().optional(),
   /** Gaussian blur sigma. */
   blur: z.number().optional(),
   /** Sharpening sigma. */
@@ -856,6 +912,9 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     monochrome: options.monochrome,
     duotone: options.duotone,
     quality: options.quality,
+    formatQuality: options.formatQuality,
+    autoquality: options.autoquality,
+    maxBytes: options.maxBytes,
     blur: options.blur,
     sharpen: options.sharpen,
     pixelate: options.pixelate,
