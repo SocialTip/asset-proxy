@@ -86,8 +86,14 @@ jobs:
       - name: Wait for asset-proxy
         run: timeout 30 bash -c 'until curl -sf http://localhost:8080/health; do sleep 1; done'
 
-      - run: yarn test
+      - run: yarn test --coverage
         working-directory: repo
+
+      - uses: codecov/codecov-action@v5
+        if: always()
+        with:
+          files: repo/coverage/cobertura-coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Print asset-proxy logs
         if: failure()

@@ -6,6 +6,11 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./tests/setup.ts"],
     onConsoleLog: () => false,
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "cobertura"],
+      include: ["src/**"],
+    },
     projects: [
       {
         extends: true,
