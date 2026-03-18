@@ -27,11 +27,11 @@ jobs:
       - run: yarn workspace @asset-proxy/url-generator build
 
       - name: Publish @asset-proxy/url-parser
-        run: yarn workspace @asset-proxy/url-parser npm publish --access public || true
+        run: yarn workspace @asset-proxy/url-parser npm publish --access restricted || true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @asset-proxy/url-generator
-        run: yarn workspace @asset-proxy/url-generator npm publish --access public || true
+        run: yarn workspace @asset-proxy/url-generator npm publish --access restricted || true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
