@@ -413,6 +413,11 @@ function buildImageArgs(
     );
   }
 
+  // Convert to RGBA when background alpha is used (required for transparent pad)
+  if (parsed.backgroundAlpha !== undefined && parsed.backgroundAlpha < 1) {
+    filters.push("format=rgba");
+  }
+
   // Extend — pad undersized images to fill target dimensions
   if (parsed.extend?.enabled && parsed.resize) {
     const tw = parsed.resize.width || 0;
