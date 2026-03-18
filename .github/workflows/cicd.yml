@@ -99,6 +99,7 @@ jobs:
         run: |
           BRANCH="snapshot-update/${{ github.head_ref || github.ref_name }}"
           BASE="${{ github.head_ref || github.ref_name }}"
+          git fetch origin "$BRANCH" || true
           git checkout -B "$BRANCH"
           git add -A
           git -c user.name="github-actions[bot]" \
