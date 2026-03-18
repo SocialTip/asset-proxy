@@ -206,7 +206,10 @@ export async function processImage(
 
   let buffer: Buffer;
 
-  if (parsed.outputFormat === "avif") {
+  // Video thumbnail animation: generate animated gif/webp from video frames
+  if (parsed.videoThumbnailAnimation) {
+    buffer = await generateVideoAnimation(ffmpegInput, effectiveParsed);
+  } else if (parsed.outputFormat === "avif") {
     const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
     const outPath = join(dir, "output.avif");
     const args = buildImageArgs(ffmpegInput, effectiveParsed, {
@@ -451,6 +454,59 @@ async function computeDssim(a: Buffer, b: Buffer): Promise<number> {
 
 /** Binary search on quality using sharp to fit output under maxBytes. */
 /** Re-encode with format-specific options using sharp. */
+/** Generate an animated gif/webp from video frames using ffmpeg. */
+async function generateVideoAnimation(
+  sourceUrl: string,
+  parsed: ImageUrl,
+): Promise<Buffer> {
+  const vta = parsed.videoThumbnailAnimation!;
+  const fps = vta.step > 0 ? 1 / vta.step : 10;
+  const args = ["-hide_banner", "-y", "-i", sourceUrl];
+  const filters: string[] = [];
+
+  filters.push(`fps=${fps}`);
+
+  if (vta.frameWidth > 0 || vta.frameHeight > 0) {
+    const w = vta.frameWidth > 0 ? vta.frameWidth : -1;
+    const h = vta.frameHeight > 0 ? vta.frameHeight : -1;
+    filters.push(`scale=${w}:${h}:force_original_aspect_ratio=decrease`);
+  } else if (
+    parsed.resize &&
+    (parsed.resize.width > 0 || parsed.resize.height > 0)
+  ) {
+    const w = parsed.resize.width > 0 ? parsed.resize.width : -1;
+    const h = parsed.resize.height > 0 ? parsed.resize.height : -1;
+    filters.push(`scale=${w}:${h}:force_original_aspect_ratio=decrease`);
+  }
+
+  if (vta.frames > 0) {
+    args.push("-frames:v", String(vta.frames));
+  }
+
+  if (filters.length > 0) {
+    args.push("-vf", filters.join(","));
+  }
+
+  if (parsed.outputFormat === "gif") {
+    args.push("-f", "gif", "pipe:1");
+  } else {
+    // Default to animated webp
+    args.push("-loop", "0");
+    if (parsed.quality !== undefined) {
+      args.push("-quality", String(parsed.quality));
+    }
+    args.push("-f", "webp", "pipe:1");
+  }
+
+  const stream = runFfmpeg(args);
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+}
+
 async function applyFormatOptions(
   buffer: Buffer,
   parsed: ImageUrl,
@@ -833,7 +889,19 @@ function buildImageArgs(
   parsed: ImageUrl,
   opts?: { outputPath?: string; trimFilter?: string },
 ): string[] {
-  const args = ["-hide_banner", "-y", "-i", sourceUrl];
+  const args = ["-hide_banner", "-y"];
+
+  // Video thumbnail: seek to given second before input for faster seeking
+  if (parsed.videoThumbnailSecond !== undefined) {
+    args.push("-ss", String(parsed.videoThumbnailSecond));
+  }
+
+  // Video thumbnail: use only keyframes
+  if (parsed.videoThumbnailKeyframes) {
+    args.push("-skip_frame", "nokey");
+  }
+
+  args.push("-i", sourceUrl);
 
   const filters: string[] = [];
 
