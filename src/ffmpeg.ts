@@ -70,10 +70,71 @@ export const gpuReady: Promise<boolean> = env.SKIP_GPU
       });
     });
 
+/** Options that are only supported for image processing, not video. */
+const IMAGE_ONLY_OPTIONS: [
+  keyof import("./url-parser.js").ParsedUrl,
+  string,
+][] = [
+  ["trim", "trim"],
+  ["blur", "blur"],
+  ["sharpen", "sharpen"],
+  ["rotate", "rotate"],
+  ["padding", "padding"],
+  ["autoquality", "autoquality"],
+  ["dpi", "dpi"],
+  ["enforceThumbnail", "enforce_thumbnail"],
+  ["crop", "crop"],
+  ["enlarge", "enlarge"],
+  ["minWidth", "min_width"],
+  ["minHeight", "min_height"],
+  ["extend", "extend"],
+  ["extendAspectRatio", "extend_aspect_ratio"],
+  ["pixelate", "pixelate"],
+  ["unsharpMasking", "unsharp_masking"],
+  ["colorize", "colorize"],
+  ["gradient", "gradient"],
+  ["monochrome", "monochrome"],
+  ["duotone", "duotone"],
+];
+
+function rejectImageOnlyOptions(parsed: import("./url-parser.js").ParsedUrl) {
+  for (const [key, name] of IMAGE_ONLY_OPTIONS) {
+    if (parsed[key] !== undefined) {
+      throw new HTTPError(
+        `Option '${name}' is not supported for video processing`,
+        {
+          code: "NOT_IMPLEMENTED",
+        },
+      );
+    }
+  }
+  // brightness/contrast/saturation have non-undefined defaults, check for non-default values
+  if (parsed.brightness !== 0) {
+    throw new HTTPError(
+      "Option 'brightness' is not supported for video processing",
+      { code: "NOT_IMPLEMENTED" },
+    );
+  }
+  if (parsed.contrast !== 1) {
+    throw new HTTPError(
+      "Option 'contrast' is not supported for video processing",
+      { code: "NOT_IMPLEMENTED" },
+    );
+  }
+  if (parsed.saturation !== 1) {
+    throw new HTTPError(
+      "Option 'saturation' is not supported for video processing",
+      { code: "NOT_IMPLEMENTED" },
+    );
+  }
+}
+
 export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
 ): Promise<Readable> {
+  rejectImageOnlyOptions(parsed);
+
   return runFfmpeg(
     buildVideoArgs(sourceUrl, {
       resizingType: parsed.resize?.type,
@@ -84,6 +145,8 @@ export async function processVideo(
       flip: parsed.flip,
       framerate: parsed.framerate,
       cut: parsed.cut,
+      quality: parsed.formatQuality?.[parsed.outputFormat] ?? parsed.quality,
+      maxBytes: parsed.maxBytes,
       outputFormat: parsed.outputFormat,
       gpu: await gpuReady,
     }),
@@ -553,6 +616,8 @@ export interface VideoParams {
   height: number;
   framerate?: number;
   cut?: number;
+  quality?: number;
+  maxBytes?: number;
   outputFormat: OutputFormat;
   gpu: boolean;
 }
@@ -572,6 +637,8 @@ export function buildVideoArgs(
     gpu,
     framerate,
     cut,
+    quality,
+    maxBytes,
     outputFormat,
   } = params;
 
@@ -664,16 +731,31 @@ export function buildVideoArgs(
 
   if (outputFormat === "webm") {
     args.push("-c:v", "libvpx-vp9");
+    if (quality !== undefined) {
+      // libvpx-vp9 CRF: 0-63 (0=best), map 1-100 → 63-0
+      args.push("-crf", String(Math.round(63 - (quality / 100) * 63)));
+      args.push("-b:v", "0");
+    }
     args.push("-c:a", "libopus");
+    if (maxBytes) args.push("-fs", String(maxBytes));
     args.push("-f", "webm", "pipe:1");
   } else {
     if (gpu) {
       args.push("-c:v", "h264_nvenc", "-preset", "p4", "-tune", "hq");
+      if (quality !== undefined) {
+        // NVENC CQ: 0-51 (0=best), map 1-100 → 51-0
+        args.push("-cq", String(Math.round(51 - (quality / 100) * 51)));
+      }
     } else {
       args.push("-c:v", "libx264", "-preset", "fast");
+      if (quality !== undefined) {
+        // libx264 CRF: 0-51 (0=best), map 1-100 → 51-0
+        args.push("-crf", String(Math.round(51 - (quality / 100) * 51)));
+      }
     }
     args.push("-c:a", "copy");
     args.push("-movflags", "frag_keyframe+empty_moov+faststart");
+    if (maxBytes) args.push("-fs", String(maxBytes));
     args.push("-f", "mp4", "pipe:1");
   }
 

@@ -12,7 +12,8 @@ concurrency:
 jobs:
   ci:
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
     runs-on: warp-ubuntu-latest-x64-2x
     services:
       file-server:
@@ -20,18 +21,17 @@ jobs:
         ports:
           - 80:80
         volumes:
-          - ${{ github.workspace }}/nginx:/usr/share/nginx
+          - /tmp/nginx:/usr/share/nginx
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: true
-          path: repo
 
       - name: Map file-server hostname
         run: echo "127.0.0.1 file-server" | sudo tee -a /etc/hosts
 
       - name: Copy test fixtures into nginx
-        run: sudo cp -a repo/tests/fixtures/. nginx/html/
+        run: sudo cp -a tests/fixtures/. /tmp/nginx/html/
 
       - name: Configure nginx to serve all files
         run: |
@@ -52,18 +52,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: repo/.tool-versions
+          node-version-file: .tool-versions
           cache: yarn
-          cache-dependency-path: repo/yarn.lock
 
       - run: yarn install --immutable
-        working-directory: repo
 
       - run: yarn typecheck
-        working-directory: repo
 
       - run: yarn lint
-        working-directory: repo
 
       - name: Install ffmpeg, exiftool, and heif-thumbnailer
         env:
@@ -77,7 +73,6 @@ jobs:
 
       - name: Start asset-proxy
         run: nohup npx tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
-        working-directory: repo
         env:
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -87,7 +82,56 @@ jobs:
         run: timeout 30 bash -c 'until curl -sf http://localhost:8080/health; do sleep 1; done'
 
       - run: yarn test --coverage
-        working-directory: repo
+
+      - name: Update snapshots
+        if: failure()
+        run: yarn test --update
+
+      - name: Check for snapshot changes
+        if: always() && github.event_name == 'pull_request'
+        id: snapshots
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create snapshot update PR
+        if: always() && steps.snapshots.outputs.changed == 'true' && github.event_name == 'pull_request'
+        id: snapshot-pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="snapshot-update/${{ github.head_ref || github.ref_name }}"
+          BASE="${{ github.head_ref || github.ref_name }}"
+          git fetch origin "$BRANCH" || true
+          git checkout -B "$BRANCH"
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "test: update image snapshots"
+          git lfs push --all origin "$BRANCH"
+          git push --force-with-lease origin "$BRANCH"
+          if ! gh pr view "$BRANCH" --json number &>/dev/null; then
+            gh api repos/${{ github.repository }}/pulls \
+              -f head="$BRANCH" \
+              -f base="$BASE" \
+              -f title="Update image snapshots" \
+              -f body="Automated snapshot update from [${{ github.workflow }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}?pr=${{ github.event.pull_request.number }})
+          Created from #${{ github.event.pull_request.number }}"
+          fi
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Delete stale snapshot branch
+        if: always() && steps.snapshots.outputs.changed != 'true' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="snapshot-update/${{ github.head_ref || github.ref_name }}"
+          gh pr close "$BRANCH" --delete-branch 2>/dev/null || true
+
+      - name: Fail if snapshots were outdated
+        if: steps.snapshot-pr.outputs.created == 'true'
+        run: exit 1
 
       - uses: codecov/codecov-action@v5
         if: always()
@@ -96,7 +140,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Print asset-proxy logs
-        if: failure()
+        if: failure() && steps.snapshots.outputs.changed != 'true'
         run: cat /tmp/asset-proxy.log
 
   cd-changes:
