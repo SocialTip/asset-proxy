@@ -146,14 +146,15 @@ jobs:
         if: failure() && steps.snapshots.outputs.changed != 'true'
         run: cat /tmp/asset-proxy.log
 
-  cd-changes:
+  changes:
     if: github.event_name == 'pull_request'
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      changed: ${{ steps.filter.outputs.cd }}
+      cd: ${{ steps.filter.outputs.cd }}
+      publish: ${{ steps.filter.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -162,40 +163,50 @@ jobs:
           filters: |
             cd:
               - '.github/workflows/cd.yml'
+              - 'Dockerfile'
+              - 'packages/url-parser/**'
+              - 'packages/proxy/**'
+            publish:
+              - '.github/workflows/publish.yml'
+              - 'packages/url-parser/**'
+              - 'packages/url-generator/**'
 
   cd:
     if: |
       always() && needs.ci.result == 'success' &&
-      (github.event_name == 'push' || needs.cd-changes.outputs.changed == 'true')
-    needs: [ci, cd-changes]
+      (github.event_name == 'push' || needs.changes.outputs.cd == 'true')
+    needs: [ci, changes]
     uses: ./.github/workflows/cd.yml
     permissions:
       contents: read
       packages: write
-    secrets: inherit
 
-  publish-url-generator:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [ci]
-    runs-on: warp-ubuntu-latest-x64-2x
+  publish:
+    if: |
+      always() && needs.ci.result == 'success' &&
+      (github.event_name == 'push' || needs.changes.outputs.publish == 'true')
+    needs: [ci, changes]
+    uses: ./.github/workflows/publish.yml
     permissions:
       contents: read
+    secrets: inherit
+
+  required:
+    if: always()
+    needs: [ci, cd, publish]
+    runs-on: warp-ubuntu-latest-x64-2x
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .tool-versions
-          cache: yarn
-          registry-url: "https://registry.npmjs.org"
-
-      - run: yarn install --immutable
-
-      - run: yarn workspace @asset-proxy/url-parser build
-
-      - run: yarn workspace assets-proxy-url-generator build
-
-      - name: Publish to npm
-        run: yarn workspace assets-proxy-url-generator npm publish --access public || true
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Check required jobs
+        run: |
+          if [ "${{ needs.ci.result }}" != "success" ]; then
+            echo "CI failed"
+            exit 1
+          fi
+          if [ "${{ needs.cd.result }}" != "success" ] && [ "${{ needs.cd.result }}" != "skipped" ]; then
+            echo "CD failed"
+            exit 1
+          fi
+          if [ "${{ needs.publish.result }}" != "success" ] && [ "${{ needs.publish.result }}" != "skipped" ]; then
+            echo "Publish failed"
+            exit 1
+          fi

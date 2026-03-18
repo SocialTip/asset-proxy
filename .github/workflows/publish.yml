@@ -1,0 +1,37 @@
+name: Publish
+
+on:
+  workflow_call:
+
+concurrency:
+  group: publish-${{ github.event_name == 'push' && github.ref || github.sha }}
+
+jobs:
+  publish:
+    runs-on: warp-ubuntu-latest-x64-2x
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: yarn
+          registry-url: "https://registry.npmjs.org"
+
+      - run: yarn install --immutable
+
+      - run: yarn workspace @asset-proxy/url-parser build
+
+      - run: yarn workspace @asset-proxy/url-generator build
+
+      - name: Publish @asset-proxy/url-parser
+        run: yarn workspace @asset-proxy/url-parser npm publish --access public || true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @asset-proxy/url-generator
+        run: yarn workspace @asset-proxy/url-generator npm publish --access public || true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

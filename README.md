@@ -319,14 +319,14 @@ When `SIGNING_KEY` and `SIGNING_SALT` are not set, the signature segment is stil
 
 ## URL generator package
 
-The `assets-proxy-url-generator` npm package generates assets-proxy-compatible URL paths programmatically. It uses the same types as the server's URL parser.
+The `@asset-proxy/url-generator` npm package generates assets-proxy-compatible URL paths programmatically. It uses the same types as the server's URL parser.
 
 ```bash
-npm install assets-proxy-url-generator
+npm install @asset-proxy/url-generator
 ```
 
 ```ts
-import { generateUrl } from "assets-proxy-url-generator";
+import { generateUrl } from "@asset-proxy/url-generator";
 
 const url = generateUrl({
   sourceUrl: "https://example.com/photo.jpg",
@@ -358,7 +358,7 @@ This repository is a yarn monorepo with three packages:
 | ---------------------------- | ------------------------ | ----------------------------------------------------------------------------- |
 | `@asset-proxy/url-parser`    | `packages/url-parser`    | Shared URL schema, parsing, signature verification/generation, and encryption |
 | `@asset-proxy/proxy`         | `packages/proxy`         | The image/video processing service (Express + ffmpeg + sharp)                 |
-| `assets-proxy-url-generator` | `packages/url-generator` | Published npm package for generating compatible URL paths                     |
+| `@asset-proxy/url-generator` | `packages/url-generator` | Published npm package for generating compatible URL paths                     |
 
 ## Development
 
@@ -393,7 +393,7 @@ Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud
 
 ## Deployment
 
-CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`). The `assets-proxy-url-generator` package is published to npm on pushes to `main`.
+CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`). The `@asset-proxy/url-parser` and `@asset-proxy/url-generator` packages are published to npm on pushes to `main`.
 
 Images are tagged with the commit SHA. Pushes to `main` are additionally tagged `latest`.
 

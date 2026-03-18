@@ -8,7 +8,7 @@
   "scripts": {
     "start": "yarn workspace @asset-proxy/proxy start",
     "dev": "yarn workspace @asset-proxy/proxy dev",
-    "build": "yarn workspace @asset-proxy/url-parser build && yarn workspace @asset-proxy/proxy build && yarn workspace assets-proxy-url-generator build",
+    "build": "yarn workspace @asset-proxy/url-parser build && yarn workspace @asset-proxy/proxy build && yarn workspace @asset-proxy/url-generator build",
     "typecheck": "yarn workspaces run typecheck",
     "test": "vitest",
     "test:up": "docker compose up -d --build --wait",
