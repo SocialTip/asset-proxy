@@ -58,8 +58,6 @@ export const gpuReady: Promise<boolean> = env.SKIP_GPU
       });
     });
 
-// ── Video processing ─────────────────────────────────────────────────────────
-
 export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
@@ -79,8 +77,6 @@ export async function processVideo(
     }),
   );
 }
-
-// ── Image processing ─────────────────────────────────────────────────────────
 
 export async function processImage(
   sourceUrl: string,
@@ -124,8 +120,6 @@ export async function processImage(
   });
 }
 
-// ── Shared ffmpeg runner ─────────────────────────────────────────────────────
-
 function runFfmpeg(args: string[]): Readable {
   const proc = spawn("ffmpeg", args);
 
@@ -150,8 +144,6 @@ function runFfmpeg(args: string[]): Readable {
 
   return proc.stdout;
 }
-
-// ── Image trim detection ─────────────────────────────────────────────────────
 
 interface TrimOptions {
   threshold: number;
@@ -216,8 +208,6 @@ function detectTrimCrop(
     proc.on("error", () => resolve(undefined));
   });
 }
-
-// ── Video arg builder ────────────────────────────────────────────────────────
 
 export interface VideoParams {
   resizingType?: ResizingType;
@@ -355,8 +345,6 @@ export function buildVideoArgs(
   return args;
 }
 
-// ── Image arg builder ────────────────────────────────────────────────────────
-
 function buildImageArgs(
   sourceUrl: string,
   parsed: ImageUrl,
@@ -456,10 +444,62 @@ function buildImageArgs(
     filters.push(`gblur=sigma=${parsed.blur}`);
   }
 
-  // Sharpen
   if (parsed.sharpen && parsed.sharpen > 0) {
     const s = parsed.sharpen;
     filters.push(`unsharp=5:5:${s}:5:5:0`);
+  }
+
+  // Colour adjustments (eq filter combines brightness, contrast, saturation)
+  const eqParts: string[] = [];
+  if (parsed.brightness !== 0) {
+    eqParts.push(`brightness=${parsed.brightness / 255}`);
+  }
+  if (parsed.contrast !== 1) {
+    eqParts.push(`contrast=${parsed.contrast}`);
+  }
+  if (parsed.saturation !== 1) {
+    eqParts.push(`saturation=${parsed.saturation}`);
+  }
+  if (eqParts.length > 0) {
+    filters.push(`eq=${eqParts.join(":")}`);
+  }
+
+  // Monochrome
+  if (parsed.monochrome && parsed.monochrome.intensity > 0) {
+    const { intensity, colour } = parsed.monochrome;
+    const r = parseInt(colour.slice(0, 2), 16) / 255;
+    const g = parseInt(colour.slice(2, 4), 16) / 255;
+    const b = parseInt(colour.slice(4, 6), 16) / 255;
+    // Desaturate then tint: use colorbalance or hue filter
+    // Full intensity = fully monochrome, partial = blend
+    if (intensity >= 1) {
+      filters.push(`hue=s=0`);
+      if (colour !== "b3b3b3") {
+        filters.push(`colorbalance=rs=${r - 0.5}:gs=${g - 0.5}:bs=${b - 0.5}`);
+      }
+    } else {
+      filters.push(`eq=saturation=${1 - intensity}`);
+    }
+  }
+
+  // Duotone
+  if (parsed.duotone && parsed.duotone.intensity > 0) {
+    const { intensity, colour1, colour2 } = parsed.duotone;
+    const r1 = parseInt(colour1.slice(0, 2), 16);
+    const g1 = parseInt(colour1.slice(2, 4), 16);
+    const b1 = parseInt(colour1.slice(4, 6), 16);
+    const r2 = parseInt(colour2.slice(0, 2), 16);
+    const g2 = parseInt(colour2.slice(2, 4), 16);
+    const b2 = parseInt(colour2.slice(4, 6), 16);
+    if (intensity >= 1) {
+      filters.push(`hue=s=0`);
+    } else {
+      filters.push(`eq=saturation=${1 - intensity}`);
+    }
+    // Linear interpolation from colour1 (shadows) to colour2 (highlights) using lut
+    filters.push(
+      `lutrgb=r=${r1}+(${r2}-${r1})*val/255:g=${g1}+(${g2}-${g1})*val/255:b=${b1}+(${b2}-${b1})*val/255`,
+    );
   }
 
   // Padding with background
@@ -583,8 +623,6 @@ function gravityOffsets(
       return { x: cx, y: cy };
   }
 }
-
-// ── Shared scale filter builder ──────────────────────────────────────────────
 
 interface ScaleFilterParams {
   resizingType: ResizingType;

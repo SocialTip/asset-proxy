@@ -30,6 +30,28 @@ function setupSpawnMock() {
   return proc;
 }
 
+function setupSpawnMockError() {
+  const stdout = new Readable({
+    read() {
+      // Emit error on first read attempt
+      process.nextTick(() =>
+        this.destroy(new Error("ffmpeg exited with code 1")),
+      );
+    },
+  });
+  const stderr = new Readable({ read() {} });
+  const proc = {
+    stdout,
+    stderr,
+    stdin: new Readable({ read() {} }),
+    kill: vi.fn(),
+    on: vi.fn(),
+    pid: 1,
+  };
+  mockSpawn.mockReturnValue(proc as never);
+  return proc;
+}
+
 vi.hoisted(() => {
   process.env.SKIP_GPU = "1";
   process.env.ALLOWED_ORIGINS = "http://file-server,https://example.com";
@@ -67,6 +89,18 @@ const vplain = (opts: string) => `${opts}/plain/${VSRC}`;
 
 beforeEach(() => {
   mockSpawn.mockReset();
+});
+
+describe("error handling", () => {
+  it("returns 500 with generic message when image processing fails", async () => {
+    setupSpawnMockError();
+    const res = await request(app)
+      .get("/insecure/w:100/plain/https://example.com/photo.jpg")
+      .buffer(true);
+
+    expect(res.status).toBe(500);
+    expect(res.text).toBe("Error processing image");
+  });
 });
 
 describe("origin allowlist", () => {
@@ -402,6 +436,28 @@ describe("image ffmpeg args", () => {
         "https://example.com/photo.jpg",
         "-vf",
         "hflip,vflip",
+        "-map_metadata",
+        "-1",
+        "-frames:v",
+        "1",
+        "-f",
+        "image2",
+        "-c:v",
+        "mjpeg",
+        "pipe:1",
+      ]
+    `);
+  });
+
+  it("brightness and saturation via adjust", () => {
+    expect(imageArgs(plain("/a:50::0.5"))).toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-i",
+        "https://example.com/photo.jpg",
+        "-vf",
+        "eq=brightness=0.19607843137254902:saturation=0.5",
         "-map_metadata",
         "-1",
         "-frames:v",

@@ -2,8 +2,6 @@ import { z } from "zod/v4";
 import { decryptSourceUrl } from "./decrypt.js";
 import { HTTPError } from "./error.js";
 
-// ── Zod enums & primitives ───────────────────────────────────────────────────
-
 const resizingType = z.enum(["fit", "fill", "fill-down", "force", "auto"]);
 export type ResizingType = z.output<typeof resizingType>;
 
@@ -183,8 +181,6 @@ const notImplemented = (name: string) =>
     });
   });
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 const VIDEO_FORMATS = new Set<string>(["mp4", "webm"]);
 const IMAGE_FORMATS = new Set<string>(["jpg", "png", "webp", "avif", "gif"]);
 const ALL_FORMATS = new Set<string>([...VIDEO_FORMATS, ...IMAGE_FORMATS]);
@@ -219,15 +215,20 @@ const SHORTHANDS: Record<string, string> = {
   ct: "cut",
   tr: "trim",
   ra: "resizing_algorithm",
+  a: "adjust",
+  br: "brightness",
+  co: "contrast",
+  sa: "saturation",
+  mc: "monochrome",
+  dt: "duotone",
   op: "objects_position",
   // Pro shorthands (parsed but rejected)
   car: "crop_aspect_ratio",
 };
 
-// ── Options schema (raw segments → canonical options) ────────────────────────
-
 const rawOptionsSchema = z
   .object({
+    /** Resize with type, width, height. Format: `<type>:<w>:<h>`. */
     resize: z
       .string()
       .transform((v) => {
@@ -240,6 +241,7 @@ const rawOptionsSchema = z
       })
       .optional(),
 
+    /** Shorthand for width + height. Format: `<w>:<h>`. */
     size: z
       .string()
       .transform((v) => {
@@ -248,6 +250,7 @@ const rawOptionsSchema = z
       })
       .optional(),
 
+    /** Override resize type without specifying dimensions. */
     resizing_type: resizingType.optional(),
     width: z.coerce.number().int().optional(),
     height: z.coerce.number().int().optional(),
@@ -264,9 +267,12 @@ const rawOptionsSchema = z
       })
       .optional(),
 
+    /** Device pixel ratio — multiplies dimensions and padding. */
     dpr: z.coerce.number().positive().optional(),
+    /** Allow upscaling smaller images. */
     enlarge: zBool.optional(),
 
+    /** Pad undersized images to fill target dimensions. Format: `<enabled>[:<gravity>]`. */
     extend: z
       .string()
       .transform((v) => {
@@ -327,8 +333,10 @@ const rawOptionsSchema = z
       .optional(),
     auto_rotate: zBool.optional(),
     background: zBackground.optional(),
+    /** Background opacity (0–1). */
     background_alpha: z.coerce.number().min(0).max(1).optional(),
 
+    /** Canvas padding. Format: `<top>[:<right>[:<bottom>[:<left>]]]`. */
     padding: z
       .string()
       .transform((v) => {
@@ -349,9 +357,12 @@ const rawOptionsSchema = z
       .pipe(z.string().refine((v) => ALL_FORMATS.has(v)))
       .optional(),
 
+    /** Output framerate in fps (video only). */
     framerate: zPositiveFloat.optional(),
+    /** Limit video duration in seconds (video only). */
     cut: zPositiveFloat.optional(),
 
+    /** Remove uniform borders. Format: `<threshold>[:<colour>[:<equal_hor>[:<equal_vert>]]]`. */
     trim: z
       .string()
       .transform((v) => {
@@ -367,6 +378,49 @@ const rawOptionsSchema = z
       .optional(),
 
     resizing_algorithm: zResizingAlgorithm.optional(),
+
+    /** Meta-option: `<brightness>:<contrast>:<saturation>`. */
+    adjust: z
+      .string()
+      .transform((v) => {
+        const [b, c, s] = v.split(":");
+        return {
+          brightness: b ? parseInt(b, 10) : 0,
+          contrast: c ? parseFloat(c) : 1,
+          saturation: s ? parseFloat(s) : 1,
+        };
+      })
+      .optional(),
+    /** Brightness (-255 to 255). */
+    brightness: z.coerce.number().int().min(-255).max(255).optional(),
+    /** Contrast multiplier (1 = unchanged). */
+    contrast: z.coerce.number().positive().optional(),
+    /** Saturation multiplier (1 = unchanged). */
+    saturation: z.coerce.number().positive().optional(),
+    /** Monochrome effect. Format: `<intensity>[:<hex_colour>]`. */
+    monochrome: z
+      .string()
+      .transform((v) => {
+        const [intensity, colour] = v.split(":");
+        return {
+          intensity: parseFloat(intensity) || 0,
+          colour: colour || "b3b3b3",
+        };
+      })
+      .optional(),
+    /** Duotone effect. Format: `<intensity>[:<shadow_colour>[:<highlight_colour>]]`. */
+    duotone: z
+      .string()
+      .transform((v) => {
+        const [intensity, c1, c2] = v.split(":");
+        return {
+          intensity: parseFloat(intensity) || 0,
+          colour1: c1 || "000000",
+          colour2: c2 || "ffffff",
+        };
+      })
+      .optional(),
+
     objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: z
       .string()
@@ -445,6 +499,11 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     framerate: data.framerate,
     cut: data.cut,
     trim: data.trim,
+    brightness: data.brightness ?? data.adjust?.brightness ?? 0,
+    contrast: data.contrast ?? data.adjust?.contrast ?? 1,
+    saturation: data.saturation ?? data.adjust?.saturation ?? 1,
+    monochrome: data.monochrome,
+    duotone: data.duotone,
     quality: data.quality,
     blur: data.blur,
     sharpen: data.sharpen,
@@ -462,8 +521,6 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     formatOverride: data.format as OutputFormat | undefined,
   };
 });
-
-// ── ParsedUrl schema ─────────────────────────────────────────────────────────
 
 const parsedUrlSchema = z.object({
   /** Resize dimensions and mode (fit, fill, fill-down, force, auto). */
@@ -499,6 +556,24 @@ const parsedUrlSchema = z.object({
       equalHor: z.boolean(),
       /** Trim equal amounts from top and bottom. */
       equalVert: z.boolean(),
+    })
+    .optional(),
+  /** Brightness adjustment (-255 to 255, 0 = no change). */
+  brightness: z.number(),
+  /** Contrast multiplier (1 = no change). */
+  contrast: z.number(),
+  /** Saturation multiplier (1 = no change). */
+  saturation: z.number(),
+  /** Convert to monochrome with optional intensity and base colour. */
+  monochrome: z
+    .object({ intensity: z.number(), colour: z.string() })
+    .optional(),
+  /** Apply duotone effect with two colours. */
+  duotone: z
+    .object({
+      intensity: z.number(),
+      colour1: z.string(),
+      colour2: z.string(),
     })
     .optional(),
   /** Output quality 1–100 for lossy formats (JPEG, WebP, AVIF). */
@@ -559,8 +634,6 @@ export function isImageUrl(parsed: ParsedUrl): parsed is ImageUrl {
 export function isVideoUrl(parsed: ParsedUrl): parsed is VideoUrl {
   return !isImageUrl(parsed);
 }
-
-// ── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Parses an imgproxy-format processing path (after signature has been stripped).
@@ -651,6 +724,11 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     framerate: options.framerate,
     cut: options.cut,
     trim: options.trim,
+    brightness: options.brightness,
+    contrast: options.contrast,
+    saturation: options.saturation,
+    monochrome: options.monochrome,
+    duotone: options.duotone,
     quality: options.quality,
     blur: options.blur,
     sharpen: options.sharpen,

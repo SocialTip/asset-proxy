@@ -78,24 +78,53 @@ async function handleRequest(req: express.Request, res: express.Response) {
     : parsed.sourceUrl;
 
   if (isImageUrl(parsed)) {
-    const buffer = await processImage(sourceUrl, parsed);
-
-    res.set("Content-Type", CONTENT_TYPES[parsed.outputFormat] || "image/jpeg");
-    res.set("Cache-Control", env.CACHE_CONTROL);
-    res.send(buffer);
-  } else if (isVideoUrl(parsed)) {
-    const result = await processVideo(sourceUrl, parsed);
-
-    res.set("Content-Type", CONTENT_TYPES[parsed.outputFormat] || "video/mp4");
-    res.set("Cache-Control", env.CACHE_CONTROL);
-    result.pipe(res);
-
-    result.on("error", (err) => {
-      logger.error("ffmpeg stream error", { error: err.message });
+    // TODO: add instrumentation (timing, source URL, options)
+    try {
+      const buffer = await processImage(sourceUrl, parsed);
+      res.set(
+        "Content-Type",
+        CONTENT_TYPES[parsed.outputFormat] || "image/jpeg",
+      );
+      res.set("Cache-Control", env.CACHE_CONTROL);
+      res.send(buffer);
+    } catch (err) {
+      logger.error("Error processing image", {
+        error: err instanceof Error ? err.message : String(err),
+        sourceUrl: parsed.sourceUrl,
+      });
       if (!res.headersSent) {
-        res.status(500).send("Processing failed");
+        res.status(500).send("Error processing image");
       }
-    });
+    }
+  } else if (isVideoUrl(parsed)) {
+    // TODO: add instrumentation (timing, source URL, options)
+    try {
+      const result = await processVideo(sourceUrl, parsed);
+      res.set(
+        "Content-Type",
+        CONTENT_TYPES[parsed.outputFormat] || "video/mp4",
+      );
+      res.set("Cache-Control", env.CACHE_CONTROL);
+      result.pipe(res);
+
+      result.on("error", (err) => {
+        logger.error("Error processing video (stream)", {
+          error: err.message,
+          sourceUrl: parsed.sourceUrl,
+        });
+        if (!res.headersSent) {
+          res.status(500).send("Error processing video");
+        }
+      });
+    } catch (err) {
+      logger.error("Error processing video", {
+        error: err instanceof Error ? err.message : String(err),
+        sourceUrl: parsed.sourceUrl,
+      });
+      if (!res.headersSent) {
+        res.status(500).send("Error processing video");
+      }
+    }
   }
 }
 

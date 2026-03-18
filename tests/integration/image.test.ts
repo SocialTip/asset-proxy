@@ -217,6 +217,28 @@ describe("image padding and background", () => {
   });
 });
 
+describe("colour adjustments", () => {
+  it("adjusts brightness", async () => {
+    const buffer = await fetchImage("/br:80");
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("adjusts contrast and saturation", async () => {
+    const buffer = await fetchImage("/co:1.5/sa:0.5");
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("applies monochrome", async () => {
+    const buffer = await fetchImage("/mc:1");
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("applies duotone", async () => {
+    const buffer = await fetchImage("/dt:1:000033:ffcc00");
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+});
+
 describe("image trim", () => {
   it("trims borders from image", async () => {
     // Apply trim to the test image — cropdetect should detect and remove any
