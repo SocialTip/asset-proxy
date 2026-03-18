@@ -120,7 +120,7 @@ const zGravity = z.string().transform((v): Gravity => {
     throw new HTTPError(
       `Gravity type '${v.split(":")[0]}' is not implemented`,
       {
-        code: "BAD_REQUEST",
+        code: "NOT_IMPLEMENTED",
       },
     );
   }
@@ -177,7 +177,7 @@ const zBackground = z.string().transform((v) => {
 const notImplemented = (name: string) =>
   z.string().transform(() => {
     throw new HTTPError(`Option '${name}' is not implemented`, {
-      code: "BAD_REQUEST",
+      code: "NOT_IMPLEMENTED",
     });
   });
 
@@ -230,6 +230,13 @@ const SHORTHANDS: Record<string, string> = {
   col: "colorize",
   grd: "gradient",
   gr: "gradient",
+  wm: "watermark",
+  wmu: "watermark_url",
+  wmt: "watermark_text",
+  wms: "watermark_size",
+  wmr: "watermark_rotate",
+  wmsh: "watermark_shadow",
+  st: "style",
   op: "objects_position",
   // Pro shorthands (parsed but rejected)
   car: "crop_aspect_ratio",
@@ -478,6 +485,21 @@ const rawOptionsSchema = z
         };
       })
       .optional(),
+
+    /** Watermark overlay. Format: `<opacity>[:<position>[:<x_offset>[:<y_offset>[:<scale>]]]]`. */
+    watermark: notImplemented("watermark").optional(),
+    /** Custom watermark image URL (base64-encoded). */
+    watermark_url: notImplemented("watermark_url").optional(),
+    /** Watermark text (base64-encoded, supports Pango markup). */
+    watermark_text: notImplemented("watermark_text").optional(),
+    /** Watermark dimensions. Format: `<width>:<height>`. */
+    watermark_size: notImplemented("watermark_size").optional(),
+    /** Watermark rotation in degrees. */
+    watermark_rotate: notImplemented("watermark_rotate").optional(),
+    /** Watermark shadow blur sigma. */
+    watermark_shadow: notImplemented("watermark_shadow").optional(),
+    /** Text style (Pango markup). */
+    style: notImplemented("style").optional(),
 
     objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: z

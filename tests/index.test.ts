@@ -835,34 +835,68 @@ describe("validation errors", () => {
     expect(() => parseProcessingUrl(plain("/ra:invalid/w:100"))).toThrow();
   });
 
-  it("rejects smart gravity", () => {
-    expect(() => parseProcessingUrl(plain("/g:sm/w:100"))).toThrow(
-      "not implemented",
+  it("rejects smart gravity with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/g:sm/w:100/plain/https://example.com/photo.jpg",
     );
+    expect(res.status).toBe(501);
   });
 
-  it("rejects objects_position", () => {
-    expect(() => parseProcessingUrl(plain("/op:0.5:0.5/w:100"))).toThrow(
-      "not implemented",
+  it("rejects objects_position with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/op:0.5:0.5/w:100/plain/https://example.com/photo.jpg",
     );
+    expect(res.status).toBe(501);
   });
 
-  it("rejects blur_areas", () => {
-    expect(() =>
-      parseProcessingUrl(plain("/bla:5:0.1:0.2:0.3:0.4/w:100")),
-    ).toThrow("not implemented");
+  it("rejects blur_areas with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/bla:5:0.1:0.2:0.3:0.4/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(res.status).toBe(501);
   });
 
-  it("rejects blur_detections", () => {
-    expect(() => parseProcessingUrl(plain("/bd:5:face/w:100"))).toThrow(
-      "not implemented",
+  it("rejects blur_detections with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/bd:5:face/w:100/plain/https://example.com/photo.jpg",
     );
+    expect(res.status).toBe(501);
   });
 
-  it("rejects draw_detections", () => {
-    expect(() => parseProcessingUrl(plain("/dd:1:face/w:100"))).toThrow(
-      "not implemented",
+  it("rejects draw_detections with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/dd:1:face/w:100/plain/https://example.com/photo.jpg",
     );
+    expect(res.status).toBe(501);
+  });
+
+  it("rejects watermark with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/wm:1:ce/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(res.status).toBe(501);
+  });
+
+  it("rejects watermark_url with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/wmu:abc123/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(res.status).toBe(501);
+  });
+
+  it("rejects watermark_text with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/wmt:abc123/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(res.status).toBe(501);
   });
 
   it("rejects focus point gravity out of range", () => {
