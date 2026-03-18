@@ -104,9 +104,9 @@ jobs:
               - '.github/workflows/cd.yml'
 
   cd:
-    if: |
-      always() && needs.ci.result == 'success' &&
-      (github.event_name == 'push' || needs.cd-changes.outputs.changed == 'true')
+    # if: |
+    #   always() && needs.ci.result == 'success' &&
+    #   (github.event_name == 'push' || needs.cd-changes.outputs.changed == 'true')
     # FIXME needs: [ci, cd-changes]
     uses: ./.github/workflows/cd.yml
     permissions:
