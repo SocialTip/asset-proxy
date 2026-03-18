@@ -59,10 +59,74 @@ export const gpuReady: Promise<boolean> = env.SKIP_GPU
       });
     });
 
+/** Options that are only supported for image processing, not video. */
+const IMAGE_ONLY_OPTIONS: [
+  keyof import("./url-parser.js").ParsedUrl,
+  string,
+][] = [
+  ["trim", "trim"],
+  ["blur", "blur"],
+  ["sharpen", "sharpen"],
+  ["rotate", "rotate"],
+  ["padding", "padding"],
+  ["quality", "quality"],
+  ["formatQuality", "format_quality"],
+  ["autoquality", "autoquality"],
+  ["maxBytes", "max_bytes"],
+  ["dpi", "dpi"],
+  ["enforceThumbnail", "enforce_thumbnail"],
+  ["crop", "crop"],
+  ["enlarge", "enlarge"],
+  ["minWidth", "min_width"],
+  ["minHeight", "min_height"],
+  ["extend", "extend"],
+  ["extendAspectRatio", "extend_aspect_ratio"],
+  ["pixelate", "pixelate"],
+  ["unsharpMasking", "unsharp_masking"],
+  ["colorize", "colorize"],
+  ["gradient", "gradient"],
+  ["monochrome", "monochrome"],
+  ["duotone", "duotone"],
+];
+
+function rejectImageOnlyOptions(parsed: import("./url-parser.js").ParsedUrl) {
+  for (const [key, name] of IMAGE_ONLY_OPTIONS) {
+    if (parsed[key] !== undefined) {
+      throw new HTTPError(
+        `Option '${name}' is not supported for video processing`,
+        {
+          code: "NOT_IMPLEMENTED",
+        },
+      );
+    }
+  }
+  // brightness/contrast/saturation have non-undefined defaults, check for non-default values
+  if (parsed.brightness !== 0) {
+    throw new HTTPError(
+      "Option 'brightness' is not supported for video processing",
+      { code: "NOT_IMPLEMENTED" },
+    );
+  }
+  if (parsed.contrast !== 1) {
+    throw new HTTPError(
+      "Option 'contrast' is not supported for video processing",
+      { code: "NOT_IMPLEMENTED" },
+    );
+  }
+  if (parsed.saturation !== 1) {
+    throw new HTTPError(
+      "Option 'saturation' is not supported for video processing",
+      { code: "NOT_IMPLEMENTED" },
+    );
+  }
+}
+
 export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
 ): Promise<Readable> {
+  rejectImageOnlyOptions(parsed);
+
   return runFfmpeg(
     buildVideoArgs(sourceUrl, {
       resizingType: parsed.resize?.type,

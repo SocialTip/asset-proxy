@@ -88,12 +88,15 @@ async function handleRequest(req: express.Request, res: express.Response) {
       res.set("Cache-Control", env.CACHE_CONTROL);
       res.send(buffer);
     } catch (err) {
+      const status = err instanceof HTTPError ? err.status : 500;
+      const message =
+        err instanceof HTTPError ? err.message : "Error processing image";
       logger.error("Error processing image", {
         error: err instanceof Error ? err.message : String(err),
         sourceUrl: parsed.sourceUrl,
       });
       if (!res.headersSent) {
-        res.status(500).send("Error processing image");
+        res.status(status).send(message);
       }
     }
   } else if (isVideoUrl(parsed)) {
@@ -117,12 +120,15 @@ async function handleRequest(req: express.Request, res: express.Response) {
         }
       });
     } catch (err) {
+      const status = err instanceof HTTPError ? err.status : 500;
+      const message =
+        err instanceof HTTPError ? err.message : "Error processing video";
       logger.error("Error processing video", {
         error: err instanceof Error ? err.message : String(err),
         sourceUrl: parsed.sourceUrl,
       });
       if (!res.headersSent) {
-        res.status(500).send("Error processing video");
+        res.status(status).send(message);
       }
     }
   }
