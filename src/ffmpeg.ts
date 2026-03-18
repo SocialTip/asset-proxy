@@ -168,7 +168,6 @@ export async function processImage(
   return buffer;
 }
 
-/** Run exiftool on an image buffer to set/copy metadata. Only supports EXIF — XMP/IPTC are always stripped. */
 /** Extract embedded thumbnail from an image. Tries exiftool (EXIF/AVIF) then heif-thumbnailer (HEIC). */
 async function extractThumbnail(
   sourcePath: string,
@@ -222,6 +221,7 @@ async function extractThumbnail(
   return undefined;
 }
 
+/** Run exiftool on an image buffer to set/copy metadata. Only supports EXIF — XMP/IPTC are always stripped. */
 async function runExiftool(
   buffer: Buffer,
   opts: {
