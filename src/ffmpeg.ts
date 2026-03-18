@@ -449,6 +449,14 @@ function buildImageArgs(
     filters.push(`unsharp=5:5:${s}:5:5:0`);
   }
 
+  if (parsed.pixelate && parsed.pixelate > 1) {
+    const px = parsed.pixelate;
+    filters.push(
+      `scale=iw/${px}:ih/${px}:flags=neighbor`,
+      `scale=iw*${px}:ih*${px}:flags=neighbor`,
+    );
+  }
+
   // Colour adjustments (eq filter combines brightness, contrast, saturation)
   const eqParts: string[] = [];
   if (parsed.brightness !== 0) {

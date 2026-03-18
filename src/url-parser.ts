@@ -221,6 +221,7 @@ const SHORTHANDS: Record<string, string> = {
   sa: "saturation",
   mc: "monochrome",
   dt: "duotone",
+  px: "pixelate",
   op: "objects_position",
   // Pro shorthands (parsed but rejected)
   car: "crop_aspect_ratio",
@@ -377,6 +378,9 @@ const rawOptionsSchema = z
       })
       .optional(),
 
+    /** Pixelate with given block size in pixels. */
+    pixelate: z.coerce.number().int().positive().optional(),
+
     resizing_algorithm: zResizingAlgorithm.optional(),
 
     /** Meta-option: `<brightness>:<contrast>:<saturation>`. */
@@ -507,6 +511,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     quality: data.quality,
     blur: data.blur,
     sharpen: data.sharpen,
+    pixelate: data.pixelate,
     rotate: data.rotate,
     flip: data.flip,
     autoRotate: data.auto_rotate,
@@ -582,6 +587,8 @@ const parsedUrlSchema = z.object({
   blur: z.number().optional(),
   /** Sharpening sigma. */
   sharpen: z.number().optional(),
+  /** Pixelate block size in pixels. */
+  pixelate: z.number().optional(),
   /** Rotation angle: 0, 90, 180, or 270 degrees. */
   rotate: z.number().optional(),
   /** Flip the image horizontally and/or vertically. */
@@ -732,6 +739,7 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     quality: options.quality,
     blur: options.blur,
     sharpen: options.sharpen,
+    pixelate: options.pixelate,
     rotate: options.rotate,
     flip: options.flip,
     autoRotate: options.autoRotate,

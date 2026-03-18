@@ -239,6 +239,18 @@ describe("colour adjustments", () => {
   });
 });
 
+describe("pixelate", () => {
+  const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
+
+  it("pixelates butterfly image", async () => {
+    const url = `${SERVICE_URL}/insecure/px:10/plain/${BUTTERFLY_URL}`;
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+});
+
 describe("image trim", () => {
   it("trims borders from image", async () => {
     // Apply trim to the test image — cropdetect should detect and remove any
