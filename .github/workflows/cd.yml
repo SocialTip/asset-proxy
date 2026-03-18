@@ -27,9 +27,10 @@ jobs:
       - name: Set image tags
         id: tags
         run: |
-          TAGS="ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          TAGS="ghcr.io/${REPO}:${{ github.sha }}"
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            TAGS="${TAGS},ghcr.io/${{ github.repository }}:latest"
+            TAGS="${TAGS},ghcr.io/${REPO}:latest"
           fi
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
 
