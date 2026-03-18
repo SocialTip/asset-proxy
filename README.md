@@ -78,6 +78,30 @@ Anchor point for crop operations.
 
 Output quality for lossy formats (JPEG, WebP, AVIF).
 
+#### Adjust — `adjust:<brightness>:<contrast>:<saturation>` (shorthand `a`)
+
+Meta-option to set brightness, contrast, and saturation in one segment. All arguments are optional. Example: `a:50:1.2:0.8`.
+
+#### Brightness — `brightness:<-255 to 255>` (shorthand `br`)
+
+Adjust image brightness. 0 = no change. Example: `br:50`.
+
+#### Contrast — `contrast:<float>` (shorthand `co`)
+
+Adjust image contrast. 1 = no change. Example: `co:1.5`.
+
+#### Saturation — `saturation:<float>` (shorthand `sa`)
+
+Adjust image saturation. 1 = no change, 0 = greyscale. Example: `sa:0.5`.
+
+#### Monochrome — `monochrome:<intensity>:<colour>` (shorthand `mc`)
+
+Convert to monochrome. Intensity is 0–1, colour is an optional hex base colour (default `b3b3b3`). Example: `mc:1:sepia` or `mc:0.8`.
+
+#### Duotone — `duotone:<intensity>:<colour1>:<colour2>` (shorthand `dt`)
+
+Apply duotone effect. Intensity is 0–1, colour1 for shadows, colour2 for highlights. Example: `dt:1:000033:ffcc00`.
+
 #### Blur — `blur:<sigma>` (shorthand `bl`)
 
 Gaussian blur. Example: `bl:5`.

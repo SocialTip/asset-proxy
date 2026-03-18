@@ -415,6 +415,28 @@ describe("image ffmpeg args", () => {
     `);
   });
 
+  it("brightness and saturation via adjust", () => {
+    expect(imageArgs(plain("/a:50::0.5"))).toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-i",
+        "https://example.com/photo.jpg",
+        "-vf",
+        "eq=brightness=0.19607843137254902:saturation=0.5",
+        "-map_metadata",
+        "-1",
+        "-frames:v",
+        "1",
+        "-f",
+        "image2",
+        "-c:v",
+        "mjpeg",
+        "pipe:1",
+      ]
+    `);
+  });
+
   it("strip_metadata disabled", () => {
     expect(imageArgs(plain("/w:100/sm:0"))).toMatchInlineSnapshot(`
       [
