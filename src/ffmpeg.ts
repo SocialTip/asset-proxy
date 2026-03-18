@@ -64,18 +64,14 @@ export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
 ): Promise<Readable> {
-  if (!parsed.resize) {
-    throw new HTTPError("Resize options are required for video processing", {
-      code: "BAD_REQUEST",
-    });
-  }
   return runFfmpeg(
     buildVideoArgs(sourceUrl, {
-      resizingType: parsed.resize.type,
+      resizingType: parsed.resize?.type,
       resizingAlgorithm: parsed.resizingAlgorithm,
       cropAspectRatio: parsed.cropAspectRatio,
-      width: parsed.resize.width,
-      height: parsed.resize.height,
+      width: parsed.resize?.width ?? 0,
+      height: parsed.resize?.height ?? 0,
+      flip: parsed.flip,
       framerate: parsed.framerate,
       cut: parsed.cut,
       outputFormat: parsed.outputFormat,
@@ -224,9 +220,10 @@ function detectTrimCrop(
 // ── Video arg builder ────────────────────────────────────────────────────────
 
 export interface VideoParams {
-  resizingType: ResizingType;
+  resizingType?: ResizingType;
   resizingAlgorithm?: ResizingAlgorithm;
   cropAspectRatio?: number;
+  flip?: { horizontal: boolean; vertical: boolean };
   width: number;
   height: number;
   framerate?: number;
@@ -244,6 +241,7 @@ export function buildVideoArgs(
     resizingType,
     resizingAlgorithm,
     cropAspectRatio,
+    flip,
     width,
     height,
     gpu,
@@ -252,35 +250,41 @@ export function buildVideoArgs(
     outputFormat,
   } = params;
 
-  // Build crop aspect ratio filter expression if needed
-  const carFilter = cropAspectRatio
-    ? `crop='if(gt(dar\\,${cropAspectRatio})\\,ih*${cropAspectRatio}\\,iw)':'if(gt(dar\\,${cropAspectRatio})\\,ih\\,iw/${cropAspectRatio})'`
-    : "";
+  // Build pre/post filters
+  const preFilters: string[] = [];
+  const postFilters: string[] = [];
+  if (cropAspectRatio) {
+    preFilters.push(
+      `crop='if(gt(dar\\,${cropAspectRatio})\\,ih*${cropAspectRatio}\\,iw)':'if(gt(dar\\,${cropAspectRatio})\\,ih\\,iw/${cropAspectRatio})'`,
+    );
+  }
+  if (flip?.horizontal) postFilters.push("hflip");
+  if (flip?.vertical) postFilters.push("vflip");
   const args = ["-hide_banner", "-y"];
+
+  const hasResize = width > 0 || height > 0;
 
   if (gpu) {
     args.push("-hwaccel", "cuda", "-hwaccel_output_format", "cuda");
 
     if (resizingAlgorithm?.mode === "gpu") {
-      // Explicit GPU scaler — use -vf with the chosen scale filter
       args.push("-i", sourceUrl);
       const scaleFilter = buildScaleFilter({
-        resizingType,
+        resizingType: resizingType ?? "fit",
         resizingAlgorithm,
         width,
         height,
         gpu: true,
       });
-      const vf = carFilter ? `${carFilter},${scaleFilter}` : scaleFilter;
+      const vf = [...preFilters, scaleFilter, ...postFilters].join(",");
       args.push("-vf", vf);
     } else if (resizingAlgorithm?.mode === "cpu") {
       throw new HTTPError(
         "CPU resizing algorithms are not supported with GPU acceleration — use gpu:scale_cuda or gpu:scale_npp, or disable GPU",
         { code: "BAD_REQUEST" },
       );
-    } else {
-      // Default cuvid resize via -resize decoder flag (force mode only)
-      if (resizingType !== "force") {
+    } else if (hasResize) {
+      if (resizingType && resizingType !== "force") {
         throw new HTTPError(
           `Resize type '${resizingType}' is not supported with default GPU resize — specify ra:gpu:scale_cuda or ra:gpu:scale_npp for ${resizingType} mode`,
           { code: "BAD_REQUEST" },
@@ -294,21 +298,35 @@ export function buildVideoArgs(
       }
       args.push("-resize", `${width}x${height}`);
       args.push("-i", sourceUrl);
-      if (carFilter) {
-        args.push("-vf", carFilter);
+      const extra = [...preFilters, ...postFilters];
+      if (extra.length > 0) {
+        args.push("-vf", extra.join(","));
+      }
+    } else {
+      args.push("-i", sourceUrl);
+      const extra = [...preFilters, ...postFilters];
+      if (extra.length > 0) {
+        args.push("-vf", extra.join(","));
       }
     }
   } else {
     args.push("-i", sourceUrl);
-    const scaleFilter = buildScaleFilter({
-      resizingType,
-      resizingAlgorithm,
-      width,
-      height,
-      gpu: false,
-    });
-    const vf = carFilter ? `${carFilter},${scaleFilter}` : scaleFilter;
-    args.push("-vf", vf);
+    const filters = [...preFilters];
+    if (hasResize) {
+      filters.push(
+        buildScaleFilter({
+          resizingType: resizingType ?? "fit",
+          resizingAlgorithm,
+          width,
+          height,
+          gpu: false,
+        }),
+      );
+    }
+    filters.push(...postFilters);
+    if (filters.length > 0) {
+      args.push("-vf", filters.join(","));
+    }
   }
 
   if (cut !== undefined) {
@@ -423,6 +441,10 @@ function buildImageArgs(
         break;
     }
   }
+
+  // Flip
+  if (parsed.flip?.horizontal) filters.push("hflip");
+  if (parsed.flip?.vertical) filters.push("vflip");
 
   // Blur
   if (parsed.blur && parsed.blur > 0) {

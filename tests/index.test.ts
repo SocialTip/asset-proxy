@@ -69,8 +69,6 @@ beforeEach(() => {
   mockSpawn.mockReset();
 });
 
-// ── Origin allowlist ────────────────────────────────────────────────────────
-
 describe("origin allowlist", () => {
   it("allows a request with a permitted origin", async () => {
     setupSpawnMock();
@@ -90,8 +88,6 @@ describe("origin allowlist", () => {
     expect(res.text).toContain("Origin not allowed");
   });
 });
-
-// ── ffmpeg image args ───────────────────────────────────────────────────────
 
 describe("image ffmpeg args", () => {
   it("basic resize fit", () => {
@@ -374,6 +370,28 @@ describe("image ffmpeg args", () => {
     });
   });
 
+  it("flip horizontal and vertical", () => {
+    expect(imageArgs(plain("/flip:1:1"))).toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-i",
+        "https://example.com/photo.jpg",
+        "-vf",
+        "hflip,vflip",
+        "-map_metadata",
+        "-1",
+        "-frames:v",
+        "1",
+        "-f",
+        "image2",
+        "-c:v",
+        "mjpeg",
+        "pipe:1",
+      ]
+    `);
+  });
+
   it("strip_metadata disabled", () => {
     expect(imageArgs(plain("/w:100/sm:0"))).toMatchInlineSnapshot(`
       [
@@ -394,8 +412,6 @@ describe("image ffmpeg args", () => {
     `);
   });
 });
-
-// ── ffmpeg video args ───────────────────────────────────────────────────────
 
 describe("video ffmpeg args", () => {
   it("basic resize force (CPU)", async () => {
@@ -521,8 +537,6 @@ describe("video ffmpeg args", () => {
     `);
   });
 });
-
-// ── ffmpeg video args (GPU) ──────────────────────────────────────────────────
 
 describe("video ffmpeg args (GPU)", () => {
   function gpuVideoArgs(opts: {
@@ -667,8 +681,6 @@ describe("video ffmpeg args (GPU)", () => {
   });
 });
 
-// ── Validation errors ───────────────────────────────────────────────────────
-
 describe("validation errors", () => {
   it("rejects invalid framerate", () => {
     expect(() => parseProcessingUrl(plain("/rs:fill:480:360/fr:0"))).toThrow();
@@ -696,8 +708,6 @@ describe("validation errors", () => {
     );
   });
 });
-
-// ── URL parsing ─────────────────────────────────────────────────────────────
 
 describe("url parsing", () => {
   it("parses encrypted source URL", () => {
