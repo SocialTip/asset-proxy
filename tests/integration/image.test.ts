@@ -251,6 +251,26 @@ describe("pixelate", () => {
   });
 });
 
+describe("advanced filters", () => {
+  it("applies unsharp masking to blurred lines", async () => {
+    const url = `${SERVICE_URL}/insecure/ush:always:3:2/plain/http://file-server/test-image-blurred-lines.png`;
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("applies colorize overlay", async () => {
+    const buffer = await fetchImage("/col:0.4:ff0000");
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("applies gradient overlay", async () => {
+    const buffer = await fetchImage("/gr:0.8:000000:down");
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+});
+
 describe("image trim", () => {
   it("trims borders from image", async () => {
     // Apply trim to the test image — cropdetect should detect and remove any

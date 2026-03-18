@@ -510,7 +510,78 @@ function buildImageArgs(
     );
   }
 
-  // Padding with background
+  // Unsharp masking
+  if (parsed.unsharpMasking && parsed.unsharpMasking.mode !== "none") {
+    const { mode, weight, divider } = parsed.unsharpMasking;
+    // In "auto" mode, only apply when there's a downscale (resize present)
+    // In "always" mode, always apply
+    if (mode === "always" || (mode === "auto" && parsed.resize)) {
+      const amount = weight / divider;
+      filters.push(`unsharp=5:5:${amount}:5:5:0`);
+    }
+  }
+
+  // Colorize (colour overlay)
+  if (parsed.colorize && parsed.colorize.opacity > 0) {
+    const { opacity, colour } = parsed.colorize;
+    const hex =
+      colour.length === 3
+        ? colour[0] + colour[0] + colour[1] + colour[1] + colour[2] + colour[2]
+        : colour;
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const inv = 1 - opacity;
+    filters.push(
+      `lutrgb=r=${Math.round(r * opacity)}+val*${inv}:g=${Math.round(g * opacity)}+val*${inv}:b=${Math.round(b * opacity)}+val*${inv}`,
+    );
+  }
+
+  // Gradient (transparent → colour overlay)
+  if (parsed.gradient && parsed.gradient.opacity > 0) {
+    const { opacity, colour, direction, start, stop } = parsed.gradient;
+    const hex =
+      colour.length === 3
+        ? colour[0] + colour[0] + colour[1] + colour[1] + colour[2] + colour[2]
+        : colour;
+    // Map direction to angle
+    let angle: number;
+    switch (direction) {
+      case "down":
+        angle = 0;
+        break;
+      case "up":
+        angle = 180;
+        break;
+      case "right":
+        angle = 90;
+        break;
+      case "left":
+        angle = 270;
+        break;
+      default:
+        angle = parseFloat(direction) || 0;
+    }
+    // Use geq to apply a gradient based on position
+    // For a top-to-bottom gradient (angle=0): factor = clamp((Y/H - start) / (stop - start), 0, 1)
+    // Then blend: pixel * (1 - factor*opacity) + colour * factor*opacity
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const range = stop - start || 1;
+    // For simplicity, support vertical gradients (0/180) and horizontal (90/270)
+    let pos: string;
+    if (angle === 0) pos = "Y/H";
+    else if (angle === 180) pos = "(H-Y)/H";
+    else if (angle === 90) pos = "(W-X)/W";
+    else if (angle === 270) pos = "X/W";
+    else pos = "Y/H"; // fallback to top-to-bottom
+    const factor = `clip((${pos}-${start})/${range},0,1)*${opacity}`;
+    filters.push(
+      `geq=r='r(X,Y)*(1-(${factor}))+${r}*(${factor})':g='g(X,Y)*(1-(${factor}))+${g}*(${factor})':b='b(X,Y)*(1-(${factor}))+${b}*(${factor})'`,
+    );
+  }
+
   if (parsed.padding) {
     const { top, right, bottom, left } = parsed.padding;
     const colour = parsed.background
