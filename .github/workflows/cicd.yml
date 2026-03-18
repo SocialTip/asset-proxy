@@ -12,7 +12,8 @@ concurrency:
 jobs:
   ci:
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
     runs-on: warp-ubuntu-latest-x64-2x
     services:
       file-server:
@@ -20,18 +21,17 @@ jobs:
         ports:
           - 80:80
         volumes:
-          - ${{ github.workspace }}/nginx:/usr/share/nginx
+          - /tmp/nginx:/usr/share/nginx
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: true
-          path: repo
 
       - name: Map file-server hostname
         run: echo "127.0.0.1 file-server" | sudo tee -a /etc/hosts
 
       - name: Copy test fixtures into nginx
-        run: sudo cp -a repo/tests/fixtures/. nginx/html/
+        run: sudo cp -a tests/fixtures/. /tmp/nginx/html/
 
       - name: Configure nginx to serve all files
         run: |
@@ -52,18 +52,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: repo/.tool-versions
+          node-version-file: .tool-versions
           cache: yarn
-          cache-dependency-path: repo/yarn.lock
 
       - run: yarn install --immutable
-        working-directory: repo
 
       - run: yarn typecheck
-        working-directory: repo
 
       - run: yarn lint
-        working-directory: repo
 
       - name: Install ffmpeg, exiftool, and heif-thumbnailer
         env:
@@ -75,7 +71,6 @@ jobs:
 
       - name: Start asset-proxy
         run: nohup npx tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
-        working-directory: repo
         env:
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -84,11 +79,36 @@ jobs:
       - name: Wait for asset-proxy
         run: timeout 30 bash -c 'until curl -sf http://localhost:8080/health; do sleep 1; done'
 
-      - run: yarn test
-        working-directory: repo
+      - run: yarn test --update
+
+      - name: Check for snapshot changes
+        if: github.event_name == 'pull_request'
+        id: snapshots
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create snapshot update PR
+        if: always() && github.event_name == 'pull_request'
+        id: snapshot-pr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: snapshot-update/${{ github.head_ref || github.ref_name }}
+          base: ${{ github.head_ref || github.ref_name }}
+          delete-branch: true
+          commit-message: "test: update image snapshots"
+          title: "Update image snapshots"
+          body: |
+            Automated snapshot update from [${{ github.workflow }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}?pr=${{ github.event.pull_request.number }})
+            Created from #${{ github.event.pull_request.number }}
+
+      - name: Fail if snapshots were outdated
+        if: steps.snapshot-pr.outputs.pull-request-number
+        run: exit 1
 
       - name: Print asset-proxy logs
-        if: failure()
+        if: failure() && steps.snapshots.outputs.changed != 'true'
         run: cat /tmp/asset-proxy.log
 
   cd-changes:
