@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
@@ -82,42 +82,110 @@ export async function processImage(
   sourceUrl: string,
   parsed: ImageUrl,
 ): Promise<Buffer> {
-  // Detect trim bounds before building args (requires a cropdetect pass)
   let trimFilter: string | undefined;
   if (parsed.trim) {
     trimFilter = await detectTrimCrop(sourceUrl, parsed.trim);
   }
 
-  // AVIF muxer requires seekable output — use a temp file
+  const shouldStripMetadata = parsed.stripMetadata ?? env.STRIP_METADATA;
+  const shouldKeepCopyright = parsed.keepCopyright ?? env.KEEP_COPYRIGHT;
+  const shouldStripColorProfile =
+    parsed.stripColorProfile ?? env.STRIP_COLOR_PROFILE;
+  const needsMetadataCopy =
+    !shouldStripMetadata || (shouldStripMetadata && shouldKeepCopyright);
+
+  // When we need to copy metadata back, cache source to a temp file to avoid re-downloading.
+  let sourceTempDir: string | undefined;
+  let sourceTempPath: string | undefined;
+  let ffmpegInput = sourceUrl;
+  if (needsMetadataCopy) {
+    sourceTempDir = mkdtempSync(join(tmpdir(), "asset-proxy-src-"));
+    sourceTempPath = join(sourceTempDir, "source");
+    const srcRes = await fetch(sourceUrl);
+    if (srcRes.ok) {
+      await writeFile(sourceTempPath, Buffer.from(await srcRes.arrayBuffer()));
+      ffmpegInput = sourceTempPath;
+    } else {
+      sourceTempPath = undefined;
+    }
+  }
+
+  let buffer: Buffer;
+
   if (parsed.outputFormat === "avif") {
     const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
     const outPath = join(dir, "output.avif");
-
-    const args = buildImageArgs(sourceUrl, parsed, {
+    const args = buildImageArgs(ffmpegInput, parsed, {
       outputPath: outPath,
       trimFilter,
     });
     const stream = runFfmpeg(args);
-
     await new Promise<void>((resolve, reject) => {
       stream.on("end", resolve);
       stream.on("error", reject);
-      stream.resume(); // drain stdout (will be empty since output goes to file)
+      stream.resume();
     });
-
-    const buffer = await readFile(outPath);
+    buffer = await readFile(outPath);
     await rm(dir, { recursive: true, force: true });
-    return buffer;
+  } else {
+    const stream = runFfmpeg(
+      buildImageArgs(ffmpegInput, parsed, { trimFilter }),
+    );
+    buffer = await new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      stream.on("end", () => resolve(Buffer.concat(chunks)));
+      stream.on("error", reject);
+    });
   }
 
-  const stream = runFfmpeg(buildImageArgs(sourceUrl, parsed, { trimFilter }));
+  if (needsMetadataCopy && sourceTempPath) {
+    buffer = await copyMetadataFromSource(buffer, sourceTempPath, {
+      copyrightOnly: shouldStripMetadata && shouldKeepCopyright,
+      stripColorProfile: shouldStripColorProfile,
+    });
+  }
 
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-    stream.on("end", () => resolve(Buffer.concat(chunks)));
-    stream.on("error", reject);
+  if (sourceTempDir) {
+    await rm(sourceTempDir, { recursive: true, force: true });
+  }
+
+  return buffer;
+}
+
+/** Use exiftool to copy EXIF metadata from a local source file into the processed output. */
+async function copyMetadataFromSource(
+  buffer: Buffer,
+  sourcePath: string,
+  opts: { copyrightOnly?: boolean; stripColorProfile?: boolean },
+): Promise<Buffer> {
+  const dir = mkdtempSync(join(tmpdir(), "asset-proxy-meta-"));
+  const outPath = join(dir, "output");
+  await writeFile(outPath, buffer);
+
+  const exiftoolArgs = ["-overwrite_original"];
+  if (opts.copyrightOnly) {
+    exiftoolArgs.push("-tagsfromfile", sourcePath, "-Copyright");
+  } else {
+    exiftoolArgs.push("-tagsfromfile", sourcePath, "-all:all");
+  }
+  if (opts.stripColorProfile) {
+    exiftoolArgs.push("-ICC_Profile:all=");
+  }
+  exiftoolArgs.push(outPath);
+
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn("exiftool", exiftoolArgs);
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`exiftool exited with code ${code}`));
+    });
+    proc.on("error", reject);
   });
+
+  const result = await readFile(outPath);
+  await rm(dir, { recursive: true, force: true });
+  return result;
 }
 
 function runFfmpeg(args: string[]): Readable {
@@ -152,10 +220,7 @@ interface TrimOptions {
   equalVert: boolean;
 }
 
-/**
- * Run ffmpeg cropdetect on a single frame to determine trim bounds.
- * Returns a crop filter string like "crop=180:140:10:5".
- */
+/** Run ffmpeg cropdetect on a single frame to determine trim bounds. Returns a crop filter string like "crop=180:140:10:5". */
 function detectTrimCrop(
   sourceUrl: string,
   trim: TrimOptions,
@@ -602,10 +667,9 @@ function buildImageArgs(
     args.push("-vf", filters.join(","));
   }
 
-  // Strip metadata
-  if (parsed.stripMetadata !== false) {
-    args.push("-map_metadata", "-1");
-  }
+  // Always strip metadata in ffmpeg. If metadata needs to be preserved
+  // (keepCopyright, sm:0), exiftool copies it back from the source in processImage.
+  args.push("-map_metadata", "-1");
 
   // Output format and codec
   args.push("-frames:v", "1");

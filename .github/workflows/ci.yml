@@ -59,8 +59,8 @@ jobs:
       - run: yarn lint
         working-directory: repo
 
-      - name: Install ffmpeg
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Install ffmpeg and exiftool
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libimage-exiftool-perl
 
       - name: Start asset-proxy
         run: nohup npx tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &

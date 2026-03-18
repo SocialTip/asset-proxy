@@ -210,6 +210,8 @@ const SHORTHANDS: Record<string, string> = {
   bga: "background_alpha",
   pd: "padding",
   sm: "strip_metadata",
+  kcr: "keep_copyright",
+  scp: "strip_color_profile",
   f: "format",
   fr: "framerate",
   ct: "cut",
@@ -366,6 +368,10 @@ const rawOptionsSchema = z
       .optional(),
 
     strip_metadata: zBool.optional(),
+    /** Preserve copyright metadata when stripping. */
+    keep_copyright: zBool.optional(),
+    /** Convert ICC colour profile to sRGB and remove it. */
+    strip_color_profile: zBool.optional(),
 
     format: z
       .string()
@@ -598,6 +604,8 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     backgroundAlpha: data.background_alpha,
     padding,
     stripMetadata: data.strip_metadata,
+    keepCopyright: data.keep_copyright,
+    stripColorProfile: data.strip_color_profile,
     crop: data.crop,
     cropAspectRatio: data.crop_aspect_ratio,
     gravity: data.gravity,
@@ -704,6 +712,10 @@ const parsedUrlSchema = z.object({
   padding: sides.optional(),
   /** Remove EXIF and other metadata from the output. */
   stripMetadata: z.boolean().optional(),
+  /** Preserve copyright metadata when stripping. */
+  keepCopyright: z.boolean().optional(),
+  /** Convert ICC colour profile to sRGB and remove it. */
+  stripColorProfile: z.boolean().optional(),
   /** Extract a region before resizing (width, height, optional gravity). */
   crop: z
     .object({
@@ -743,13 +755,7 @@ export function isVideoUrl(parsed: ParsedUrl): parsed is VideoUrl {
   return !isImageUrl(parsed);
 }
 
-/**
- * Parses an imgproxy-format processing path (after signature has been stripped).
- *
- * Supported formats:
- *   /<options>/plain/<source_url>[@<format>]
- *   /<options>/enc/<encrypted_source_url>[@<format>]
- */
+/** Parses an imgproxy-format processing path (after signature has been stripped). Supports `/<options>/plain/<source_url>[@<format>]` and `/<options>/enc/<encrypted_source_url>[@<format>]`. */
 export function parseProcessingUrl(path: string): ParsedUrl {
   const withoutPrefix = path.replace(/^\//, "");
 
@@ -851,6 +857,8 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     backgroundAlpha: options.backgroundAlpha,
     padding: options.padding,
     stripMetadata: options.stripMetadata,
+    keepCopyright: options.keepCopyright,
+    stripColorProfile: options.stripColorProfile,
     crop: options.crop,
     cropAspectRatio: options.cropAspectRatio,
     gravity: options.gravity,

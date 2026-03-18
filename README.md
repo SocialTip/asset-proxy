@@ -54,9 +54,29 @@ Controls the scaling algorithm. Supports CPU and GPU modes:
 
 GPU scaler variants are not available when extracting image thumbnails — use the CPU algorithms instead.
 
+#### Min Width / Min Height — `min_width:<w>` (`mw`) / `min_height:<h>` (`mh`)
+
+Ensure the output is at least the specified width or height, upscaling if necessary while preserving aspect ratio.
+
+#### Zoom — `zoom:<factor>` or `zoom:<x>:<y>` (shorthand `z`)
+
+Multiply resize dimensions by the given factor. Example: `z:2` doubles the output size. Supports separate x/y factors: `z:2:1.5`.
+
+#### DPR — `dpr:<ratio>`
+
+Device pixel ratio — multiplies dimensions and padding. Example: `dpr:2`.
+
 #### Enlarge — `enlarge:1` (shorthand `el`)
 
 Allow upscaling when the image is smaller than the target dimensions. Off by default.
+
+#### Extend — `extend:<enabled>:<gravity>` (shorthand `ex`)
+
+Pad undersized images to fill the target resize dimensions. Example: `ex:1:ce` (extend with centre gravity).
+
+#### Extend Aspect Ratio — `extend_aspect_ratio:<enabled>:<gravity>` (shorthand `exar`)
+
+Extend the image to match the target aspect ratio.
 
 #### Crop — `crop:<width>:<height>:<gravity>` (shorthand `c`)
 
@@ -152,7 +172,15 @@ Extend the canvas. A single value applies uniform padding: `pd:10`.
 
 #### Strip Metadata — `strip_metadata:1` (shorthand `sm`)
 
-Remove EXIF and other metadata from the output.
+Remove EXIF and other metadata from the output. Enabled by default (controlled by `STRIP_METADATA` env var). Note: selective metadata stripping only supports EXIF metadata.
+
+#### Keep Copyright — `keep_copyright:1` (shorthand `kcr`)
+
+Preserve copyright metadata when stripping other metadata. Enabled by default (controlled by `KEEP_COPYRIGHT` env var). Uses exiftool to copy copyright from the source image after ffmpeg processing.
+
+#### Strip Colour Profile — `strip_color_profile:1` (shorthand `scp`)
+
+Strip the embedded ICC colour profile. Enabled by default (controlled by `STRIP_COLOR_PROFILE` env var).
 
 #### Format — `format:<extension>` (shorthand `f`)
 
@@ -169,6 +197,25 @@ Remove borders from an image using colour similarity detection. The threshold (r
 #### Cut — `cut:<seconds>` (shorthand `ct`) — video only
 
 Limits output duration to the given number of seconds. Example: `ct:10`.
+
+#### Not implemented
+
+The following imgproxy options are recognised but return 501 Not Implemented:
+
+- `watermark` / `wm` — watermark overlay
+- `watermark_url` / `wmu` — custom watermark image URL
+- `watermark_text` / `wmt` — watermark text
+- `watermark_size` / `wms` — watermark dimensions
+- `watermark_rotate` / `wmr` — watermark rotation
+- `watermark_shadow` / `wmsh` — watermark shadow
+- `style` / `st` — text style
+- `objects_position` / `op` — detected object positions
+- `blur_areas` / `bla` — blur specific regions
+- `blur_detections` / `bd` — blur detected objects
+- `draw_detections` / `dd` — draw bounding boxes on detected objects
+- `gravity:sm` — smart gravity (content-aware)
+- `gravity:obj` — object-oriented gravity
+- `gravity:objw` — weighted object gravity
 
 ### Output format
 
@@ -269,6 +316,9 @@ yarn test:down    # stop and remove containers
 | `SOURCE_URL_ENCRYPTION_KEY` | —                                     | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs. When unset, encrypted URLs are not supported. |
 | `ALLOWED_ORIGINS`           | —                                     | Comma-separated list of allowed source URL origins (e.g. `https://example.com,gs://my-bucket`). When unset, all origins are permitted.    |
 | `CACHE_CONTROL`             | `public, max-age=31536000, immutable` | Cache-Control header value for successful responses.                                                                                      |
+| `STRIP_METADATA`            | `true`                                | Strip EXIF/IPTC metadata from output images by default.                                                                                   |
+| `KEEP_COPYRIGHT`            | `true`                                | Preserve copyright metadata when stripping. Uses exiftool to copy from source.                                                            |
+| `STRIP_COLOR_PROFILE`       | `true`                                | Strip embedded ICC colour profile from output images by default.                                                                          |
 
 ## Health check
 

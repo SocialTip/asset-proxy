@@ -54,6 +54,7 @@ function setupSpawnMockError() {
 
 vi.hoisted(() => {
   process.env.SKIP_GPU = "1";
+  process.env.KEEP_COPYRIGHT = "0";
   process.env.ALLOWED_ORIGINS = "http://file-server,https://example.com";
   process.env.SOURCE_URL_ENCRYPTION_KEY =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -537,25 +538,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("strip_metadata disabled", () => {
-    expect(imageArgs(plain("/w:100/sm:0"))).toMatchInlineSnapshot(`
-      [
-        "-hide_banner",
-        "-y",
-        "-i",
-        "https://example.com/photo.jpg",
-        "-vf",
-        "scale=100:-1:force_original_aspect_ratio=decrease",
-        "-frames:v",
-        "1",
-        "-f",
-        "image2",
-        "-c:v",
-        "mjpeg",
-        "pipe:1",
-      ]
-    `);
-  });
+  // strip_metadata behaviour is tested in integration/image.metadata.test.ts
+  // since it involves exiftool post-processing that can't be tested via spawn mock
 });
 
 describe("video ffmpeg args", () => {
