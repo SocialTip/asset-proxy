@@ -84,9 +84,25 @@ jobs:
         if: failure()
         run: cat /tmp/asset-proxy.log
 
+  cd-changes:
+    if: github.event_name == 'pull_request'
+    runs-on: warp-ubuntu-latest-x64-2x
+    outputs:
+      changed: ${{ steps.filter.outputs.cd }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            cd:
+              - '.github/workflows/cd.yml'
+
   cd:
-    if: github.event_name == 'push'
-    needs: ci
+    if: |
+      always() && needs.ci.result == 'success' &&
+      (github.event_name == 'push' || needs.cd-changes.outputs.changed == 'true')
+    needs: [ci, cd-changes]
     uses: ./.github/workflows/cd.yml
     permissions:
       contents: read
