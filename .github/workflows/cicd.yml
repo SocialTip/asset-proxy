@@ -12,8 +12,6 @@ concurrency:
 jobs:
   ci:
     runs-on: warp-ubuntu-latest-x64-2x
-    permissions:
-      contents: read
     services:
       file-server:
         image: nginx:alpine
@@ -90,7 +88,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
-      contents: read
+      pull-requests: read
     outputs:
       changed: ${{ steps.filter.outputs.cd }}
     steps:
