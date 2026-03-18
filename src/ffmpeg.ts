@@ -30,7 +30,7 @@ export const gpuReady: Promise<boolean> = env.SKIP_GPU
         "-f",
         "lavfi",
         "-i",
-        "nullsrc=s=16x16:d=0.1",
+        "nullsrc=s=192x192:d=0.1",
         "-c:v",
         "h264_nvenc",
         "-f",
