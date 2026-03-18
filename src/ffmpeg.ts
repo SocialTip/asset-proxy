@@ -69,8 +69,6 @@ const IMAGE_ONLY_OPTIONS: [
   ["sharpen", "sharpen"],
   ["rotate", "rotate"],
   ["padding", "padding"],
-  ["quality", "quality"],
-  ["formatQuality", "format_quality"],
   ["autoquality", "autoquality"],
   ["maxBytes", "max_bytes"],
   ["dpi", "dpi"],
@@ -137,6 +135,7 @@ export async function processVideo(
       flip: parsed.flip,
       framerate: parsed.framerate,
       cut: parsed.cut,
+      quality: parsed.formatQuality?.[parsed.outputFormat] ?? parsed.quality,
       outputFormat: parsed.outputFormat,
       gpu: await gpuReady,
     }),
@@ -606,6 +605,7 @@ export interface VideoParams {
   height: number;
   framerate?: number;
   cut?: number;
+  quality?: number;
   outputFormat: OutputFormat;
   gpu: boolean;
 }
@@ -625,6 +625,7 @@ export function buildVideoArgs(
     gpu,
     framerate,
     cut,
+    quality,
     outputFormat,
   } = params;
 
@@ -717,13 +718,26 @@ export function buildVideoArgs(
 
   if (outputFormat === "webm") {
     args.push("-c:v", "libvpx-vp9");
+    if (quality !== undefined) {
+      // libvpx-vp9 CRF: 0-63 (0=best), map 1-100 → 63-0
+      args.push("-crf", String(Math.round(63 - (quality / 100) * 63)));
+      args.push("-b:v", "0");
+    }
     args.push("-c:a", "libopus");
     args.push("-f", "webm", "pipe:1");
   } else {
     if (gpu) {
       args.push("-c:v", "h264_nvenc", "-preset", "p4", "-tune", "hq");
+      if (quality !== undefined) {
+        // NVENC CQ: 0-51 (0=best), map 1-100 → 51-0
+        args.push("-cq", String(Math.round(51 - (quality / 100) * 51)));
+      }
     } else {
       args.push("-c:v", "libx264", "-preset", "fast");
+      if (quality !== undefined) {
+        // libx264 CRF: 0-51 (0=best), map 1-100 → 51-0
+        args.push("-crf", String(Math.round(51 - (quality / 100) * 51)));
+      }
     }
     args.push("-c:a", "copy");
     args.push("-movflags", "frag_keyframe+empty_moov+faststart");
