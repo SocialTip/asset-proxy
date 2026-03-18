@@ -5,6 +5,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
+import sharp from "sharp";
 import { env } from "./env.js";
 import { HTTPError } from "./error.js";
 import { logger } from "./logger.js";
@@ -120,12 +121,17 @@ export async function processImage(
     trimFilter = await detectTrimCrop(ffmpegInput, parsed.trim);
   }
 
+  // Resolve effective quality: format-specific > global > default
+  const effectiveQuality =
+    parsed.formatQuality?.[parsed.outputFormat] ?? parsed.quality;
+  const effectiveParsed = { ...parsed, quality: effectiveQuality };
+
   let buffer: Buffer;
 
   if (parsed.outputFormat === "avif") {
     const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
     const outPath = join(dir, "output.avif");
-    const args = buildImageArgs(ffmpegInput, parsed, {
+    const args = buildImageArgs(ffmpegInput, effectiveParsed, {
       outputPath: outPath,
       trimFilter,
     });
@@ -139,7 +145,7 @@ export async function processImage(
     await rm(dir, { recursive: true, force: true });
   } else {
     const stream = runFfmpeg(
-      buildImageArgs(ffmpegInput, parsed, { trimFilter }),
+      buildImageArgs(ffmpegInput, effectiveParsed, { trimFilter }),
     );
     buffer = await new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
@@ -147,6 +153,47 @@ export async function processImage(
       stream.on("end", () => resolve(Buffer.concat(chunks)));
       stream.on("error", reject);
     });
+  }
+
+  const aq =
+    parsed.autoquality ??
+    (env.AUTOQUALITY_METHOD !== "none"
+      ? {
+          method: env.AUTOQUALITY_METHOD as "dssim",
+          target: env.AUTOQUALITY_TARGET ?? 0.02,
+          min:
+            env.AUTOQUALITY_FORMAT_MIN?.[parsed.outputFormat] ??
+            env.AUTOQUALITY_MIN ??
+            70,
+          max:
+            env.AUTOQUALITY_FORMAT_MAX?.[parsed.outputFormat] ??
+            env.AUTOQUALITY_MAX ??
+            80,
+          allowedError: env.AUTOQUALITY_ALLOWED_ERROR ?? 0.001,
+        }
+      : undefined);
+
+  if (aq?.method === "dssim") {
+    buffer = await autoqualityDssim(buffer, parsed.outputFormat, {
+      target: aq.target,
+      min: aq.min,
+      max: aq.max,
+      allowedError: aq.allowedError,
+    });
+  } else if (aq?.method === "size" && aq.target) {
+    buffer = await shrinkToMaxBytes(buffer, parsed.outputFormat, aq.target);
+  }
+
+  if (
+    parsed.maxBytes &&
+    parsed.maxBytes > 0 &&
+    buffer.length > parsed.maxBytes
+  ) {
+    buffer = await shrinkToMaxBytes(
+      buffer,
+      parsed.outputFormat,
+      parsed.maxBytes,
+    );
   }
 
   const needsExiftool =
@@ -222,6 +269,137 @@ async function extractThumbnail(
 }
 
 /** Run exiftool on an image buffer to set/copy metadata. Only supports EXIF — XMP/IPTC are always stripped. */
+/** Binary search on quality targeting a DSSIM value using sharp + ffmpeg SSIM filter. */
+async function autoqualityDssim(
+  original: Buffer,
+  format: ImageFormat,
+  opts: { target: number; min: number; max: number; allowedError: number },
+): Promise<Buffer> {
+  let lo = opts.min;
+  let hi = opts.max;
+  let best = original;
+
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const encoded = await reencodeWithQuality(original, format, mid);
+    const dssim = await computeDssim(original, encoded);
+
+    if (Math.abs(dssim - opts.target) <= opts.allowedError) {
+      return encoded;
+    }
+
+    if (dssim < opts.target) {
+      // Quality too high (too similar) — lower it
+      best = encoded;
+      hi = mid - 1;
+    } else {
+      // Quality too low (too different) — raise it
+      lo = mid + 1;
+    }
+  }
+
+  return best;
+}
+
+async function reencodeWithQuality(
+  buffer: Buffer,
+  format: ImageFormat,
+  quality: number,
+): Promise<Buffer> {
+  let img = sharp(buffer);
+  switch (format) {
+    case "jpg":
+      img = img.jpeg({ quality });
+      break;
+    case "webp":
+      img = img.webp({ quality });
+      break;
+    case "avif":
+      img = img.avif({ quality });
+      break;
+    default:
+      return buffer;
+  }
+  return img.toBuffer();
+}
+
+/** Compute DSSIM between two image buffers using ffmpeg's SSIM filter. DSSIM = (1 - SSIM) / 2. */
+async function computeDssim(a: Buffer, b: Buffer): Promise<number> {
+  const dir = mkdtempSync(join(tmpdir(), "asset-proxy-ssim-"));
+  const pathA = join(dir, "a.png");
+  const pathB = join(dir, "b.png");
+
+  // Convert both to PNG for consistent comparison
+  await writeFile(pathA, await sharp(a).png().toBuffer());
+  await writeFile(pathB, await sharp(b).png().toBuffer());
+
+  return new Promise<number>((resolve) => {
+    const proc = spawn("ffmpeg", [
+      "-hide_banner",
+      "-i",
+      pathA,
+      "-i",
+      pathB,
+      "-lavfi",
+      "ssim",
+      "-f",
+      "null",
+      "-",
+    ]);
+
+    let stderr = "";
+    proc.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    proc.on("close", async () => {
+      await rm(dir, { recursive: true, force: true });
+      // Parse SSIM from stderr: "SSIM All:0.987654 (19.123456)"
+      const match = stderr.match(/All:([\d.]+)/);
+      const ssim = match ? parseFloat(match[1]) : 1;
+      resolve((1 - ssim) / 2);
+    });
+  });
+}
+
+/** Binary search on quality using sharp to fit output under maxBytes. */
+async function shrinkToMaxBytes(
+  buffer: Buffer,
+  format: ImageFormat,
+  maxBytes: number,
+): Promise<Buffer> {
+  let lo = 1;
+  let hi = 99;
+  let best = buffer;
+
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    let img = sharp(buffer);
+    switch (format) {
+      case "jpg":
+        img = img.jpeg({ quality: mid });
+        break;
+      case "webp":
+        img = img.webp({ quality: mid });
+        break;
+      case "avif":
+        img = img.avif({ quality: mid });
+        break;
+      default:
+        return buffer;
+    }
+    const attempt = await img.toBuffer();
+    if (attempt.length <= maxBytes) {
+      best = attempt;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return best;
+}
+
 async function runExiftool(
   buffer: Buffer,
   opts: {

@@ -1,11 +1,14 @@
 import {
   fetchImage,
+  fetchImageFrom,
   fetchImageWithFormat,
   toPng,
   sharp,
   SOURCE_URL,
   SERVICE_URL,
 } from "./helpers.js";
+
+const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
 
 describe("image padding and background", () => {
   it("adds uniform padding", async () => {
@@ -69,5 +72,41 @@ describe("image quality", () => {
     const lowQ = await fetchImage("/w:100/q:10");
     expect(lowQ.length).toBeLessThan(highQ.length);
     expect(await toPng(lowQ)).toMatchImageSnapshot();
+  });
+
+  it("format_quality overrides global quality for jpg", async () => {
+    const globalQ = await fetchImageFrom("/q:95", BUTTERFLY_URL);
+    const fmtQ = await fetchImageFrom("/q:95/fq:jpg:10", BUTTERFLY_URL);
+    expect(fmtQ.length).toBeLessThan(globalQ.length);
+    expect(await toPng(fmtQ)).toMatchImageSnapshot();
+  });
+
+  it("max_bytes limits output size", async () => {
+    const unlimited = await fetchImageFrom("/w:200/q:95", BUTTERFLY_URL);
+    const limited = await fetchImageFrom("/w:200/q:95/mb:3000", BUTTERFLY_URL);
+    expect(limited.length).toBeLessThanOrEqual(3000);
+    expect(limited.length).toBeLessThan(unlimited.length);
+    expect(await toPng(limited)).toMatchImageSnapshot();
+  });
+
+  it("autoquality by size limits output", async () => {
+    const auto = await fetchImageFrom(
+      "/w:200/aq:size:3000:1:95",
+      BUTTERFLY_URL,
+    );
+    expect(auto.length).toBeLessThanOrEqual(3000);
+    expect(await toPng(auto)).toMatchImageSnapshot();
+  });
+
+  it("autoquality by DSSIM adjusts quality", async () => {
+    // aq:dssim:0.02:60:95 — binary search between q60-95 targeting DSSIM 0.02
+    const auto = await fetchImageFrom(
+      "/w:200/aq:dssim:0.02:60:95",
+      BUTTERFLY_URL,
+    );
+    const highQ = await fetchImageFrom("/w:200/q:95", BUTTERFLY_URL);
+    // Autoquality should produce a smaller file than max quality
+    expect(auto.length).toBeLessThan(highQ.length);
+    expect(await toPng(auto)).toMatchImageSnapshot();
   });
 });
