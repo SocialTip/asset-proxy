@@ -472,6 +472,11 @@ describe("image ffmpeg args", () => {
     `);
   });
 
+  it("enforce_thumbnail parses correctly", () => {
+    const parsed = parseProcessingUrl(plain("/eth:1"));
+    expect(parsed.enforceThumbnail).toBe(true);
+  });
+
   it("unsharp masking (always mode)", () => {
     expect(imageArgs(plain("/ush:always:1:24"))).toMatchInlineSnapshot(`
       [

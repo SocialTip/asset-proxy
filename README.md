@@ -198,6 +198,10 @@ Remove borders from an image using colour similarity detection. The threshold (r
 
 Limits output duration to the given number of seconds. Example: `ct:10`.
 
+#### Enforce Thumbnail — `enforce_thumbnail:1` (shorthand `eth`)
+
+Prefer embedded thumbnail over the full image when available. Uses exiftool for AVIF (EXIF thumbnails) and heif-thumbnailer for HEIC (container thumbnails). Falls back gracefully to the main image if no thumbnail exists. Controlled by `ENFORCE_THUMBNAIL` env var (default: false).
+
 #### DPI — `dpi:<value>`
 
 Set the output DPI metadata. Example: `dpi:300`. Takes effect regardless of whether metadata stripping is enabled.
@@ -323,6 +327,7 @@ yarn test:down    # stop and remove containers
 | `STRIP_METADATA`            | `true`                                | Strip EXIF/IPTC metadata from output images by default.                                                                                   |
 | `KEEP_COPYRIGHT`            | `true`                                | Preserve copyright metadata when stripping. Uses exiftool to copy from source.                                                            |
 | `STRIP_COLOR_PROFILE`       | `true`                                | Strip embedded ICC colour profile from output images by default.                                                                          |
+| `ENFORCE_THUMBNAIL`         | `false`                               | Prefer embedded thumbnails over full image for HEIC/AVIF sources.                                                                         |
 
 ## Health check
 

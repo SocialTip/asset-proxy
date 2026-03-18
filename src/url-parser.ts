@@ -239,6 +239,7 @@ const SHORTHANDS: Record<string, string> = {
   wmr: "watermark_rotate",
   wmsh: "watermark_shadow",
   st: "style",
+  eth: "enforce_thumbnail",
   op: "objects_position",
   // Pro shorthands (parsed but rejected)
   car: "crop_aspect_ratio",
@@ -509,6 +510,8 @@ const rawOptionsSchema = z
 
     /** Set output DPI metadata. */
     dpi: z.coerce.number().positive().optional(),
+    /** Prefer embedded thumbnail over full image (HEIC/AVIF). */
+    enforce_thumbnail: zBool.optional(),
 
     objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: z
@@ -608,6 +611,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     padding,
     stripMetadata: data.strip_metadata,
     dpi: data.dpi,
+    enforceThumbnail: data.enforce_thumbnail,
     keepCopyright: data.keep_copyright,
     stripColorProfile: data.strip_color_profile,
     crop: data.crop,
@@ -722,6 +726,8 @@ const parsedUrlSchema = z.object({
   stripColorProfile: z.boolean().optional(),
   /** Output DPI metadata value. */
   dpi: z.number().optional(),
+  /** Prefer embedded thumbnail over full image (HEIC/AVIF). */
+  enforceThumbnail: z.boolean().optional(),
   /** Extract a region before resizing (width, height, optional gravity). */
   crop: z
     .object({
@@ -866,6 +872,7 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     keepCopyright: options.keepCopyright,
     stripColorProfile: options.stripColorProfile,
     dpi: options.dpi,
+    enforceThumbnail: options.enforceThumbnail,
     crop: options.crop,
     cropAspectRatio: options.cropAspectRatio,
     gravity: options.gravity,

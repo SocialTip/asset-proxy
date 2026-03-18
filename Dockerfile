@@ -23,6 +23,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ffmpeg \
       libimage-exiftool-perl \
+      heif-thumbnailer \
       ca-certificates \
       curl \
       xz-utils && \
@@ -59,6 +60,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ffmpeg \
       libimage-exiftool-perl \
+      heif-thumbnailer \
       ca-certificates \
       curl \
       xz-utils && \

@@ -73,6 +73,12 @@ const envSchema = z
       .optional()
       .transform((v) => v === undefined || v === "1" || v === "true"),
 
+    /** When true, prefer embedded thumbnails over full image for HEIC/AVIF. Defaults to false. */
+    ENFORCE_THUMBNAIL: z
+      .string()
+      .optional()
+      .transform((v) => v === "1" || v === "true"),
+
     /** Cache-Control header value for successful responses. */
     CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
   })

@@ -2,7 +2,12 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import sharp from "sharp";
 import { SERVICE_URL } from "./setup.js";
+
+async function toPng(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer).png().toBuffer();
+}
 
 const SOURCE_URL = "http://file-server/test-image-with-metadata.jpg";
 
@@ -101,5 +106,36 @@ describe("dpi", () => {
     const exif = getExif(filePath);
     expect(exif.XResolution).toBe(150);
     expect(exif.YResolution).toBe(150);
+  });
+});
+
+describe("enforce_thumbnail", () => {
+  it("extracts AVIF thumbnail when available", async () => {
+    const url = `${SERVICE_URL}/insecure/eth:1/plain/http://file-server/test-image-with-thumbnail.avif@jpg`;
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(80);
+    expect(meta.height).toBe(60);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("extracts HEIC thumbnail when available", async () => {
+    // Main image is 100x100, thumbnail is 40x40
+    const url = `${SERVICE_URL}/insecure/eth:1/plain/http://file-server/test-image-with-thumbnail.heic@jpg`;
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(40);
+    expect(meta.height).toBe(40);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("falls back gracefully when no thumbnail exists", async () => {
+    const filePath = await fetchToFile("/eth:1/w:100");
+    const exif = getExif(filePath);
+    expect(exif.ImageWidth).toBeDefined();
   });
 });

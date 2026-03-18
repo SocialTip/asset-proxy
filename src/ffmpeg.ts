@@ -82,23 +82,20 @@ export async function processImage(
   sourceUrl: string,
   parsed: ImageUrl,
 ): Promise<Buffer> {
-  let trimFilter: string | undefined;
-  if (parsed.trim) {
-    trimFilter = await detectTrimCrop(sourceUrl, parsed.trim);
-  }
-
   const shouldStripMetadata = parsed.stripMetadata ?? env.STRIP_METADATA;
   const shouldKeepCopyright = parsed.keepCopyright ?? env.KEEP_COPYRIGHT;
   const shouldStripColorProfile =
     parsed.stripColorProfile ?? env.STRIP_COLOR_PROFILE;
+  const enforceThumbnail = parsed.enforceThumbnail ?? env.ENFORCE_THUMBNAIL;
   const needsMetadataCopy =
     !shouldStripMetadata || (shouldStripMetadata && shouldKeepCopyright);
+  const needsSourceFile = needsMetadataCopy || enforceThumbnail;
 
-  // When we need to copy metadata back, cache source to a temp file to avoid re-downloading.
+  // Download source to a temp file when we need it for metadata copy or thumbnail extraction.
   let sourceTempDir: string | undefined;
   let sourceTempPath: string | undefined;
   let ffmpegInput = sourceUrl;
-  if (needsMetadataCopy) {
+  if (needsSourceFile) {
     sourceTempDir = mkdtempSync(join(tmpdir(), "asset-proxy-src-"));
     sourceTempPath = join(sourceTempDir, "source");
     const srcRes = await fetch(sourceUrl);
@@ -108,6 +105,19 @@ export async function processImage(
     } else {
       sourceTempPath = undefined;
     }
+  }
+
+  // Extract embedded thumbnail if requested and source is available
+  if (enforceThumbnail && sourceTempPath) {
+    const thumbPath = await extractThumbnail(sourceTempPath);
+    if (thumbPath) {
+      ffmpegInput = thumbPath;
+    }
+  }
+
+  let trimFilter: string | undefined;
+  if (parsed.trim) {
+    trimFilter = await detectTrimCrop(ffmpegInput, parsed.trim);
   }
 
   let buffer: Buffer;
@@ -156,6 +166,59 @@ export async function processImage(
   }
 
   return buffer;
+}
+
+/** Extract embedded thumbnail from an image. Tries exiftool (EXIF/AVIF) then heif-thumbnailer (HEIC). */
+async function extractThumbnail(
+  sourcePath: string,
+): Promise<string | undefined> {
+  const dir = mkdtempSync(join(tmpdir(), "asset-proxy-thumb-"));
+
+  // Try exiftool first (works for AVIF/JPEG EXIF thumbnails)
+  const exifThumb = join(dir, "thumbnail.jpg");
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn("exiftool", ["-b", "-ThumbnailImage", sourcePath]);
+      const chunks: Buffer[] = [];
+      proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+      proc.on("close", async (code) => {
+        if (code !== 0 || chunks.length === 0) {
+          reject(new Error("No EXIF thumbnail"));
+          return;
+        }
+        await writeFile(exifThumb, Buffer.concat(chunks));
+        resolve();
+      });
+      proc.on("error", reject);
+    });
+    return exifThumb;
+  } catch {
+    // Fall through to heif-thumbnailer
+  }
+
+  // Try heif-thumbnailer (works for HEIC container thumbnails)
+  const heifThumb = join(dir, "thumbnail.png");
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn("heif-thumbnailer", [sourcePath, heifThumb]);
+      proc.on("close", async (code) => {
+        if (code !== 0) {
+          reject(new Error("No HEIC thumbnail"));
+          return;
+        }
+        resolve();
+      });
+      proc.on("error", reject);
+    });
+    // Verify the file was created and is non-empty
+    const stat = await readFile(heifThumb);
+    if (stat.length > 0) return heifThumb;
+  } catch {
+    // No thumbnail found
+  }
+
+  await rm(dir, { recursive: true, force: true });
+  return undefined;
 }
 
 /** Run exiftool on an image buffer to set/copy metadata. Only supports EXIF — XMP/IPTC are always stripped. */
@@ -434,6 +497,7 @@ function buildImageArgs(
   opts?: { outputPath?: string; trimFilter?: string },
 ): string[] {
   const args = ["-hide_banner", "-y", "-i", sourceUrl];
+
   const filters: string[] = [];
 
   // Trim (border removal — applied first, before crop/resize)
