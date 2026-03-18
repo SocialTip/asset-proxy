@@ -38,6 +38,11 @@ export const gpuReady: Promise<boolean> = env.SKIP_GPU
         "-",
       ]);
 
+      const stdout: Buffer[] = [];
+      const stderr: Buffer[] = [];
+      proc.stdout.on("data", (chunk) => stdout.push(chunk));
+      proc.stderr.on("data", (chunk) => stderr.push(chunk));
+
       proc.on("close", (code) => {
         const available = code === 0;
         if (available) {
@@ -46,14 +51,20 @@ export const gpuReady: Promise<boolean> = env.SKIP_GPU
         } else {
           logger.error(
             "GPU acceleration is required but not available. Set env.SKIP_GPU=1 to use CPU encoding.",
+            {
+              stdout: Buffer.concat(stdout).toString(),
+              stderr: Buffer.concat(stderr).toString(),
+              exitCode: code,
+            },
           );
           process.exit(1);
         }
       });
 
-      proc.on("error", () => {
+      proc.on("error", (err) => {
         logger.error(
           "GPU acceleration is required but ffmpeg could not be started. Set env.SKIP_GPU=1 to use CPU encoding.",
+          { err },
         );
         process.exit(1);
       });
