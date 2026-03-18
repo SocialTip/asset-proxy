@@ -106,6 +106,18 @@ Apply duotone effect. Intensity is 0–1, colour1 for shadows, colour2 for highl
 
 Apply a pixelation effect with the given block size in pixels. Example: `px:10`.
 
+#### Unsharp Masking — `unsharp_masking:<mode>:<weight>:<divider>` (shorthand `ush`)
+
+Advanced sharpening control. Mode: `auto` (only when downscaling, default), `always`, or `none`. Weight and divider control sharpening intensity (default weight=1, divider=24).
+
+#### Colorize — `colorize:<opacity>:<colour>:<keep_alpha>` (shorthand `clrz` or `col`)
+
+Apply a colour overlay. Opacity is 0–1, colour is hex (default `000`). Example: `col:0.3:ff0000`.
+
+#### Gradient — `gradient:<opacity>:<colour>:<direction>:<start>:<stop>` (shorthand `grd` or `gr`)
+
+Apply a gradient overlay from transparent to colour. Direction: `down` (default), `up`, `right`, `left`, or angle in degrees. Start/stop are 0–1 floats controlling gradient position. Example: `gr:0.5:000:down:0:0.5`.
+
 #### Blur — `blur:<sigma>` (shorthand `bl`)
 
 Gaussian blur. Example: `bl:5`.

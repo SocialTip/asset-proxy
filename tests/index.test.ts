@@ -471,6 +471,50 @@ describe("image ffmpeg args", () => {
     `);
   });
 
+  it("unsharp masking (always mode)", () => {
+    expect(imageArgs(plain("/ush:always:1:24"))).toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-i",
+        "https://example.com/photo.jpg",
+        "-vf",
+        "unsharp=5:5:0.041666666666666664:5:5:0",
+        "-map_metadata",
+        "-1",
+        "-frames:v",
+        "1",
+        "-f",
+        "image2",
+        "-c:v",
+        "mjpeg",
+        "pipe:1",
+      ]
+    `);
+  });
+
+  it("colorize overlay", () => {
+    expect(imageArgs(plain("/col:0.5:ff0000"))).toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-i",
+        "https://example.com/photo.jpg",
+        "-vf",
+        "lutrgb=r=128+val*0.5:g=0+val*0.5:b=0+val*0.5",
+        "-map_metadata",
+        "-1",
+        "-frames:v",
+        "1",
+        "-f",
+        "image2",
+        "-c:v",
+        "mjpeg",
+        "pipe:1",
+      ]
+    `);
+  });
+
   it("brightness and saturation via adjust", () => {
     expect(imageArgs(plain("/a:50::0.5"))).toMatchInlineSnapshot(`
       [
@@ -799,6 +843,24 @@ describe("validation errors", () => {
 
   it("rejects objects_position", () => {
     expect(() => parseProcessingUrl(plain("/op:0.5:0.5/w:100"))).toThrow(
+      "not implemented",
+    );
+  });
+
+  it("rejects blur_areas", () => {
+    expect(() =>
+      parseProcessingUrl(plain("/bla:5:0.1:0.2:0.3:0.4/w:100")),
+    ).toThrow("not implemented");
+  });
+
+  it("rejects blur_detections", () => {
+    expect(() => parseProcessingUrl(plain("/bd:5:face/w:100"))).toThrow(
+      "not implemented",
+    );
+  });
+
+  it("rejects draw_detections", () => {
+    expect(() => parseProcessingUrl(plain("/dd:1:face/w:100"))).toThrow(
       "not implemented",
     );
   });

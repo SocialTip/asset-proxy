@@ -222,6 +222,14 @@ const SHORTHANDS: Record<string, string> = {
   mc: "monochrome",
   dt: "duotone",
   px: "pixelate",
+  ush: "unsharp_masking",
+  bla: "blur_areas",
+  bd: "blur_detections",
+  dd: "draw_detections",
+  clrz: "colorize",
+  col: "colorize",
+  grd: "gradient",
+  gr: "gradient",
   op: "objects_position",
   // Pro shorthands (parsed but rejected)
   car: "crop_aspect_ratio",
@@ -425,6 +433,52 @@ const rawOptionsSchema = z
       })
       .optional(),
 
+    /** Unsharp masking. Format: `<mode>:<weight>:<divider>`. */
+    unsharp_masking: z
+      .string()
+      .transform((v) => {
+        const [mode, weight, divider] = v.split(":");
+        return {
+          mode: mode || "auto",
+          weight: weight ? parseFloat(weight) : 1,
+          divider: divider ? parseFloat(divider) : 24,
+        };
+      })
+      .optional(),
+
+    blur_areas: notImplemented("blur_areas").optional(),
+    blur_detections: notImplemented("blur_detections").optional(),
+    draw_detections: notImplemented("draw_detections").optional(),
+
+    /** Colour overlay. Format: `<opacity>[:<hex_colour>[:<keep_alpha>]]`. */
+    colorize: z
+      .string()
+      .transform((v) => {
+        const [opacity, colour, keepAlpha] = v.split(":");
+        return {
+          opacity: parseFloat(opacity) || 0,
+          colour: colour || "000",
+          keepAlpha:
+            keepAlpha === "1" || keepAlpha === "t" || keepAlpha === "true",
+        };
+      })
+      .optional(),
+
+    /** Gradient overlay. Format: `<opacity>[:<colour>[:<direction>[:<start>[:<stop>]]]]`. */
+    gradient: z
+      .string()
+      .transform((v) => {
+        const [opacity, colour, direction, start, stop] = v.split(":");
+        return {
+          opacity: parseFloat(opacity) || 0,
+          colour: colour || "000",
+          direction: direction || "down",
+          start: start ? parseFloat(start) : 0,
+          stop: stop ? parseFloat(stop) : 1,
+        };
+      })
+      .optional(),
+
     objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: z
       .string()
@@ -512,6 +566,9 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     blur: data.blur,
     sharpen: data.sharpen,
     pixelate: data.pixelate,
+    unsharpMasking: data.unsharp_masking,
+    colorize: data.colorize,
+    gradient: data.gradient,
     rotate: data.rotate,
     flip: data.flip,
     autoRotate: data.auto_rotate,
@@ -589,6 +646,28 @@ const parsedUrlSchema = z.object({
   sharpen: z.number().optional(),
   /** Pixelate block size in pixels. */
   pixelate: z.number().optional(),
+  /** Unsharp masking: mode (auto/always/none), weight, divider. */
+  unsharpMasking: z
+    .object({ mode: z.string(), weight: z.number(), divider: z.number() })
+    .optional(),
+  /** Colour overlay with opacity. */
+  colorize: z
+    .object({
+      opacity: z.number(),
+      colour: z.string(),
+      keepAlpha: z.boolean(),
+    })
+    .optional(),
+  /** Gradient overlay from transparent to colour. */
+  gradient: z
+    .object({
+      opacity: z.number(),
+      colour: z.string(),
+      direction: z.string(),
+      start: z.number(),
+      stop: z.number(),
+    })
+    .optional(),
   /** Rotation angle: 0, 90, 180, or 270 degrees. */
   rotate: z.number().optional(),
   /** Flip the image horizontally and/or vertically. */
@@ -740,6 +819,9 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     blur: options.blur,
     sharpen: options.sharpen,
     pixelate: options.pixelate,
+    unsharpMasking: options.unsharpMasking,
+    colorize: options.colorize,
+    gradient: options.gradient,
     rotate: options.rotate,
     flip: options.flip,
     autoRotate: options.autoRotate,
