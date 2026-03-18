@@ -912,7 +912,7 @@ describe("validation errors", () => {
     expect(res.status).toBe(501);
   });
 
-  it("rejects autoquality ml method with 501", async () => {
+  it("rejects autoquality ml method with 501 (only dssim and size supported)", async () => {
     setupSpawnMock();
     const res = await request(app).get(
       "/insecure/aq:ml:0.02/w:100/plain/https://example.com/photo.jpg",

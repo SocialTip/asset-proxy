@@ -530,19 +530,21 @@ const rawOptionsSchema = z
       })
       .optional(),
     /** Autoquality. Format: `<method>:<target>:<min>:<max>:<allowed_error>`. */
+    /** Autoquality. Format: `<method>:<target>:<min>:<max>:<allowed_error>`. Methods: dssim, size. */
     autoquality: z
       .string()
       .transform((v) => {
         const [method, target, min, max, err] = v.split(":");
-        if (method && method !== "dssim") {
+        const m = method || "dssim";
+        if (m !== "dssim" && m !== "size") {
           throw new HTTPError(
-            `Autoquality method '${method}' is not implemented — only 'dssim' is supported`,
+            `Autoquality method '${m}' is not implemented — supported: dssim, size`,
             { code: "NOT_IMPLEMENTED" },
           );
         }
         return {
-          method: (method || "dssim") as "dssim",
-          target: target ? parseFloat(target) : 0.02,
+          method: m as "dssim" | "size",
+          target: target ? parseFloat(target) : m === "size" ? 0 : 0.02,
           min: min ? parseInt(min, 10) : 70,
           max: max ? parseInt(max, 10) : 80,
           allowedError: err ? parseFloat(err) : 0.001,
@@ -722,10 +724,10 @@ const parsedUrlSchema = z.object({
   quality: z.number().optional(),
   /** Per-format quality overrides: { jpg: 80, webp: 90, ... }. */
   formatQuality: z.record(z.string(), z.number()).optional(),
-  /** Autoquality via DSSIM binary search. */
+  /** Autoquality: dssim (target DSSIM) or size (target bytes). */
   autoquality: z
     .object({
-      method: z.literal("dssim"),
+      method: z.enum(["dssim", "size"]),
       target: z.number(),
       min: z.number(),
       max: z.number(),

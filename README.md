@@ -106,6 +106,10 @@ Per-format quality overrides. Example: `fq:jpg:80:webp:90:avif:60`. Overrides th
 
 Automatically degrade quality until the output fits under the given byte size. Applies to lossy formats only (jpg, webp, avif). Uses binary search on quality. Example: `mb:50000`.
 
+#### Autoquality — `autoquality:<method>:<target>:<min>:<max>:<allowed_error>` (shorthand `aq`)
+
+Automatically select quality level. Methods: `dssim` (target structural dissimilarity, default 0.02), `size` (target file size in bytes). Min/max bound the quality search range. Configurable via `AUTOQUALITY_*` env vars. ML method is not supported. Example: `aq:dssim:0.02:60:95:0.001`.
+
 #### Adjust — `adjust:<brightness>:<contrast>:<saturation>` (shorthand `a`)
 
 Meta-option to set brightness, contrast, and saturation in one segment. All arguments are optional. Example: `a:50:1.2:0.8`.
@@ -336,6 +340,13 @@ yarn test:down    # stop and remove containers
 | `KEEP_COPYRIGHT`            | `true`                                | Preserve copyright metadata when stripping. Uses exiftool to copy from source.                                                            |
 | `STRIP_COLOR_PROFILE`       | `true`                                | Strip embedded ICC colour profile from output images by default.                                                                          |
 | `ENFORCE_THUMBNAIL`         | `false`                               | Prefer embedded thumbnails over full image for HEIC/AVIF sources.                                                                         |
+| `AUTOQUALITY_METHOD`        | `none`                                | Autoquality method: `none`, `dssim`, or `size`.                                                                                           |
+| `AUTOQUALITY_TARGET`        | —                                     | Target value (DSSIM for dssim, bytes for size).                                                                                           |
+| `AUTOQUALITY_MIN`           | —                                     | Minimum quality for autoquality search.                                                                                                   |
+| `AUTOQUALITY_MAX`           | —                                     | Maximum quality for autoquality search.                                                                                                   |
+| `AUTOQUALITY_ALLOWED_ERROR` | —                                     | Allowed DSSIM deviation from target.                                                                                                      |
+| `AUTOQUALITY_FORMAT_MIN`    | —                                     | Format-specific min quality, e.g. `avif=60,webp=70`.                                                                                      |
+| `AUTOQUALITY_FORMAT_MAX`    | —                                     | Format-specific max quality, e.g. `avif=65,webp=80`.                                                                                      |
 
 ## Health check
 

@@ -88,4 +88,25 @@ describe("image quality", () => {
     expect(limited.length).toBeLessThan(unlimited.length);
     expect(await toPng(limited)).toMatchImageSnapshot();
   });
+
+  it("autoquality by size limits output", async () => {
+    const auto = await fetchImageFrom(
+      "/w:200/aq:size:3000:1:95",
+      BUTTERFLY_URL,
+    );
+    expect(auto.length).toBeLessThanOrEqual(3000);
+    expect(await toPng(auto)).toMatchImageSnapshot();
+  });
+
+  it("autoquality by DSSIM adjusts quality", async () => {
+    // aq:dssim:0.02:60:95 — binary search between q60-95 targeting DSSIM 0.02
+    const auto = await fetchImageFrom(
+      "/w:200/aq:dssim:0.02:60:95",
+      BUTTERFLY_URL,
+    );
+    const highQ = await fetchImageFrom("/w:200/q:95", BUTTERFLY_URL);
+    // Autoquality should produce a smaller file than max quality
+    expect(auto.length).toBeLessThan(highQ.length);
+    expect(await toPng(auto)).toMatchImageSnapshot();
+  });
 });

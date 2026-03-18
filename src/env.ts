@@ -1,5 +1,17 @@
 import { z } from "zod/v4";
 
+function parseFormatMap(
+  v: string | undefined,
+): Record<string, number> | undefined {
+  if (!v) return undefined;
+  const result: Record<string, number> = {};
+  for (const pair of v.split(",")) {
+    const [fmt, val] = pair.split("=");
+    if (fmt && val) result[fmt.trim()] = parseInt(val.trim(), 10);
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 const envSchema = z
   .object({
     /** Server listen port. */
@@ -78,6 +90,27 @@ const envSchema = z
       .string()
       .optional()
       .transform((v) => v === "1" || v === "true"),
+
+    /** Autoquality method: none, dssim, or size. ML is not supported. */
+    AUTOQUALITY_METHOD: z.enum(["none", "dssim", "size"]).default("none"),
+    /** Autoquality target (DSSIM value for dssim, bytes for size). */
+    AUTOQUALITY_TARGET: z.coerce.number().optional(),
+    /** Autoquality minimum quality. */
+    AUTOQUALITY_MIN: z.coerce.number().int().optional(),
+    /** Autoquality maximum quality. */
+    AUTOQUALITY_MAX: z.coerce.number().int().optional(),
+    /** Autoquality allowed DSSIM error. */
+    AUTOQUALITY_ALLOWED_ERROR: z.coerce.number().optional(),
+    /** Format-specific autoquality min, e.g. "avif=60,webp=70". */
+    AUTOQUALITY_FORMAT_MIN: z
+      .string()
+      .optional()
+      .transform((v) => parseFormatMap(v)),
+    /** Format-specific autoquality max, e.g. "avif=65,webp=80". */
+    AUTOQUALITY_FORMAT_MAX: z
+      .string()
+      .optional()
+      .transform((v) => parseFormatMap(v)),
 
     /** Cache-Control header value for successful responses. */
     CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
