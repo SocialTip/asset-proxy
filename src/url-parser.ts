@@ -208,6 +208,7 @@ const SHORTHANDS: Record<string, string> = {
   bl: "blur",
   sh: "sharpen",
   rot: "rotate",
+  fl: "flip",
   ar: "auto_rotate",
   bg: "background",
   pd: "padding",
@@ -313,6 +314,16 @@ const rawOptionsSchema = z
     blur: z.coerce.number().optional(),
     sharpen: z.coerce.number().optional(),
     rotate: z.coerce.number().int().optional(),
+    flip: z
+      .string()
+      .transform((v) => {
+        const [h, vert] = v.split(":");
+        return {
+          horizontal: h === "1" || h === "t" || h === "true",
+          vertical: vert === "1" || vert === "t" || vert === "true",
+        };
+      })
+      .optional(),
     auto_rotate: zBool.optional(),
     background: zBackground.optional(),
 
@@ -436,6 +447,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     blur: data.blur,
     sharpen: data.sharpen,
     rotate: data.rotate,
+    flip: data.flip,
     autoRotate: data.auto_rotate,
     background: data.background,
     padding,
@@ -494,6 +506,8 @@ const parsedUrlSchema = z.object({
   sharpen: z.number().optional(),
   /** Rotation angle: 0, 90, 180, or 270 degrees. */
   rotate: z.number().optional(),
+  /** Flip the image horizontally and/or vertically. */
+  flip: z.object({ horizontal: z.boolean(), vertical: z.boolean() }).optional(),
   /** Rotate based on EXIF orientation data. */
   autoRotate: z.boolean().optional(),
   /** Background colour (RGB) for padding, extend, and alpha flattening. */
@@ -636,6 +650,7 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     blur: options.blur,
     sharpen: options.sharpen,
     rotate: options.rotate,
+    flip: options.flip,
     autoRotate: options.autoRotate,
     background: options.background,
     padding: options.padding,

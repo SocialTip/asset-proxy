@@ -138,6 +138,16 @@ describe("image transforms", () => {
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
 
+  it("flips horizontally", async () => {
+    const buffer = await fetchImage("/flip:1:0");
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("flips vertically", async () => {
+    const buffer = await fetchImage("/flip:0:1");
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
   it("applies blur", async () => {
     const buffer = await fetchImage("/w:100/bl:5");
     expect(await toPng(buffer)).toMatchImageSnapshot();

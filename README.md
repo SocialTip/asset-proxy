@@ -90,6 +90,10 @@ Sharpening. Example: `sh:1.5`.
 
 Rotate by 0, 90, 180, or 270 degrees.
 
+#### Flip — `flip:<horizontal>:<vertical>` (shorthand `fl`)
+
+Flip the image or video. Set horizontal and/or vertical to `1` to flip along that axis. Example: `flip:1:0` (horizontal flip), `flip:0:1` (vertical flip), `flip:1:1` (both).
+
 #### Auto Rotate — `auto_rotate:1` (shorthand `ar`)
 
 Rotate based on EXIF orientation data. Enabled by default.

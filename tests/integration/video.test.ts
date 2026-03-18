@@ -92,3 +92,11 @@ describe("video resize", () => {
     expect(frame).toMatchImageSnapshot();
   });
 });
+
+describe("flip", () => {
+  it("flips video vertically", async () => {
+    const { videoPath } = await fetchVideo("/flip:0:1/ct:1");
+    const frame = extractFrame(videoPath);
+    expect(frame).toMatchImageSnapshot();
+  });
+});
