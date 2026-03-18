@@ -139,10 +139,15 @@ export async function processImage(
     });
   }
 
-  if (needsMetadataCopy && sourceTempPath) {
-    buffer = await copyMetadataFromSource(buffer, sourceTempPath, {
+  const needsExiftool =
+    (needsMetadataCopy && sourceTempPath) || (parsed.dpi && parsed.dpi > 0);
+
+  if (needsExiftool) {
+    buffer = await runExiftool(buffer, {
+      sourcePath: needsMetadataCopy ? sourceTempPath : undefined,
       copyrightOnly: shouldStripMetadata && shouldKeepCopyright,
       stripColorProfile: shouldStripColorProfile,
+      dpi: parsed.dpi,
     });
   }
 
@@ -153,24 +158,37 @@ export async function processImage(
   return buffer;
 }
 
-/** Use exiftool to copy EXIF metadata from a local source file into the processed output. */
-async function copyMetadataFromSource(
+/** Run exiftool on an image buffer to set/copy metadata. Only supports EXIF — XMP/IPTC are always stripped. */
+async function runExiftool(
   buffer: Buffer,
-  sourcePath: string,
-  opts: { copyrightOnly?: boolean; stripColorProfile?: boolean },
+  opts: {
+    sourcePath?: string;
+    copyrightOnly?: boolean;
+    stripColorProfile?: boolean;
+    dpi?: number;
+  },
 ): Promise<Buffer> {
   const dir = mkdtempSync(join(tmpdir(), "asset-proxy-meta-"));
   const outPath = join(dir, "output");
   await writeFile(outPath, buffer);
 
   const exiftoolArgs = ["-overwrite_original"];
-  if (opts.copyrightOnly) {
-    exiftoolArgs.push("-tagsfromfile", sourcePath, "-Copyright");
-  } else {
-    exiftoolArgs.push("-tagsfromfile", sourcePath, "-all:all");
+  if (opts.sourcePath) {
+    if (opts.copyrightOnly) {
+      exiftoolArgs.push("-tagsfromfile", opts.sourcePath, "-Copyright");
+    } else {
+      exiftoolArgs.push("-tagsfromfile", opts.sourcePath, "-all:all");
+    }
   }
   if (opts.stripColorProfile) {
     exiftoolArgs.push("-ICC_Profile:all=");
+  }
+  if (opts.dpi && opts.dpi > 0) {
+    exiftoolArgs.push(
+      `-XResolution=${opts.dpi}`,
+      `-YResolution=${opts.dpi}`,
+      "-ResolutionUnit=inches",
+    );
   }
   exiftoolArgs.push(outPath);
 

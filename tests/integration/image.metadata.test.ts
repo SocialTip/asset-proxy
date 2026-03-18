@@ -87,3 +87,19 @@ describe("strip metadata options", () => {
     );
   });
 });
+
+describe("dpi", () => {
+  it("sets DPI metadata to 300", async () => {
+    const filePath = await fetchToFile("/w:100/dpi:300");
+    const exif = getExif(filePath);
+    expect(exif.XResolution).toBe(300);
+    expect(exif.YResolution).toBe(300);
+  });
+
+  it("sets DPI even when metadata is stripped", async () => {
+    const filePath = await fetchToFile("/w:100/sm:1/kcr:0/dpi:150");
+    const exif = getExif(filePath);
+    expect(exif.XResolution).toBe(150);
+    expect(exif.YResolution).toBe(150);
+  });
+});
