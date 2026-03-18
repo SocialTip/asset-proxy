@@ -1,13 +1,15 @@
 {
   "name": "asset-proxy",
-  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "start": "tsx src/index.ts",
-    "dev": "tsx --watch src/index.ts",
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "start": "yarn workspace @asset-proxy/proxy start",
+    "dev": "yarn workspace @asset-proxy/proxy dev",
+    "build": "yarn workspace @asset-proxy/url-parser build && yarn workspace @asset-proxy/proxy build && yarn workspace assets-proxy-url-generator build",
+    "typecheck": "yarn workspaces run typecheck",
     "test": "vitest",
     "test:up": "docker compose up -d --build --wait",
     "test:restart": "docker compose restart asset-proxy",
@@ -18,7 +20,6 @@
   },
   "lint-staged": {
     "*.{ts,js}": [
-      "bash -c 'tsc --noEmit --pretty'",
       "eslint --fix",
       "prettier --write"
     ],
@@ -26,29 +27,14 @@
       "prettier --write"
     ]
   },
-  "dependencies": {
-    "@google-cloud/storage": "^7.19.0",
-    "express": "^5.1.0",
-    "winston": "^3.19.0",
-    "zod": "^4.3.6"
-  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/express": "^5.0.6",
-    "@types/jest-image-snapshot": "^6.4.1",
-    "@types/node": "^25.5.0",
-    "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
-    "jest-image-snapshot": "^6.5.2",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.1",
-    "sharp": "^0.34.5",
-    "supertest": "^7.2.2",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.0",
     "vitest": "^4.1.0"
   }

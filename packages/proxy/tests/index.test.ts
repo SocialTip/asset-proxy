@@ -60,7 +60,8 @@ vi.hoisted(() => {
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 });
 
-const { parseProcessingUrl, isImageUrl } = await import("../src/url-parser.js");
+const { parseProcessingUrl, isImageUrl } =
+  await import("@asset-proxy/url-parser");
 const { processImage, processVideo, buildVideoArgs } =
   await import("../src/ffmpeg.js");
 const { app } = await import("../src/index.js");
@@ -963,7 +964,9 @@ describe("url parsing", () => {
       cipher.final(),
     ]).toString("base64url");
 
-    const result = parseProcessingUrl(`/resize:fill:480:360/enc/${encrypted}`);
+    const result = parseProcessingUrl(`/resize:fill:480:360/enc/${encrypted}`, {
+      encryptionKey: key,
+    });
     expect(result.sourceUrl).toBe(original);
   });
 

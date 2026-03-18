@@ -1,5 +1,5 @@
 import { z } from "zod/v4";
-import { decryptSourceUrl } from "./decrypt.js";
+import { decryptSourceUrl } from "./crypto.js";
 import { HTTPError } from "./error.js";
 
 const resizingType = z.enum(["fit", "fill", "fill-down", "force", "auto"]);
@@ -255,7 +255,6 @@ const SHORTHANDS: Record<string, string> = {
   aq: "autoquality",
   mb: "max_bytes",
   op: "objects_position",
-  // Pro shorthands (parsed but rejected)
   car: "crop_aspect_ratio",
 };
 
@@ -540,7 +539,6 @@ const rawOptionsSchema = z
         return result;
       })
       .optional(),
-    /** Autoquality. Format: `<method>:<target>:<min>:<max>:<allowed_error>`. */
     /** Autoquality. Format: `<method>:<target>:<min>:<max>:<allowed_error>`. Methods: dssim, size. */
     autoquality: z
       .string()
@@ -781,7 +779,15 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
   };
 });
 
-const parsedUrlSchema = z.object({
+/**
+ * Zod schema for a fully parsed assets-proxy URL. Validates all processing
+ * options after URL segments have been decoded and shorthand names expanded.
+ *
+ * Use `z.input<typeof parsedUrlSchema>` (exported as `ParsedUrlInput`) for
+ * the type accepted when constructing a URL, and `z.output<typeof parsedUrlSchema>`
+ * for the validated result.
+ */
+export const parsedUrlSchema = z.object({
   /** Resize dimensions and mode (fit, fill, fill-down, force, auto). */
   resize: resizeOptions.optional(),
   /** The source image/video URL to process. */
@@ -966,6 +972,9 @@ const parsedUrlSchema = z.object({
 
 type ParsedUrlBase = z.output<typeof parsedUrlSchema>;
 
+/** The input type for generating URLs — all fields from parsedUrlSchema. */
+export type ParsedUrlInput = z.input<typeof parsedUrlSchema>;
+
 /** Fully parsed URL including fields not validated by the Zod schema. */
 export type ParsedUrl = ParsedUrlBase & {
   /** Scaling algorithm — CPU (sws_flags) or GPU (scale_cuda/scale_npp). */
@@ -987,8 +996,16 @@ export function isVideoUrl(parsed: ParsedUrl): parsed is VideoUrl {
   return !isImageUrl(parsed);
 }
 
+export interface ParseOptions {
+  /** AES-256-CBC key for decrypting `/enc/` source URLs. */
+  encryptionKey?: Buffer;
+}
+
 /** Parses an imgproxy-format processing path (after signature has been stripped). Supports `/<options>/plain/<source_url>[@<format>]` and `/<options>/enc/<encrypted_source_url>[@<format>]`. */
-export function parseProcessingUrl(path: string): ParsedUrl {
+export function parseProcessingUrl(
+  path: string,
+  options?: ParseOptions,
+): ParsedUrl {
   const withoutPrefix = path.replace(/^\//, "");
 
   const plainIdx = withoutPrefix.indexOf("/plain/");
@@ -1030,7 +1047,13 @@ export function parseProcessingUrl(path: string): ParsedUrl {
   }
 
   if (encrypted) {
-    sourceUrl = decryptSourceUrl(sourceUrl);
+    if (!options?.encryptionKey) {
+      throw new HTTPError(
+        "Encrypted source URLs are not supported: no encryption key provided",
+        { code: "BAD_REQUEST" },
+      );
+    }
+    sourceUrl = decryptSourceUrl(sourceUrl, options.encryptionKey);
   }
 
   // Parse option segments into a { name: value } record, then validate with Zod
@@ -1047,70 +1070,70 @@ export function parseProcessingUrl(path: string): ParsedUrl {
       }),
   );
 
-  const options = optionsSchema.parse(raw);
+  const parsedOptions = optionsSchema.parse(raw);
 
-  if (options.formatOverride) {
-    format = options.formatOverride;
+  if (parsedOptions.formatOverride) {
+    format = parsedOptions.formatOverride;
   }
 
-  if (!hasFormatSuffix && !options.formatOverride) {
+  if (!hasFormatSuffix && !parsedOptions.formatOverride) {
     if (IMAGE_EXTENSIONS.test(sourceUrl)) {
       format = "jpg";
     }
   }
 
   const parsed = parsedUrlSchema.parse({
-    resize: options.resize,
+    resize: parsedOptions.resize,
     sourceUrl,
     outputFormat: format,
-    minWidth: options.minWidth,
-    minHeight: options.minHeight,
-    extend: options.extend,
-    extendAspectRatio: options.extendAspectRatio,
-    framerate: options.framerate,
-    cut: options.cut,
-    trim: options.trim,
-    brightness: options.brightness,
-    contrast: options.contrast,
-    saturation: options.saturation,
-    monochrome: options.monochrome,
-    duotone: options.duotone,
-    quality: options.quality,
-    formatQuality: options.formatQuality,
-    autoquality: options.autoquality,
-    maxBytes: options.maxBytes,
-    jpegOptions: options.jpegOptions,
-    pngOptions: options.pngOptions,
-    webpOptions: options.webpOptions,
-    avifOptions: options.avifOptions,
-    blur: options.blur,
-    sharpen: options.sharpen,
-    pixelate: options.pixelate,
-    unsharpMasking: options.unsharpMasking,
-    colorize: options.colorize,
-    gradient: options.gradient,
-    rotate: options.rotate,
-    flip: options.flip,
-    autoRotate: options.autoRotate,
-    background: options.background,
-    backgroundAlpha: options.backgroundAlpha,
-    padding: options.padding,
-    stripMetadata: options.stripMetadata,
-    keepCopyright: options.keepCopyright,
-    stripColorProfile: options.stripColorProfile,
-    dpi: options.dpi,
-    enforceThumbnail: options.enforceThumbnail,
-    videoThumbnailSecond: options.videoThumbnailSecond,
-    videoThumbnailKeyframes: options.videoThumbnailKeyframes,
-    videoThumbnailAnimation: options.videoThumbnailAnimation,
-    crop: options.crop,
-    cropAspectRatio: options.cropAspectRatio,
-    gravity: options.gravity,
-    enlarge: options.enlarge,
+    minWidth: parsedOptions.minWidth,
+    minHeight: parsedOptions.minHeight,
+    extend: parsedOptions.extend,
+    extendAspectRatio: parsedOptions.extendAspectRatio,
+    framerate: parsedOptions.framerate,
+    cut: parsedOptions.cut,
+    trim: parsedOptions.trim,
+    brightness: parsedOptions.brightness,
+    contrast: parsedOptions.contrast,
+    saturation: parsedOptions.saturation,
+    monochrome: parsedOptions.monochrome,
+    duotone: parsedOptions.duotone,
+    quality: parsedOptions.quality,
+    formatQuality: parsedOptions.formatQuality,
+    autoquality: parsedOptions.autoquality,
+    maxBytes: parsedOptions.maxBytes,
+    jpegOptions: parsedOptions.jpegOptions,
+    pngOptions: parsedOptions.pngOptions,
+    webpOptions: parsedOptions.webpOptions,
+    avifOptions: parsedOptions.avifOptions,
+    blur: parsedOptions.blur,
+    sharpen: parsedOptions.sharpen,
+    pixelate: parsedOptions.pixelate,
+    unsharpMasking: parsedOptions.unsharpMasking,
+    colorize: parsedOptions.colorize,
+    gradient: parsedOptions.gradient,
+    rotate: parsedOptions.rotate,
+    flip: parsedOptions.flip,
+    autoRotate: parsedOptions.autoRotate,
+    background: parsedOptions.background,
+    backgroundAlpha: parsedOptions.backgroundAlpha,
+    padding: parsedOptions.padding,
+    stripMetadata: parsedOptions.stripMetadata,
+    keepCopyright: parsedOptions.keepCopyright,
+    stripColorProfile: parsedOptions.stripColorProfile,
+    dpi: parsedOptions.dpi,
+    enforceThumbnail: parsedOptions.enforceThumbnail,
+    videoThumbnailSecond: parsedOptions.videoThumbnailSecond,
+    videoThumbnailKeyframes: parsedOptions.videoThumbnailKeyframes,
+    videoThumbnailAnimation: parsedOptions.videoThumbnailAnimation,
+    crop: parsedOptions.crop,
+    cropAspectRatio: parsedOptions.cropAspectRatio,
+    gravity: parsedOptions.gravity,
+    enlarge: parsedOptions.enlarge,
   });
 
   return {
     ...parsed,
-    resizingAlgorithm: options.resizingAlgorithm,
+    resizingAlgorithm: parsedOptions.resizingAlgorithm,
   };
 }

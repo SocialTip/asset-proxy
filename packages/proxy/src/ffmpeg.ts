@@ -7,18 +7,19 @@ import { join } from "node:path";
 import type { Readable } from "node:stream";
 import sharp from "sharp";
 import { env } from "./env.js";
-import { HTTPError } from "./error.js";
+import {
+  HTTPError,
+  type CompassGravity,
+  type Gravity,
+  type ImageFormat,
+  type ImageUrl,
+  type OutputFormat,
+  type ParsedUrl,
+  type ResizingAlgorithm,
+  type ResizingType,
+  type VideoUrl,
+} from "@asset-proxy/url-parser";
 import { logger } from "./logger.js";
-import type {
-  CompassGravity,
-  Gravity,
-  ImageFormat,
-  ImageUrl,
-  OutputFormat,
-  ResizingAlgorithm,
-  ResizingType,
-  VideoUrl,
-} from "./url-parser.js";
 
 export const gpuReady: Promise<boolean> = env.SKIP_GPU
   ? Promise.resolve(false)
@@ -71,10 +72,7 @@ export const gpuReady: Promise<boolean> = env.SKIP_GPU
     });
 
 /** Options that are only supported for image processing, not video. */
-const IMAGE_ONLY_OPTIONS: [
-  keyof import("./url-parser.js").ParsedUrl,
-  string,
-][] = [
+const IMAGE_ONLY_OPTIONS: [keyof ParsedUrl, string][] = [
   ["trim", "trim"],
   ["blur", "blur"],
   ["sharpen", "sharpen"],
@@ -101,7 +99,7 @@ const IMAGE_ONLY_OPTIONS: [
   ["avifOptions", "avif_options"],
 ];
 
-function rejectImageOnlyOptions(parsed: import("./url-parser.js").ParsedUrl) {
+function rejectImageOnlyOptions(parsed: ParsedUrl) {
   for (const [key, name] of IMAGE_ONLY_OPTIONS) {
     if (parsed[key] !== undefined) {
       throw new HTTPError(

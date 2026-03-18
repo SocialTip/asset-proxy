@@ -1,4 +1,4 @@
-import { verifySignature } from "../src/signature.js";
+import { verifySignature } from "@asset-proxy/url-parser";
 
 describe("verifySignature (keys not configured)", () => {
   it("accepts any signature value when keys are not set", () => {

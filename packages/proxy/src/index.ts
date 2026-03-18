@@ -1,11 +1,15 @@
 import { Storage } from "@google-cloud/storage";
 import express from "express";
+import {
+  HTTPError,
+  isImageUrl,
+  isVideoUrl,
+  parseProcessingUrl,
+  verifySignature,
+} from "@asset-proxy/url-parser";
 import { env } from "./env.js";
-import { HTTPError } from "./error.js";
 import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
 import { logger } from "./logger.js";
-import { verifySignature } from "./signature.js";
-import { isImageUrl, isVideoUrl, parseProcessingUrl } from "./url-parser.js";
 
 const CONTENT_TYPES: Record<string, string> = {
   mp4: "video/mp4",
@@ -67,8 +71,13 @@ async function resolveGcsUrl(gsUrl: string): Promise<string> {
 }
 
 async function handleRequest(req: express.Request, res: express.Response) {
-  const pathAfterSignature = verifySignature(req.path);
-  const parsed = parseProcessingUrl(pathAfterSignature);
+  const pathAfterSignature = verifySignature(req.path, {
+    signingKey: env.SIGNING_KEY,
+    signingSalt: env.SIGNING_SALT,
+  });
+  const parsed = parseProcessingUrl(pathAfterSignature, {
+    encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY,
+  });
 
   assertOriginAllowed(parsed.sourceUrl);
 

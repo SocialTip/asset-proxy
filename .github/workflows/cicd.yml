@@ -31,7 +31,7 @@ jobs:
         run: echo "127.0.0.1 file-server" | sudo tee -a /etc/hosts
 
       - name: Copy test fixtures into nginx
-        run: sudo cp -a tests/fixtures/. /tmp/nginx/html/
+        run: sudo cp -a packages/proxy/tests/fixtures/. /tmp/nginx/html/
 
       - name: Configure nginx to serve all files
         run: |
@@ -61,6 +61,9 @@ jobs:
 
       - run: yarn lint
 
+      - name: Build packages
+        run: yarn build
+
       - name: Install ffmpeg, exiftool, and heif-thumbnailer
         env:
           FFMPEG_VERSION: "7.0"
@@ -72,7 +75,7 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq libimage-exiftool-perl heif-thumbnailer
 
       - name: Start asset-proxy
-        run: nohup npx tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
+        run: nohup npx tsx packages/proxy/src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -136,7 +139,7 @@ jobs:
       - uses: codecov/codecov-action@v5
         if: always()
         with:
-          files: repo/coverage/cobertura-coverage.xml
+          files: coverage/clover.xml
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Print asset-proxy logs
@@ -169,3 +172,30 @@ jobs:
     permissions:
       contents: read
       packages: write
+    secrets: inherit
+
+  publish-url-generator:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ci]
+    runs-on: warp-ubuntu-latest-x64-2x
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: yarn
+          registry-url: "https://registry.npmjs.org"
+
+      - run: yarn install --immutable
+
+      - run: yarn workspace @asset-proxy/url-parser build
+
+      - run: yarn workspace assets-proxy-url-generator build
+
+      - name: Publish to npm
+        run: yarn workspace assets-proxy-url-generator npm publish --access public || true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

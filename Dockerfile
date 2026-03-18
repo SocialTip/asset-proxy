@@ -5,11 +5,14 @@ RUN corepack enable
 
 WORKDIR /app
 
-COPY package.json yarn.lock tsconfig.json ./
+COPY package.json yarn.lock ./
+COPY packages/url-parser/package.json packages/url-parser/
+COPY packages/proxy/package.json packages/proxy/
+COPY packages/url-generator/package.json packages/url-generator/
 RUN yarn install --immutable
 
-COPY src/ ./src/
-RUN yarn tsc
+COPY packages/ packages/
+RUN yarn workspace @asset-proxy/url-parser build && yarn workspace @asset-proxy/proxy build
 
 # Production stage
 FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
@@ -42,7 +45,10 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY --from=build /app/dist ./dist/
+COPY --from=build /app/packages/proxy/dist ./packages/proxy/dist/
+COPY --from=build /app/packages/proxy/package.json ./packages/proxy/
+COPY --from=build /app/packages/url-parser/dist ./packages/url-parser/dist/
+COPY --from=build /app/packages/url-parser/package.json ./packages/url-parser/
 COPY --from=build /app/node_modules ./node_modules/
 COPY --from=build /app/package.json ./
 
@@ -52,4 +58,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s \
   CMD curl -f http://localhost:8080/health || exit 1
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "packages/proxy/dist/index.js"]
