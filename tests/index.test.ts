@@ -925,6 +925,14 @@ describe("validation errors", () => {
       "between 0 and 1",
     );
   });
+
+  it("rejects image-only options on video with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/bl:5/plain/https://example.com/video.mp4",
+    );
+    expect(res.status).toBe(501);
+  });
 });
 
 describe("url parsing", () => {
