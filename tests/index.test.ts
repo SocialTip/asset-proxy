@@ -865,6 +865,24 @@ describe("validation errors", () => {
     );
   });
 
+  it("rejects watermark", () => {
+    expect(() => parseProcessingUrl(plain("/wm:1:ce/w:100"))).toThrow(
+      "not implemented",
+    );
+  });
+
+  it("rejects watermark_url", () => {
+    expect(() => parseProcessingUrl(plain("/wmu:abc123/w:100"))).toThrow(
+      "not implemented",
+    );
+  });
+
+  it("rejects watermark_text", () => {
+    expect(() => parseProcessingUrl(plain("/wmt:abc123/w:100"))).toThrow(
+      "not implemented",
+    );
+  });
+
   it("rejects focus point gravity out of range", () => {
     expect(() => parseProcessingUrl(plain("/g:fp:1.5:0.5/w:100"))).toThrow(
       "between 0 and 1",
