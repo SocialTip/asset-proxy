@@ -102,6 +102,10 @@ Rotate based on EXIF orientation data. Enabled by default.
 
 Background colour for padding and alpha flattening. Example: `bg:ff0000` or `bg:255:0:0`.
 
+#### Background Alpha — `background_alpha:<0-1>` (shorthand `bga`)
+
+Opacity of the background colour (0 = fully transparent, 1 = fully opaque). Example: `bga:0.5`.
+
 #### Padding — `padding:<top>:<right>:<bottom>:<left>` (shorthand `pd`)
 
 Extend the canvas. A single value applies uniform padding: `pd:10`.

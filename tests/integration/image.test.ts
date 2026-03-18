@@ -204,6 +204,17 @@ describe("image padding and background", () => {
     const buffer = await fetchImage("/w:100/pd:20/bg:ff0000");
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
+
+  it("extend with background alpha 50%", async () => {
+    // Source 200x150 → fit into 200x200 → extend with 50% alpha blue background
+    const buffer = await fetchImage(
+      "/rs:fit:200:200/ex:1/bg:0000ff/bga:0.5/f:png",
+    );
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(200);
+    expect(meta.height).toBe(200);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
 });
 
 describe("image trim", () => {
