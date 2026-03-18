@@ -70,7 +70,6 @@ const IMAGE_ONLY_OPTIONS: [
   ["rotate", "rotate"],
   ["padding", "padding"],
   ["autoquality", "autoquality"],
-  ["maxBytes", "max_bytes"],
   ["dpi", "dpi"],
   ["enforceThumbnail", "enforce_thumbnail"],
   ["crop", "crop"],
@@ -136,6 +135,7 @@ export async function processVideo(
       framerate: parsed.framerate,
       cut: parsed.cut,
       quality: parsed.formatQuality?.[parsed.outputFormat] ?? parsed.quality,
+      maxBytes: parsed.maxBytes,
       outputFormat: parsed.outputFormat,
       gpu: await gpuReady,
     }),
@@ -606,6 +606,7 @@ export interface VideoParams {
   framerate?: number;
   cut?: number;
   quality?: number;
+  maxBytes?: number;
   outputFormat: OutputFormat;
   gpu: boolean;
 }
@@ -626,6 +627,7 @@ export function buildVideoArgs(
     framerate,
     cut,
     quality,
+    maxBytes,
     outputFormat,
   } = params;
 
@@ -724,6 +726,7 @@ export function buildVideoArgs(
       args.push("-b:v", "0");
     }
     args.push("-c:a", "libopus");
+    if (maxBytes) args.push("-fs", String(maxBytes));
     args.push("-f", "webm", "pipe:1");
   } else {
     if (gpu) {
@@ -741,6 +744,7 @@ export function buildVideoArgs(
     }
     args.push("-c:a", "copy");
     args.push("-movflags", "frag_keyframe+empty_moov+faststart");
+    if (maxBytes) args.push("-fs", String(maxBytes));
     args.push("-f", "mp4", "pipe:1");
   }
 
