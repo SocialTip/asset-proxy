@@ -920,6 +920,22 @@ describe("validation errors", () => {
     expect(res.status).toBe(501);
   });
 
+  it("rejects video_thumbnail_tile with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/vtt:1:3:3:100:100/plain/https://example.com/video.mp4@jpg",
+    );
+    expect(res.status).toBe(501);
+  });
+
+  it("rejects page with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/pg:2/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(res.status).toBe(501);
+  });
+
   it("rejects focus point gravity out of range", () => {
     expect(() => parseProcessingUrl(plain("/g:fp:1.5:0.5/w:100"))).toThrow(
       "between 0 and 1",

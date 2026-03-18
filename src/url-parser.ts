@@ -240,6 +240,13 @@ const SHORTHANDS: Record<string, string> = {
   wmsh: "watermark_shadow",
   st: "style",
   eth: "enforce_thumbnail",
+  pg: "page",
+  pgs: "pages",
+  da: "disable_animation",
+  vts: "video_thumbnail_second",
+  vtk: "video_thumbnail_keyframes",
+  vtt: "video_thumbnail_tile",
+  vta: "video_thumbnail_animation",
   fq: "format_quality",
   jpgo: "jpeg_options",
   pngo: "png_options",
@@ -631,6 +638,30 @@ const rawOptionsSchema = z
       })
       .optional(),
 
+    page: notImplemented("page").optional(),
+    pages: notImplemented("pages").optional(),
+    disable_animation: notImplemented("disable_animation").optional(),
+
+    /** Extract video frame at given second. */
+    video_thumbnail_second: z.coerce.number().optional(),
+    /** Use only keyframes for video thumbnails. */
+    video_thumbnail_keyframes: zBool.optional(),
+    video_thumbnail_tile: notImplemented("video_thumbnail_tile").optional(),
+    /** Video animation. Format: `<step>:<delay>:<frames>:<frame_width>:<frame_height>`. */
+    video_thumbnail_animation: z
+      .string()
+      .transform((v) => {
+        const [step, delay, frames, frameWidth, frameHeight] = v.split(":");
+        return {
+          step: step ? parseFloat(step) : 0,
+          delay: delay ? parseInt(delay, 10) : 100,
+          frames: frames ? parseInt(frames, 10) : 0,
+          frameWidth: frameWidth ? parseInt(frameWidth, 10) : 0,
+          frameHeight: frameHeight ? parseInt(frameHeight, 10) : 0,
+        };
+      })
+      .optional(),
+
     objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: z
       .string()
@@ -737,6 +768,9 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     stripMetadata: data.strip_metadata,
     dpi: data.dpi,
     enforceThumbnail: data.enforce_thumbnail,
+    videoThumbnailSecond: data.video_thumbnail_second,
+    videoThumbnailKeyframes: data.video_thumbnail_keyframes,
+    videoThumbnailAnimation: data.video_thumbnail_animation,
     keepCopyright: data.keep_copyright,
     stripColorProfile: data.strip_color_profile,
     crop: data.crop,
@@ -900,6 +934,20 @@ const parsedUrlSchema = z.object({
   dpi: z.number().optional(),
   /** Prefer embedded thumbnail over full image (HEIC/AVIF). */
   enforceThumbnail: z.boolean().optional(),
+  /** Extract video frame at this second. */
+  videoThumbnailSecond: z.number().optional(),
+  /** Use only keyframes for video thumbnails. */
+  videoThumbnailKeyframes: z.boolean().optional(),
+  /** Video animation config. */
+  videoThumbnailAnimation: z
+    .object({
+      step: z.number(),
+      delay: z.number(),
+      frames: z.number(),
+      frameWidth: z.number(),
+      frameHeight: z.number(),
+    })
+    .optional(),
   /** Extract a region before resizing (width, height, optional gravity). */
   crop: z
     .object({
@@ -1052,6 +1100,9 @@ export function parseProcessingUrl(path: string): ParsedUrl {
     stripColorProfile: options.stripColorProfile,
     dpi: options.dpi,
     enforceThumbnail: options.enforceThumbnail,
+    videoThumbnailSecond: options.videoThumbnailSecond,
+    videoThumbnailKeyframes: options.videoThumbnailKeyframes,
+    videoThumbnailAnimation: options.videoThumbnailAnimation,
     crop: options.crop,
     cropAspectRatio: options.cropAspectRatio,
     gravity: options.gravity,

@@ -214,6 +214,18 @@ Limits output duration to the given number of seconds. Example: `ct:10`.
 
 Prefer embedded thumbnail over the full image when available. Uses exiftool for AVIF (EXIF thumbnails) and heif-thumbnailer for HEIC (container thumbnails). Falls back gracefully to the main image if no thumbnail exists. Controlled by `ENFORCE_THUMBNAIL` env var (default: false).
 
+#### Video Thumbnail Second — `video_thumbnail_second:<seconds>` (shorthand `vts`)
+
+Extract a single frame from a video at the given second. Used when outputting an image format from a video source. Example: `vts:5` extracts the frame at 5 seconds.
+
+#### Video Thumbnail Keyframes — `video_thumbnail_keyframes:1` (shorthand `vtk`)
+
+When extracting frames from video, use only keyframes. This is faster but less precise than seeking to an exact timestamp.
+
+#### Video Thumbnail Animation — `video_thumbnail_animation:<step>:<delay>:<frames>:<frame_width>:<frame_height>` (shorthand `vta`)
+
+Generate an animated gif or webp from video frames. Step is the interval in seconds between frames (0 = auto). Delay is the frame delay in ms (default 100). Frames limits the number of output frames. Frame width/height control output dimensions. Output format is determined by the `@gif` or `@webp` suffix. Example: `vta:0.5:100:10:200:150`.
+
 #### DPI — `dpi:<value>`
 
 Set the output DPI metadata. Example: `dpi:300`. Takes effect regardless of whether metadata stripping is enabled.
@@ -252,6 +264,11 @@ The following imgproxy options are recognised but return 501 Not Implemented:
 - `gravity:sm` — smart gravity (content-aware)
 - `gravity:obj` — object-oriented gravity
 - `gravity:objw` — weighted object gravity
+- `page` / `pg` — select page from multi-page image
+- `pages` / `pgs` — number of pages to load
+- `disable_animation` / `da` — disable animation
+- `video_thumbnail_tile` / `vtt` — video tile sprite sheet
+- `video_thumbnail_tile` / `vtt` — video tile sprite sheet
 
 ### Output format
 
