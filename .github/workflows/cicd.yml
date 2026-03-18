@@ -107,15 +107,12 @@ jobs:
           git lfs push --all origin "$BRANCH"
           git push --force-with-lease origin "$BRANCH"
           if ! gh pr view "$BRANCH" --json number &>/dev/null; then
-            gh pr create \
-              --base "$BASE" \
-              --head "$BRANCH" \
-              --title "Update image snapshots" \
-              --body "$(cat <<EOF
-          Automated snapshot update from [${{ github.workflow }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}?pr=${{ github.event.pull_request.number }})
-          Created from #${{ github.event.pull_request.number }}
-          EOF
-          )"
+            gh api repos/${{ github.repository }}/pulls \
+              -f head="$BRANCH" \
+              -f base="$BASE" \
+              -f title="Update image snapshots" \
+              -f body="Automated snapshot update from [${{ github.workflow }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}?pr=${{ github.event.pull_request.number }})
+          Created from #${{ github.event.pull_request.number }}"
           fi
           echo "created=true" >> "$GITHUB_OUTPUT"
 
