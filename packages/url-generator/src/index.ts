@@ -29,6 +29,7 @@ export function generateUrl(
   config?: UrlGeneratorConfig,
 ): string {
   const segments = serializeOptions(options);
+  console.log("test change");
 
   let sourceUrlPart: string;
   if (config?.encryptionKey) {
