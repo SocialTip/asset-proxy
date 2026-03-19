@@ -186,7 +186,7 @@ const IMAGE_FORMATS = new Set<string>(["jpg", "png", "webp", "avif", "gif"]);
 const ALL_FORMATS = new Set<string>([...VIDEO_FORMATS, ...IMAGE_FORMATS]);
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|avif|gif|svg|bmp|tiff?)$/i;
 
-const SHORTHANDS: Record<string, string> = {
+export const SHORTHANDS: Record<string, string> = {
   rs: "resize",
   s: "size",
   t: "resizing_type",

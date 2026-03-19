@@ -40,7 +40,9 @@ export function encryptSourceUrl(
   options?: EncryptOptions,
 ): string {
   const iv = options?.deterministic
-    ? createHash("sha256").update(sourceUrl).digest().subarray(0, 16)
+    ? Buffer.from(
+        createHash("sha256").update(sourceUrl).digest("hex").slice(0, 16),
+      )
     : randomBytes(16);
   const cipher = createCipheriv("aes-256-cbc", key, iv);
   const encrypted = Buffer.concat([
