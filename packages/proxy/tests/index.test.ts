@@ -70,7 +70,7 @@ function imageArgs(path: string): string[] {
   const parsed = parseProcessingUrl(path);
   if (!isImageUrl(parsed)) throw new Error("Expected image URL");
   setupSpawnMock();
-  processImage(parsed.sourceUrl, parsed);
+  processImage(parsed.sourceUrl, parsed as never);
   return mockSpawn.mock.calls.at(-1)![1] as string[];
 }
 
@@ -982,5 +982,45 @@ describe("url parsing", () => {
       "/resize:fill:480:360/fr:30/plain/https://example.com/file",
     );
     expect(isImageUrl(result)).toBe(false);
+  });
+
+  it("parses @best format suffix as bestFormat flag", () => {
+    const result = parseProcessingUrl(
+      "/w:100/plain/https://example.com/photo.jpg@best",
+    );
+    expect(result.bestFormat).toBe(true);
+    expect(result.outputFormat).toBe("jpg");
+  });
+
+  it("parses f:best option as bestFormat flag", () => {
+    const result = parseProcessingUrl(
+      "/w:100/f:best/plain/https://example.com/photo.jpg",
+    );
+    expect(result.bestFormat).toBe(true);
+    expect(result.outputFormat).toBe("jpg");
+  });
+
+  it("f:best does not override outputFormat to a concrete format", () => {
+    const result = parseProcessingUrl(
+      "/f:best/plain/https://example.com/video.mp4",
+    );
+    expect(result.bestFormat).toBe(true);
+    // Source is a video, no explicit image format → defaults to mp4
+    expect(result.outputFormat).toBe("mp4");
+  });
+});
+
+describe("best format ffmpeg args", () => {
+  it("uses PNG as intermediate format when bestFormat is active", () => {
+    const parsed = parseProcessingUrl(plain("/w:100/f:best"));
+    if (!isImageUrl(parsed)) throw new Error("Expected image URL");
+    setupSpawnMock();
+    // Fire processImage but don't await — we only need the ffmpeg args from the first spawn call.
+    // The promise will reject because sharp can't parse mock data, so catch and ignore.
+    processImage(parsed.sourceUrl, parsed as never).catch(() => {});
+    const args = mockSpawn.mock.calls.at(-1)![1] as string[];
+    // When best format is active, ffmpeg should output PNG (lossless intermediate)
+    expect(args).toContain("png");
+    expect(args).not.toContain("mjpeg");
   });
 });

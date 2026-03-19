@@ -31,6 +31,9 @@ export default defineConfig({
           globals: true,
           setupFiles: ["./tests/setup.ts", "./tests/integration/setup.ts"],
           include: ["tests/integration/**/*.test.ts"],
+          env: {
+            BEST_FORMAT_MAX_RESOLUTION: "0.005",
+          },
         },
       },
     ],
