@@ -190,7 +190,7 @@ describe("generateUrl", () => {
       sourceUrl: SRC,
       bestFormat: true,
     });
-    expect(url).toBe(`/_/f:best/plain/${SRC}`);
+    expect(url).toBe(`/insecure/f:best/plain/${SRC}`);
   });
 
   it("round-trips bestFormat through parseProcessingUrl", () => {
