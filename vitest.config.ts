@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -5,6 +6,9 @@ export default defineConfig({
     projects: [
       "packages/url-generator",
       {
+        resolve: {
+          alias: { "@": resolve(__dirname, "packages/proxy/src") },
+        },
         test: {
           name: "proxy:unit",
           root: "packages/proxy",
@@ -16,6 +20,9 @@ export default defineConfig({
         },
       },
       {
+        resolve: {
+          alias: { "@": resolve(__dirname, "packages/proxy/src") },
+        },
         test: {
           name: "proxy:integration",
           root: "packages/proxy",
