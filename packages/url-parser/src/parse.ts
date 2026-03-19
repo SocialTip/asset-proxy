@@ -256,6 +256,14 @@ export const SHORTHANDS: Record<string, string> = {
   mb: "max_bytes",
   op: "objects_position",
   car: "crop_aspect_ratio",
+  skp: "skip_processing",
+  cb: "cache_buster",
+  exp: "expires",
+  fn: "filename",
+  att: "return_attachment",
+  pr: "preset",
+  fiu: "fallback_image_url",
+  hs: "hashsum",
 };
 
 const rawOptionsSchema = z
@@ -660,6 +668,43 @@ const rawOptionsSchema = z
       })
       .optional(),
 
+    /** Skip processing for listed extensions. Format: `<ext1>:<ext2>:...`. */
+    skip_processing: z
+      .string()
+      .transform((v) => {
+        if (!v) return [];
+        return v.split(":").map((e) => (e === "jpeg" ? "jpg" : e));
+      })
+      .optional(),
+    /** Return source without any processing. */
+    raw: zBool.optional(),
+    /** Ignored value used to differentiate CDN cache keys. */
+    cache_buster: z.string().optional(),
+    /** Unix timestamp after which the URL returns 404. */
+    expires: z.coerce.number().int().optional(),
+    /** Override the download filename in Content-Disposition. */
+    filename: z.string().optional(),
+    /** When true, set Content-Disposition: attachment. */
+    return_attachment: zBool.optional(),
+    preset: notImplemented("preset").optional(),
+    /** Fallback image URL (base64url-encoded) served when the source fails to load. */
+    fallback_image_url: z.string().optional(),
+    /** Expected hex-encoded checksum of the source image. Format: `<type>:<hex_digest>`. */
+    hashsum: z
+      .string()
+      .transform((v) => {
+        const idx = v.indexOf(":");
+        if (idx === -1) {
+          throw new HTTPError("hashsum requires format <type>:<hex_digest>", {
+            code: "BAD_REQUEST",
+          });
+        }
+        const type = v.slice(0, idx);
+        const hash = v.slice(idx + 1);
+        return { type, hash };
+      })
+      .optional(),
+
     objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: z
       .string()
@@ -774,6 +819,14 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     crop: data.crop,
     cropAspectRatio: data.crop_aspect_ratio,
     gravity: data.gravity,
+    skipProcessing: data.skip_processing,
+    raw: data.raw,
+    cacheBuster: data.cache_buster,
+    expires: data.expires,
+    filename: data.filename,
+    returnAttachment: data.return_attachment,
+    fallbackImageUrl: data.fallback_image_url,
+    hashsum: data.hashsum,
     enlarge: data.enlarge,
     bestFormat: data.format === "best" ? true : undefined,
     formatOverride:
@@ -974,6 +1027,22 @@ export const parsedUrlSchema = z.object({
   enlarge: z.boolean().optional(),
   /** Automatically select the most efficient output format. */
   bestFormat: z.boolean().optional(),
+  /** Skip processing when the source extension matches one of these formats. */
+  skipProcessing: z.array(z.string()).optional(),
+  /** Return the source without any processing. */
+  raw: z.boolean().optional(),
+  /** Ignored cache-busting value. */
+  cacheBuster: z.string().optional(),
+  /** Unix timestamp after which the URL returns 404. */
+  expires: z.number().optional(),
+  /** Override the download filename in Content-Disposition. */
+  filename: z.string().optional(),
+  /** When true, set Content-Disposition: attachment. */
+  returnAttachment: z.boolean().optional(),
+  /** Fallback image URL (base64url-encoded) to serve when the source fails. */
+  fallbackImageUrl: z.string().optional(),
+  /** Expected checksum of the source image. */
+  hashsum: z.object({ type: z.string(), hash: z.string() }).optional(),
 });
 
 type ParsedUrlBase = z.output<typeof parsedUrlSchema>;
@@ -1141,6 +1210,14 @@ export function parseProcessingUrl(
     gravity: parsedOptions.gravity,
     enlarge: parsedOptions.enlarge,
     bestFormat: parsedOptions.bestFormat || bestFormatSuffix || undefined,
+    skipProcessing: parsedOptions.skipProcessing,
+    raw: parsedOptions.raw,
+    cacheBuster: parsedOptions.cacheBuster,
+    expires: parsedOptions.expires,
+    filename: parsedOptions.filename,
+    returnAttachment: parsedOptions.returnAttachment,
+    fallbackImageUrl: parsedOptions.fallbackImageUrl,
+    hashsum: parsedOptions.hashsum,
   });
 
   return {
