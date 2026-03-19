@@ -295,6 +295,14 @@ describe("generateUrl", () => {
     expect(parsed.maxResultDimension).toBe(4096);
   });
 
+  it("generates and round-trips mute option", () => {
+    const url = generateUrl({ sourceUrl: SRC, mute: true });
+    expect(url).toContain("mu:1");
+    const pathAfterSig = url.slice(url.indexOf("/", 1));
+    const parsed = parseProcessingUrl(pathAfterSig);
+    expect(parsed.mute).toBe(true);
+  });
+
   it("round-trips through parseProcessingUrl", () => {
     const url = generateUrl({
       sourceUrl: SRC,

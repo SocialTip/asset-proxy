@@ -696,6 +696,17 @@ describe("video ffmpeg args", () => {
       ]
     `);
   });
+  it("mute strips audio from mp4", async () => {
+    const args = await videoArgs(vplain("/rs:force:480:360/mu:1"));
+    expect(args).toContain("-an");
+    expect(args).not.toContain("-c:a");
+  });
+
+  it("mute strips audio from webm", async () => {
+    const args = await videoArgs(vplain("/rs:force:480:360/mu:1") + "@webm");
+    expect(args).toContain("-an");
+    expect(args).not.toContain("-c:a");
+  });
 });
 
 describe("video ffmpeg args (GPU)", () => {
@@ -1332,6 +1343,11 @@ describe("url parsing (ST-2500)", () => {
   it("parses max_result_dimension", () => {
     const result = parseProcessingUrl(plain("/mrd:4096"));
     expect(result.maxResultDimension).toBe(4096);
+  });
+
+  it("parses mute", () => {
+    const result = parseProcessingUrl(vplain("/mu:1"));
+    expect(result.mute).toBe(true);
   });
 });
 
