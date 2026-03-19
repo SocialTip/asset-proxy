@@ -100,10 +100,12 @@ const IMAGE_ONLY_OPTIONS: [keyof ParsedUrl, string][] = [
 ];
 
 function rejectImageOnlyOptions(parsed: ParsedUrl) {
+  const hint =
+    " — use video_thumbnail_second (vts) to extract a frame first, or specify an image output format";
   for (const [key, name] of IMAGE_ONLY_OPTIONS) {
     if (parsed[key] !== undefined) {
       throw new HTTPError(
-        `Option '${name}' is not supported for video processing`,
+        `Option '${name}' is not supported for video processing${hint}`,
         {
           code: "NOT_IMPLEMENTED",
         },
@@ -113,19 +115,19 @@ function rejectImageOnlyOptions(parsed: ParsedUrl) {
   // brightness/contrast/saturation have non-undefined defaults, check for non-default values
   if (parsed.brightness !== 0) {
     throw new HTTPError(
-      "Option 'brightness' is not supported for video processing",
+      `Option 'brightness' is not supported for video processing${hint}`,
       { code: "NOT_IMPLEMENTED" },
     );
   }
   if (parsed.contrast !== 1) {
     throw new HTTPError(
-      "Option 'contrast' is not supported for video processing",
+      `Option 'contrast' is not supported for video processing${hint}`,
       { code: "NOT_IMPLEMENTED" },
     );
   }
   if (parsed.saturation !== 1) {
     throw new HTTPError(
-      "Option 'saturation' is not supported for video processing",
+      `Option 'saturation' is not supported for video processing${hint}`,
       { code: "NOT_IMPLEMENTED" },
     );
   }
