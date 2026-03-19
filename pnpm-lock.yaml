@@ -139,6 +139,9 @@ importers:
         specifier: workspace:*
         version: link:../url-parser
     devDependencies:
+      "@imgproxy/imgproxy-node":
+        specifier: ^1.1.0
+        version: 1.1.0
       "@types/node":
         specifier: ^25.5.0
         version: 25.5.0
@@ -1089,6 +1092,18 @@ packages:
     engines: { node: ^18.17.0 || ^20.3.0 || >=21.0.0 }
     cpu: [x64]
     os: [win32]
+
+  "@imgproxy/imgproxy-js-core@1.7.0":
+    resolution:
+      {
+        integrity: sha512-NOitHDWUnlF/Co0bwotnFqAaUUXinrSB+pCLLXxpHVMpureWU5NgApeghoV/mRei1eBLnHRSdL7ZcjvlLWA06w==,
+      }
+
+  "@imgproxy/imgproxy-node@1.1.0":
+    resolution:
+      {
+        integrity: sha512-oxet1AVhvZbnBjZrq/moaLAb3LnJN1xDR2oQMam5lJy4equMngH3bfE7ePJ++Yz65tmNcINt9/X4oesJInAEjw==,
+      }
 
   "@jest/diff-sequences@30.3.0":
     resolution:
@@ -7232,6 +7247,12 @@ snapshots:
 
   "@img/sharp-win32-x64@0.34.5":
     optional: true
+
+  "@imgproxy/imgproxy-js-core@1.7.0": {}
+
+  "@imgproxy/imgproxy-node@1.1.0":
+    dependencies:
+      "@imgproxy/imgproxy-js-core": 1.7.0
 
   "@jest/diff-sequences@30.3.0": {}
 

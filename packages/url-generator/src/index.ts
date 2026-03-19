@@ -1,6 +1,7 @@
 import {
   encryptSourceUrl,
   sign,
+  SHORTHANDS,
   type ParsedUrlInput,
 } from "@socialtip/asset-proxy-url-parser";
 
@@ -29,6 +30,11 @@ export function generateUrl(
   config?: UrlGeneratorConfig,
 ): string {
   const segments = serializeOptions(options);
+  segments.sort((a, b) => {
+    const keyA = SHORTHANDS[a.slice(0, a.indexOf(":"))] ?? a;
+    const keyB = SHORTHANDS[b.slice(0, b.indexOf(":"))] ?? b;
+    return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+  });
 
   let sourceUrlPart: string;
   if (config?.encryptionKey) {
@@ -38,14 +44,10 @@ export function generateUrl(
     sourceUrlPart = `plain/${options.sourceUrl}`;
   }
 
-  if (options.outputFormat) {
-    sourceUrlPart += `@${options.outputFormat}`;
-  }
-
   const optionsPath = segments.length > 0 ? segments.join("/") + "/" : "";
   const pathAfterSignature = `/${optionsPath}${sourceUrlPart}`;
 
-  let signature = "_";
+  let signature = "insecure";
   if (config?.signingKey && config?.signingSalt) {
     signature = sign(
       pathAfterSignature,
@@ -70,6 +72,8 @@ function serializeGravity(g: NonNullable<Gravity>): string {
 
 function serializeOptions(options: UrlGeneratorOptions): string[] {
   const segments: string[] = [];
+
+  if (options.outputFormat) segments.push(`f:${options.outputFormat}`);
 
   if (options.resize) {
     segments.push(
