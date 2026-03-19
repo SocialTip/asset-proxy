@@ -2,14 +2,11 @@
   "name": "asset-proxy",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
-    "start": "yarn workspace @asset-proxy/proxy start",
-    "dev": "yarn workspace @asset-proxy/proxy dev",
-    "build": "yarn workspace @asset-proxy/url-parser build && yarn workspace @asset-proxy/proxy build && yarn workspace @asset-proxy/url-generator build",
-    "typecheck": "yarn workspaces run typecheck",
+    "start": "pnpm --filter @asset-proxy/proxy start",
+    "dev": "pnpm --filter @asset-proxy/proxy dev",
+    "build": "pnpm --filter @asset-proxy/url-parser build && pnpm --filter @asset-proxy/proxy build && pnpm --filter @asset-proxy/url-generator build",
+    "typecheck": "pnpm -r run typecheck",
     "test": "vitest",
     "test:up": "docker compose up -d --build --wait",
     "test:restart": "docker compose restart asset-proxy",
@@ -37,5 +34,11 @@
     "prettier": "^3.8.1",
     "typescript-eslint": "^8.57.0",
     "vitest": "^4.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
   }
 }

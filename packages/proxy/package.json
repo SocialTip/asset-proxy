@@ -11,7 +11,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@asset-proxy/url-parser": "*",
+    "@asset-proxy/url-parser": "workspace:*",
     "@google-cloud/storage": "^7.19.0",
     "express": "^5.1.0",
     "winston": "^3.19.0",
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/express-serve-static-core": "^5.1.1",
     "@types/jest-image-snapshot": "^6.4.1",
     "@types/node": "^25.5.0",
     "@types/supertest": "^7.2.0",
