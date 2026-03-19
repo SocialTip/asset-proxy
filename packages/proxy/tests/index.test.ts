@@ -950,6 +950,68 @@ describe("validation errors", () => {
       "/insecure/bl:5/plain/https://example.com/video.mp4",
     );
     expect(res.status).toBe(501);
+    expect(res.text).toContain("video_thumbnail_second");
+  });
+});
+
+describe("video thumbnail with image options", () => {
+  it("vts defaults to jpg output for video source", () => {
+    const result = parseProcessingUrl(
+      "/vts:3/plain/https://example.com/video.mp4",
+    );
+    expect(isImageUrl(result)).toBe(true);
+    expect(result.outputFormat).toBe("jpg");
+  });
+
+  it("vts allows image-only options on video source", () => {
+    const result = parseProcessingUrl(
+      "/vts:3/c:100:100/bl:5/plain/https://example.com/video.mp4",
+    );
+    expect(isImageUrl(result)).toBe(true);
+    expect(result.crop).toEqual({ width: 100, height: 100 });
+    expect(result.blur).toBe(5);
+  });
+
+  it("vta defaults to jpg output for video source", () => {
+    const result = parseProcessingUrl(
+      "/vta:0.5:100:10:200:150/plain/https://example.com/video.mp4",
+    );
+    expect(isImageUrl(result)).toBe(true);
+    expect(result.outputFormat).toBe("jpg");
+  });
+
+  it("vts respects explicit video output format", () => {
+    const result = parseProcessingUrl(
+      "/vts:3/plain/https://example.com/video.mp4@webp",
+    );
+    expect(result.outputFormat).toBe("webp");
+    expect(isImageUrl(result)).toBe(true);
+  });
+
+  it("resize + vts + crop produces correct ffmpeg args", () => {
+    const args = imageArgs(
+      "/rs:fill:480:360/vts:3/c:100:100/plain/https://example.com/video.mp4@jpg",
+    );
+    // Should seek to 3 seconds
+    expect(args).toContain("-ss");
+    expect(args).toContain("3");
+    // Should have both resize and crop in filter chain
+    const vfIdx = args.indexOf("-vf");
+    expect(vfIdx).toBeGreaterThan(-1);
+    const filterStr = args[vfIdx + 1];
+    expect(filterStr).toContain("scale=");
+    expect(filterStr).toContain("crop=");
+  });
+
+  it("vts + blur produces correct ffmpeg args", () => {
+    const args = imageArgs(
+      "/vts:3/bl:5/plain/https://example.com/video.mp4@jpg",
+    );
+    expect(args).toContain("-ss");
+    expect(args).toContain("3");
+    const vfIdx = args.indexOf("-vf");
+    const filterStr = args[vfIdx + 1];
+    expect(filterStr).toContain("gblur=sigma=5");
   });
 });
 

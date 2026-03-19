@@ -1093,6 +1093,12 @@ export type VideoUrl = ParsedUrl & { outputFormat: VideoFormat };
 export function isImageUrl(parsed: ParsedUrl): parsed is ImageUrl {
   if (IMAGE_FORMATS.has(parsed.outputFormat)) return true;
   if (VIDEO_FORMATS.has(parsed.outputFormat)) return false;
+  // Video thumbnail options produce an image even from a video source
+  if (
+    parsed.videoThumbnailSecond !== undefined ||
+    parsed.videoThumbnailAnimation !== undefined
+  )
+    return true;
   if (parsed.framerate !== undefined || parsed.cut !== undefined) return false;
   if (IMAGE_EXTENSIONS.test(parsed.sourceUrl)) return true;
   return false;
@@ -1188,6 +1194,14 @@ export function parseProcessingUrl(
 
   if (!hasFormatSuffix && !parsedOptions.formatOverride) {
     if (IMAGE_EXTENSIONS.test(sourceUrl)) {
+      format = "jpg";
+    }
+    // Video thumbnail options produce an image — default to jpg if no explicit image format
+    if (
+      (parsedOptions.videoThumbnailSecond !== undefined ||
+        parsedOptions.videoThumbnailAnimation !== undefined) &&
+      VIDEO_FORMATS.has(format)
+    ) {
       format = "jpg";
     }
   }
