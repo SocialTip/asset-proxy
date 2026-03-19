@@ -8,14 +8,16 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./src:/app/src:ro
+      - ./packages/proxy/src:/app/packages/proxy/src:ro
+      - ./packages/url-parser/src:/app/packages/url-parser/src:ro
+      - ./packages/proxy/package.json:/app/packages/proxy/package.json:ro
+      - ./packages/url-parser/package.json:/app/packages/url-parser/package.json:ro
       - ./package.json:/app/package.json:ro
-      - ./tsconfig.json:/app/tsconfig.json:ro
-    command: ["npx", "tsx", "--watch", "src/index.ts"]
+    command: ["npx", "tsx", "--watch", "packages/proxy/src/index.ts"]
     depends_on:
       - file-server
 
   file-server:
     image: nginx:alpine
     volumes:
-      - ./tests/fixtures:/usr/share/nginx/html:ro
+      - ./packages/proxy/tests/fixtures:/usr/share/nginx/html:ro

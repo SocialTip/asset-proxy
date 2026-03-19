@@ -1,0 +1,119 @@
+# Prepares a release PR with version bumps and changelogs. Triggered manually. For each publishable package, finds changes since the last git tag, bumps the minor version, and generates a CHANGELOG.md entry. Opens a PR into main using peter-evans/create-pull-request. After merging the PR, run the Publish workflow to tag and release. See docs/Release.md for the full process.
+
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prepare-release:
+    runs-on: warp-ubuntu-latest-x64-2x
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+
+      - name: Prepare package releases
+        id: release
+        run: |
+          PACKAGES=("url-parser" "url-generator")
+          CHANGED=""
+          SUMMARY=""
+
+          for pkg in "${PACKAGES[@]}"; do
+            PKG_DIR="packages/$pkg"
+            PKG_NAME=$(node -p "require('./$PKG_DIR/package.json').name")
+            CURRENT_VERSION=$(node -p "require('./$PKG_DIR/package.json').version")
+
+            # Find latest tag for this package
+            LATEST_TAG=$(git tag -l "${PKG_NAME}@*" --sort=-v:refname | head -1)
+
+            if [ -z "$LATEST_TAG" ]; then
+              # No tag — initial release, keep current version
+              CHANGELOG="## ${CURRENT_VERSION}\n\nInitial release."
+
+              if [ -f "$PKG_DIR/CHANGELOG.md" ]; then
+                PREV=$(cat "$PKG_DIR/CHANGELOG.md")
+                echo -e "${CHANGELOG}\n\n${PREV}" > "$PKG_DIR/CHANGELOG.md"
+              else
+                echo -e "$CHANGELOG" > "$PKG_DIR/CHANGELOG.md"
+              fi
+
+              CHANGED="${CHANGED} ${pkg}"
+              SUMMARY="${SUMMARY}- **${PKG_NAME}** \`${CURRENT_VERSION}\` (initial release)"$'\n'
+            else
+              # Check for changes since last tag
+              TAG_COMMIT=$(git rev-list -1 "$LATEST_TAG")
+              LOG_ENTRIES=$(git log --format="- %s" "${TAG_COMMIT}..HEAD" -- "$PKG_DIR")
+
+              if [ -z "$LOG_ENTRIES" ]; then
+                echo "No changes in $PKG_NAME since $LATEST_TAG"
+                continue
+              fi
+
+              # Bump minor version
+              IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+              NEW_VERSION="${major}.$((minor + 1)).0"
+
+              node -e "
+                const fs = require('fs');
+                const pkg = JSON.parse(fs.readFileSync('$PKG_DIR/package.json', 'utf-8'));
+                pkg.version = '$NEW_VERSION';
+                fs.writeFileSync('$PKG_DIR/package.json', JSON.stringify(pkg, null, 2) + '\n');
+              "
+
+              NEW_SECTION="## ${NEW_VERSION}\n\n${LOG_ENTRIES}"
+
+              if [ -f "$PKG_DIR/CHANGELOG.md" ]; then
+                PREV=$(cat "$PKG_DIR/CHANGELOG.md")
+                echo -e "${NEW_SECTION}\n\n${PREV}" > "$PKG_DIR/CHANGELOG.md"
+              else
+                echo -e "$NEW_SECTION" > "$PKG_DIR/CHANGELOG.md"
+              fi
+
+              CHANGED="${CHANGED} ${pkg}"
+              SUMMARY="${SUMMARY}- **${PKG_NAME}** \`${CURRENT_VERSION}\` → \`${NEW_VERSION}\`"$'\n'
+            fi
+          done
+
+          CHANGED=$(echo "$CHANGED" | xargs)
+          echo "changed=${CHANGED}" >> "$GITHUB_OUTPUT"
+
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "summary<<$EOF" >> "$GITHUB_OUTPUT"
+          echo "$SUMMARY" >> "$GITHUB_OUTPUT"
+          echo "$EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create release PR
+        if: steps.release.outputs.changed != ''
+        uses: peter-evans/create-pull-request@v7
+        id: pr
+        with:
+          branch: release/packages
+          commit-message: "release: bump package versions"
+          title: "release: bump package versions"
+          body: |
+            ## Packages
+
+            ${{ steps.release.outputs.summary }}
+
+            ## Next steps
+
+            1. Review and merge this PR
+            2. Run the [Publish workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/publish.yml) to tag and publish the releases
+
+      - name: Log PR URL
+        if: steps.pr.outputs.pull-request-url
+        run: |
+          echo "::notice::Release PR ready: ${{ steps.pr.outputs.pull-request-url }}"
+
+      - name: No changes to release
+        if: steps.release.outputs.changed == ''
+        run: echo "::notice::No packages have changes to release."

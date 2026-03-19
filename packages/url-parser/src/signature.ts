@@ -1,17 +1,23 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { env } from "./env.js";
 import { HTTPError } from "./error.js";
+
+export interface SignatureOptions {
+  signingKey?: Buffer;
+  signingSalt?: Buffer;
+}
 
 /**
  * Verifies the HMAC-SHA256 signature of a request path.
  *
- * The signature is the first path segment. When SIGNING_KEY / SIGNING_SALT are
- * not configured the segment is structurally required but any value is accepted.
- * When keys are configured the signature is validated as a URL-safe Base64
+ * The signature is the first path segment. When signingKey / signingSalt are
+ * not provided the segment is structurally required but any value is accepted.
+ * When keys are provided the signature is validated as a URL-safe Base64
  * encoded HMAC-SHA256 digest of: salt + rest_of_path.
  */
-export function verifySignature(path: string): string {
-  // Strip leading slash, split into [signature, ...rest]
+export function verifySignature(
+  path: string,
+  options?: SignatureOptions,
+): string {
   const withoutLeadingSlash = path.slice(1);
   const slashIdx = withoutLeadingSlash.indexOf("/");
   if (slashIdx === -1) {
@@ -23,14 +29,11 @@ export function verifySignature(path: string): string {
   const signature = withoutLeadingSlash.slice(0, slashIdx);
   const restOfPath = withoutLeadingSlash.slice(slashIdx); // includes leading /
 
-  const { SIGNING_KEY, SIGNING_SALT } = env;
-
-  // When keys are not configured, accept any signature value
-  if (!SIGNING_KEY || !SIGNING_SALT) {
+  if (!options?.signingKey || !options?.signingSalt) {
     return restOfPath;
   }
 
-  const expected = sign(restOfPath, SIGNING_KEY, SIGNING_SALT);
+  const expected = sign(restOfPath, options.signingKey, options.signingSalt);
 
   const sigBuf = Buffer.from(signature, "base64url");
   const expectedBuf = Buffer.from(expected, "base64url");
@@ -47,7 +50,8 @@ export function verifySignature(path: string): string {
   return restOfPath;
 }
 
-function sign(path: string, key: Buffer, salt: Buffer): string {
+/** Generates a URL-safe Base64 HMAC-SHA256 signature for the given path. */
+export function sign(path: string, key: Buffer, salt: Buffer): string {
   const hmac = createHmac("sha256", key);
   hmac.update(salt);
   hmac.update(path);

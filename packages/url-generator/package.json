@@ -1,0 +1,30 @@
+{
+  "name": "@asset-proxy/url-generator",
+  "version": "0.1.0",
+  "description": "Generate assets-proxy-compatible URL paths with optional encryption and signing",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@asset-proxy/url-parser": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,58 @@
+# Creates git tags for the current package versions and pushes them. Triggered manually after a release PR has been merged. For each publishable package, creates a tag in the format <package-name>@<version>. If a tag already exists at a different commit, the workflow fails — run the Prepare Release workflow first to bump versions. Pushing the tags automatically triggers release.yml to publish to npm. See docs/Release.md for the full process.
+
+name: Publish
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tag-and-push:
+    runs-on: warp-ubuntu-latest-x64-2x
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+
+      - name: Create tags for current versions
+        run: |
+          PACKAGES=("url-parser" "url-generator")
+          TAGGED=""
+
+          for pkg in "${PACKAGES[@]}"; do
+            PKG_DIR="packages/$pkg"
+            PKG_NAME=$(node -p "require('./$PKG_DIR/package.json').name")
+            VERSION=$(node -p "require('./$PKG_DIR/package.json').version")
+            TAG="${PKG_NAME}@${VERSION}"
+
+            EXISTING=$(git tag -l "$TAG")
+            if [ -n "$EXISTING" ]; then
+              # Tag exists — check if it points to the current commit
+              TAG_COMMIT=$(git rev-list -1 "$TAG")
+              HEAD_COMMIT=$(git rev-parse HEAD)
+
+              if [ "$TAG_COMMIT" = "$HEAD_COMMIT" ]; then
+                echo "::notice::${TAG} already exists at HEAD, skipping"
+                continue
+              else
+                echo "::error::Tag ${TAG} exists but points to a different commit. Run the Prepare Release workflow and merge the PR before publishing."
+                exit 1
+              fi
+            fi
+
+            git tag "$TAG"
+            TAGGED="${TAGGED} ${TAG}"
+            echo "::notice::Tagged ${TAG}"
+          done
+
+          if [ -z "$(echo "$TAGGED" | xargs)" ]; then
+            echo "::notice::No new tags to push — all versions are already tagged."
+          fi
+
+      - name: Push tags
+        run: git push origin --tags

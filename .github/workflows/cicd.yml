@@ -1,3 +1,5 @@
+# Continuous integration and deployment. The test job runs typecheck, lint, build, and tests across all packages. CD builds a Docker image and pushes it to GHCR on push to main. The required job gates all jobs for branch protection.
+
 name: CI/CD
 
 on:
@@ -10,7 +12,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  ci:
+  test:
     permissions:
       contents: write
       pull-requests: write
@@ -31,7 +33,7 @@ jobs:
         run: echo "127.0.0.1 file-server" | sudo tee -a /etc/hosts
 
       - name: Copy test fixtures into nginx
-        run: sudo cp -a tests/fixtures/. /tmp/nginx/html/
+        run: sudo cp -a packages/proxy/tests/fixtures/. /tmp/nginx/html/
 
       - name: Configure nginx to serve all files
         run: |
@@ -57,6 +59,9 @@ jobs:
 
       - run: yarn install --immutable
 
+      - name: Build packages
+        run: yarn build
+
       - run: yarn typecheck
 
       - run: yarn lint
@@ -72,7 +77,7 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq libimage-exiftool-perl heif-thumbnailer
 
       - name: Start asset-proxy
-        run: nohup npx tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
+        run: nohup npx tsx packages/proxy/src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -136,36 +141,49 @@ jobs:
       - uses: codecov/codecov-action@v5
         if: always()
         with:
-          files: repo/coverage/cobertura-coverage.xml
+          files: coverage/clover.xml
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Print asset-proxy logs
         if: failure() && steps.snapshots.outputs.changed != 'true'
         run: cat /tmp/asset-proxy.log
 
-  cd-changes:
+  docker-build:
     if: github.event_name == 'pull_request'
-    runs-on: warp-ubuntu-latest-x64-2x
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      changed: ${{ steps.filter.outputs.cd }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            cd:
-              - '.github/workflows/cd.yml'
-
-  cd:
-    if: |
-      always() && needs.ci.result == 'success' &&
-      (github.event_name == 'push' || needs.cd-changes.outputs.changed == 'true')
-    needs: [ci, cd-changes]
-    uses: ./.github/workflows/cd.yml
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      push: false
     permissions:
       contents: read
       packages: write
+
+  cd:
+    if: github.event_name == 'push'
+    needs: [test]
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      push: true
+    permissions:
+      contents: read
+      packages: write
+
+  required:
+    if: always() && !cancelled() && github.event_name == 'pull_request'
+    needs: [test, docker-build, cd]
+    permissions: {}
+    runs-on: warp-ubuntu-latest-x64-2x
+    steps:
+      - name: Check required jobs
+        run: |
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "test: ${{ needs.test.result }}"
+            exit 1
+          fi
+          if [ "${{ needs.docker-build.result }}" != "success" ] && [ "${{ needs.docker-build.result }}" != "skipped" ]; then
+            echo "docker-build: ${{ needs.docker-build.result }}"
+            exit 1
+          fi
+          if [ "${{ needs.cd.result }}" != "success" ] && [ "${{ needs.cd.result }}" != "skipped" ]; then
+            echo "cd: ${{ needs.cd.result }}"
+            exit 1
+          fi

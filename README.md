@@ -1,6 +1,6 @@
 # assets-proxy
 
-An image and video processing service with an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses sharp for images and ffmpeg (with optional NVIDIA GPU acceleration) for video.
+An image and video processing service with an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses ffmpeg (with optional NVIDIA GPU acceleration) for the vast majority of processing, and sharp for certain image-specific operations.
 
 ## URL format
 
@@ -317,6 +317,49 @@ URLs can be signed with HMAC-SHA256, following the [imgproxy URL signing format]
 
 When `SIGNING_KEY` and `SIGNING_SALT` are not set, the signature segment is still required but any value is accepted.
 
+## URL generator package
+
+The `@asset-proxy/url-generator` npm package generates assets-proxy-compatible URL paths programmatically. It uses the same types as the server's URL parser.
+
+```bash
+npm install @asset-proxy/url-generator
+```
+
+```ts
+import { generateUrl } from "@asset-proxy/url-generator";
+
+const url = generateUrl({
+  sourceUrl: "https://example.com/photo.jpg",
+  outputFormat: "webp",
+  resize: { type: "fill", width: 480, height: 360 },
+  quality: 80,
+});
+// => /_/rs:fill:480:360/q:80/plain/https://example.com/photo.jpg@webp
+```
+
+Encrypted source URLs and signed URLs are supported via the optional second argument:
+
+```ts
+const url = generateUrl(
+  { sourceUrl: "https://example.com/photo.jpg", outputFormat: "webp" },
+  {
+    encryptionKey: "0123456789abcdef...", // hex-encoded 32-byte key
+    signingKey: "...", // hex-encoded HMAC key
+    signingSalt: "...", // hex-encoded salt
+  },
+);
+```
+
+## Project structure
+
+This repository is a yarn monorepo with three packages:
+
+| Package                      | Path                     | Description                                                                   |
+| ---------------------------- | ------------------------ | ----------------------------------------------------------------------------- |
+| `@asset-proxy/url-parser`    | `packages/url-parser`    | Shared URL schema, parsing, signature verification/generation, and encryption |
+| `@asset-proxy/proxy`         | `packages/proxy`         | The image/video processing service (Express + ffmpeg + sharp)                 |
+| `@asset-proxy/url-generator` | `packages/url-generator` | Published npm package for generating compatible URL paths                     |
+
 ## Development
 
 Requires [asdf](https://asdf-vm.com/) with the `nodejs` plugin.
@@ -325,19 +368,19 @@ Requires [asdf](https://asdf-vm.com/) with the `nodejs` plugin.
 asdf install        # installs Node version from .tool-versions
 corepack enable     # enables yarn
 yarn install
-yarn dev            # starts the server with hot reload on :8080
+yarn dev            # starts the proxy with hot reload on :8080
 ```
 
 ## Docker
 
 ```bash
-docker build -t asset-proxy .
+docker build -t asset-proxy -f packages/proxy/Dockerfile .
 ```
 
 ### CPU only
 
 ```bash
-docker run -p 8080:8080 asset-proxy
+docker run -e SKIP_GPU=1 -p 8080:8080 asset-proxy
 ```
 
 ### With GPU (NVIDIA)
@@ -350,7 +393,7 @@ Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud
 
 ## Deployment
 
-CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`).
+CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`). The `@asset-proxy/url-parser` and `@asset-proxy/url-generator` packages are published to npm on pushes to `main`.
 
 Images are tagged with the commit SHA. Pushes to `main` are additionally tagged `latest`.
 
@@ -360,7 +403,7 @@ Integration tests require a running service via Docker Compose. This starts the 
 
 ```bash
 yarn test:up      # start containers (builds image, waits for healthy)
-yarn test         # run all tests (unit + integration)
+yarn test         # run all tests across all packages
 yarn test:down    # stop and remove containers
 ```
 

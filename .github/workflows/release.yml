@@ -1,0 +1,52 @@
+# Publishes a package to npm when a version tag is pushed. Triggered automatically by tag pushes matching @asset-proxy/*@*. Detects which package the tag belongs to, verifies the version matches package.json, builds the package, and publishes to npm as restricted. Tags are created by the Publish workflow (publish.yml). See docs/Release.md for the full process.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "@asset-proxy/*@*"
+
+jobs:
+  release:
+    runs-on: warp-ubuntu-latest-x64-2x
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: yarn
+          registry-url: "https://registry.npmjs.org"
+
+      - run: yarn install --immutable
+
+      - name: Detect package from tag
+        id: detect
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          # Tag format: @asset-proxy/<name>@<version>
+          PKG_NAME=$(echo "$TAG" | sed 's/@[^@]*$//')
+          VERSION=$(echo "$TAG" | sed 's/.*@//')
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "package=${PKG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version matches
+        run: |
+          ACTUAL=$(node -p "require('./node_modules/${{ steps.detect.outputs.package }}/package.json').version")
+          if [ "$ACTUAL" != "${{ steps.detect.outputs.version }}" ]; then
+            echo "::error::Tag version ${{ steps.detect.outputs.version }} does not match package.json version ${ACTUAL}"
+            exit 1
+          fi
+
+      - run: yarn build
+
+      - name: Publish to npm
+        run: yarn workspace ${{ steps.detect.outputs.package }} npm publish --access restricted
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - run: echo "::notice::Published ${{ steps.detect.outputs.tag }}"
