@@ -184,7 +184,7 @@ describe("getImage integration", () => {
       }),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/enc/XNdtlrwvKuz5k1blTLNJxc2lHaNIK8oYXzPu89BKYD_AyGTTL1aIvY2tfvTWHxvH"`,
+      `"https://assets.example.com/_/enc/NWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-"`,
     );
   });
 
