@@ -39,7 +39,7 @@ jobs:
 
       - name: Verify version matches
         run: |
-          ACTUAL=$(node -p "require('./node_modules/${{ steps.detect.outputs.package }}/package.json').version")
+          ACTUAL=$(pnpm ls --filter ${{ steps.detect.outputs.package }} --json --depth -1 | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'))[0].version")
           if [ "$ACTUAL" != "${{ steps.detect.outputs.version }}" ]; then
             echo "::error::Tag version ${{ steps.detect.outputs.version }} does not match package.json version ${ACTUAL}"
             exit 1
