@@ -32,7 +32,7 @@ describe("getImage integration", () => {
   it("generates a basic URL with no processing options", async () => {
     const result = await getImage({ src: SRC }, makeImageConfig());
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/plain/https://example.com/photo.jpg"`,
+      `"https://assets.example.com/insecure/plain/https://example.com/photo.jpg"`,
     );
   });
 
@@ -42,21 +42,21 @@ describe("getImage integration", () => {
       makeImageConfig(),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/rs:fit:800:600/plain/https://example.com/photo.jpg"`,
+      `"https://assets.example.com/insecure/rs:fit:800:600/plain/https://example.com/photo.jpg"`,
     );
   });
 
   it("generates a URL with width only", async () => {
     const result = await getImage({ src: SRC, width: 400 }, makeImageConfig());
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/rs:fit:400:0/plain/https://example.com/photo.jpg"`,
+      `"https://assets.example.com/insecure/rs:fit:400:0/plain/https://example.com/photo.jpg"`,
     );
   });
 
   it("generates a URL with quality as a number", async () => {
     const result = await getImage({ src: SRC, quality: 75 }, makeImageConfig());
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/q:75/plain/https://example.com/photo.jpg"`,
+      `"https://assets.example.com/insecure/q:75/plain/https://example.com/photo.jpg"`,
     );
   });
 
@@ -66,7 +66,7 @@ describe("getImage integration", () => {
       makeImageConfig(),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/q:80/plain/https://example.com/photo.jpg"`,
+      `"https://assets.example.com/insecure/q:80/plain/https://example.com/photo.jpg"`,
     );
   });
 
@@ -76,7 +76,7 @@ describe("getImage integration", () => {
       makeImageConfig(),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/plain/https://example.com/photo.jpg@webp"`,
+      `"https://assets.example.com/insecure/f:webp/plain/https://example.com/photo.jpg"`,
     );
   });
 
@@ -86,7 +86,7 @@ describe("getImage integration", () => {
       makeImageConfig(),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/plain/https://example.com/photo.jpg@jpg"`,
+      `"https://assets.example.com/insecure/f:jpg/plain/https://example.com/photo.jpg"`,
     );
   });
 
@@ -96,7 +96,7 @@ describe("getImage integration", () => {
       makeImageConfig(),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/rs:fill:300:300/plain/https://example.com/photo.jpg"`,
+      `"https://assets.example.com/insecure/rs:fill:300:300/plain/https://example.com/photo.jpg"`,
     );
   });
 
@@ -106,7 +106,7 @@ describe("getImage integration", () => {
       makeImageConfig(),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/rs:fit:300:300/plain/https://example.com/photo.jpg"`,
+      `"https://assets.example.com/insecure/rs:fit:300:300/plain/https://example.com/photo.jpg"`,
     );
   });
 
@@ -116,7 +116,7 @@ describe("getImage integration", () => {
       makeImageConfig(),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/rs:force:300:300/plain/https://example.com/photo.jpg"`,
+      `"https://assets.example.com/insecure/rs:force:300:300/plain/https://example.com/photo.jpg"`,
     );
   });
 
@@ -126,7 +126,7 @@ describe("getImage integration", () => {
       makeImageConfig(),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/rs:fit:300:300/plain/https://example.com/photo.jpg"`,
+      `"https://assets.example.com/insecure/rs:fit:300:300/plain/https://example.com/photo.jpg"`,
     );
   });
 
@@ -143,7 +143,7 @@ describe("getImage integration", () => {
       makeImageConfig(),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/rs:fill:640:480/q:90/plain/https://example.com/photo.jpg@avif"`,
+      `"https://assets.example.com/insecure/f:avif/q:90/rs:fill:640:480/plain/https://example.com/photo.jpg"`,
     );
   });
 
@@ -156,7 +156,7 @@ describe("getImage integration", () => {
     };
     const result = await getImage({ src: meta, width: 400 }, makeImageConfig());
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/rs:fit:400:225/plain//assets/photo.abc123.jpg"`,
+      `"https://assets.example.com/insecure/rs:fit:400:225/plain//assets/photo.abc123.jpg"`,
     );
   });
 
@@ -184,7 +184,7 @@ describe("getImage integration", () => {
       }),
     );
     expect(result.src).toMatchInlineSnapshot(
-      `"https://assets.example.com/_/enc/NWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-"`,
+      `"https://assets.example.com/insecure/enc/NWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-"`,
     );
   });
 
