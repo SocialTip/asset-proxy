@@ -1,0 +1,43 @@
+{
+  "name": "@socialtip/asset-proxy-astro",
+  "version": "0.1.0",
+  "description": "Astro image service for asset-proxy",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@socialtip/asset-proxy-url-generator": "workspace:*"
+  },
+  "peerDependencies": {
+    "astro": "^4.0.0 || ^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "astro": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SocialTip/asset-proxy.git",
+    "directory": "packages/astro"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}

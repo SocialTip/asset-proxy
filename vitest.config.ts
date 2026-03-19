@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     projects: [
+      "packages/astro",
       "packages/url-generator",
       {
         resolve: {
