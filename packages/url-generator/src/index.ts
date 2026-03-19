@@ -256,6 +256,25 @@ function serializeOptions(options: UrlGeneratorOptions): string[] {
     segments.push(`avo:${options.avifOptions.subsample}`);
   }
 
+  if (options.skipProcessing?.length) {
+    segments.push(`skp:${options.skipProcessing.join(":")}`);
+  }
+  if (options.raw !== undefined) segments.push(`raw:${bool(options.raw)}`);
+  if (options.cacheBuster !== undefined) {
+    segments.push(`cb:${options.cacheBuster}`);
+  }
+  if (options.expires !== undefined) segments.push(`exp:${options.expires}`);
+  if (options.filename !== undefined) segments.push(`fn:${options.filename}`);
+  if (options.returnAttachment !== undefined) {
+    segments.push(`att:${bool(options.returnAttachment)}`);
+  }
+  if (options.fallbackImageUrl !== undefined) {
+    segments.push(`fiu:${options.fallbackImageUrl}`);
+  }
+  if (options.hashsum) {
+    segments.push(`hs:${options.hashsum.type}:${options.hashsum.hash}`);
+  }
+
   if (options.bestFormat) {
     segments.push("f:best");
   }

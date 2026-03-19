@@ -1010,6 +1010,243 @@ describe("url parsing", () => {
   });
 });
 
+describe("miscellaneous options", () => {
+  it("rejects preset with 501", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/pr:default/w:100/plain/https://example.com/photo.jpg",
+    );
+    expect(res.status).toBe(501);
+  });
+
+  it("returns 404 when expires timestamp is in the past", async () => {
+    const pastTimestamp = Math.floor(Date.now() / 1000) - 3600;
+    const res = await request(app).get(
+      `/insecure/exp:${pastTimestamp}/w:100/plain/https://example.com/photo.jpg`,
+    );
+    expect(res.status).toBe(404);
+    expect(res.text).toContain("expired");
+  });
+
+  it("processes normally when expires timestamp is in the future", async () => {
+    setupSpawnMock();
+    const futureTimestamp = Math.floor(Date.now() / 1000) + 3600;
+    const res = await request(app)
+      .get(
+        `/insecure/exp:${futureTimestamp}/w:100/plain/https://example.com/photo.jpg`,
+      )
+      .buffer(true);
+    expect(res.status).toBe(200);
+  });
+
+  it("sets Content-Disposition: attachment with filename", async () => {
+    setupSpawnMock();
+    const res = await request(app)
+      .get(
+        "/insecure/att:1/fn:photo.jpg/w:100/plain/https://example.com/photo.jpg",
+      )
+      .buffer(true);
+    expect(res.status).toBe(200);
+    expect(res.headers["content-disposition"]).toBe(
+      'attachment; filename="photo.jpg"',
+    );
+  });
+
+  it("sets Content-Disposition: inline with filename when att is not set", async () => {
+    setupSpawnMock();
+    const res = await request(app)
+      .get(
+        "/insecure/fn:download.jpg/w:100/plain/https://example.com/photo.jpg",
+      )
+      .buffer(true);
+    expect(res.status).toBe(200);
+    expect(res.headers["content-disposition"]).toBe(
+      'inline; filename="download.jpg"',
+    );
+  });
+
+  it("sets Content-Disposition: attachment without filename", async () => {
+    setupSpawnMock();
+    const res = await request(app)
+      .get("/insecure/att:1/w:100/plain/https://example.com/photo.jpg")
+      .buffer(true);
+    expect(res.status).toBe(200);
+    expect(res.headers["content-disposition"]).toBe("attachment");
+  });
+
+  it("cache_buster is ignored but does not break processing", async () => {
+    setupSpawnMock();
+    const res = await request(app)
+      .get("/insecure/cb:v2/w:100/plain/https://example.com/photo.jpg")
+      .buffer(true);
+    expect(res.status).toBe(200);
+  });
+
+  it("raw:1 fetches source and returns it without processing", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(Buffer.from("raw-image-data"), {
+        headers: { "content-type": "image/png" },
+      }),
+    );
+    try {
+      const res = await request(app)
+        .get("/insecure/raw:1/plain/https://example.com/photo.jpg")
+        .buffer(true);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("image/png");
+      expect(res.body.toString()).toBe("raw-image-data");
+      expect(mockSpawn).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("skip_processing skips when source extension matches", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(Buffer.from("passthrough"), {
+        headers: { "content-type": "image/jpeg" },
+      }),
+    );
+    try {
+      const res = await request(app)
+        .get("/insecure/skp:jpg:png/w:100/plain/https://example.com/photo.jpg")
+        .buffer(true);
+      expect(res.status).toBe(200);
+      expect(res.body.toString()).toBe("passthrough");
+      expect(mockSpawn).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("skip_processing processes normally when extension does not match", async () => {
+    setupSpawnMock();
+    const res = await request(app)
+      .get("/insecure/skp:png/w:100/plain/https://example.com/photo.jpg")
+      .buffer(true);
+    expect(res.status).toBe(200);
+    expect(mockSpawn).toHaveBeenCalled();
+  });
+
+  it("fallback_image_url redirects on processing error", async () => {
+    setupSpawnMockError();
+    const fallbackUrl = Buffer.from(
+      "https://example.com/fallback.jpg",
+    ).toString("base64url");
+    const res = await request(app)
+      .get(
+        `/insecure/fiu:${fallbackUrl}/w:100/plain/https://example.com/photo.jpg`,
+      )
+      .redirects(0);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe("https://example.com/fallback.jpg");
+  });
+
+  it("hashsum verifies source integrity", async () => {
+    const data = Buffer.from("test-image-data");
+    const { createHash } = await import("node:crypto");
+    const hash = createHash("sha256").update(data).digest("hex");
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(Buffer.from(data), {
+          headers: { "content-type": "image/jpeg" },
+        }),
+      ),
+    );
+    try {
+      // Correct hash — should process (raw:1 to avoid ffmpeg)
+      const res = await request(app)
+        .get(
+          `/insecure/hs:sha256:${hash}/raw:1/plain/https://example.com/photo.jpg`,
+        )
+        .buffer(true);
+      expect(res.status).toBe(200);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("hashsum returns 422 on mismatch", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(Buffer.from("actual-data"), {
+          headers: { "content-type": "image/jpeg" },
+        }),
+      ),
+    );
+    try {
+      const res = await request(app).get(
+        "/insecure/hs:sha256:0000000000000000000000000000000000000000000000000000000000000000/raw:1/plain/https://example.com/photo.jpg",
+      );
+      expect(res.status).toBe(422);
+      expect(res.text).toContain("hashsum mismatch");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("url parsing (ST-2500)", () => {
+  it("parses skip_processing", () => {
+    const result = parseProcessingUrl(plain("/skp:jpg:png:webp"));
+    expect(result.skipProcessing).toEqual(["jpg", "png", "webp"]);
+  });
+
+  it("parses skip_processing with jpeg alias", () => {
+    const result = parseProcessingUrl(plain("/skp:jpeg"));
+    expect(result.skipProcessing).toEqual(["jpg"]);
+  });
+
+  it("parses raw", () => {
+    const result = parseProcessingUrl(plain("/raw:1"));
+    expect(result.raw).toBe(true);
+  });
+
+  it("parses cache_buster", () => {
+    const result = parseProcessingUrl(plain("/cb:abc123"));
+    expect(result.cacheBuster).toBe("abc123");
+  });
+
+  it("parses expires", () => {
+    const result = parseProcessingUrl(plain("/exp:1700000000"));
+    expect(result.expires).toBe(1700000000);
+  });
+
+  it("parses filename", () => {
+    const result = parseProcessingUrl(plain("/fn:photo.jpg"));
+    expect(result.filename).toBe("photo.jpg");
+  });
+
+  it("parses return_attachment", () => {
+    const result = parseProcessingUrl(plain("/att:1"));
+    expect(result.returnAttachment).toBe(true);
+  });
+
+  it("parses fallback_image_url", () => {
+    const encoded = Buffer.from("https://example.com/fb.jpg").toString(
+      "base64url",
+    );
+    const result = parseProcessingUrl(plain(`/fiu:${encoded}`));
+    expect(result.fallbackImageUrl).toBe(encoded);
+  });
+
+  it("parses hashsum", () => {
+    const result = parseProcessingUrl(plain("/hs:sha256:abcdef"));
+    expect(result.hashsum).toEqual({ type: "sha256", hash: "abcdef" });
+  });
+
+  it("rejects hashsum without colon separator", () => {
+    expect(() => parseProcessingUrl(plain("/hs:abcdef"))).toThrow(
+      "hashsum requires format",
+    );
+  });
+});
+
 describe("best format ffmpeg args", () => {
   it("uses PNG as intermediate format when bestFormat is active", () => {
     const parsed = parseProcessingUrl(plain("/w:100/f:best"));

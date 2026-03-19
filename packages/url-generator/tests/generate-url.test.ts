@@ -205,6 +205,64 @@ describe("generateUrl", () => {
     expect(parsed.sourceUrl).toBe(SRC);
   });
 
+  it("generates skip_processing option", () => {
+    const url = generateUrl({
+      sourceUrl: SRC,
+      skipProcessing: ["jpg", "png"],
+    });
+    expect(url).toBe(`/insecure/skp:jpg:png/plain/${SRC}`);
+  });
+
+  it("generates raw option", () => {
+    const url = generateUrl({ sourceUrl: SRC, raw: true });
+    expect(url).toBe(`/insecure/raw:1/plain/${SRC}`);
+  });
+
+  it("generates cache_buster option", () => {
+    const url = generateUrl({ sourceUrl: SRC, cacheBuster: "v2" });
+    expect(url).toBe(`/insecure/cb:v2/plain/${SRC}`);
+  });
+
+  it("generates expires option", () => {
+    const url = generateUrl({ sourceUrl: SRC, expires: 1700000000 });
+    expect(url).toBe(`/insecure/exp:1700000000/plain/${SRC}`);
+  });
+
+  it("generates filename option", () => {
+    const url = generateUrl({ sourceUrl: SRC, filename: "photo.jpg" });
+    expect(url).toBe(`/insecure/fn:photo.jpg/plain/${SRC}`);
+  });
+
+  it("generates return_attachment option", () => {
+    const url = generateUrl({ sourceUrl: SRC, returnAttachment: true });
+    expect(url).toBe(`/insecure/att:1/plain/${SRC}`);
+  });
+
+  it("round-trips miscellaneous options through parseProcessingUrl", () => {
+    const url = generateUrl({
+      sourceUrl: SRC,
+      skipProcessing: ["jpg", "png"],
+      cacheBuster: "abc",
+      expires: 1700000000,
+      filename: "download.jpg",
+      returnAttachment: true,
+    });
+    const pathAfterSig = url.slice(url.indexOf("/", 1));
+    const parsed = parseProcessingUrl(pathAfterSig);
+    expect(parsed.skipProcessing).toEqual(["jpg", "png"]);
+    expect(parsed.cacheBuster).toBe("abc");
+    expect(parsed.expires).toBe(1700000000);
+    expect(parsed.filename).toBe("download.jpg");
+    expect(parsed.returnAttachment).toBe(true);
+  });
+
+  it("round-trips raw option through parseProcessingUrl", () => {
+    const url = generateUrl({ sourceUrl: SRC, raw: true });
+    const pathAfterSig = url.slice(url.indexOf("/", 1));
+    const parsed = parseProcessingUrl(pathAfterSig);
+    expect(parsed.raw).toBe(true);
+  });
+
   it("round-trips through parseProcessingUrl", () => {
     const url = generateUrl({
       sourceUrl: SRC,
