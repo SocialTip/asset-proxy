@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  workflow_call:
+
+jobs:
+  release:
+    runs-on: warp-ubuntu-latest-x64-2x
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: yarn
+          registry-url: "https://registry.npmjs.org"
+
+      - run: yarn install --immutable
+
+      - run: yarn build
+
+      - name: Publish unreleased packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          PACKAGES=("url-parser" "url-generator")
+
+          for pkg in "${PACKAGES[@]}"; do
+            PKG_DIR="packages/$pkg"
+            PKG_NAME=$(node -p "require('./$PKG_DIR/package.json').name")
+            VERSION=$(node -p "require('./$PKG_DIR/package.json').version")
+            TAG="${PKG_NAME}@${VERSION}"
+
+            if git tag -l "$TAG" | grep -q .; then
+              echo "::notice::${TAG} already released, skipping"
+              continue
+            fi
+
+            echo "Publishing ${TAG}..."
+            yarn workspace "$PKG_NAME" npm publish --access restricted
+
+            git tag "$TAG"
+            echo "::notice::Published ${TAG}"
+          done
+
+      - name: Push tags
+        run: git push origin --tags

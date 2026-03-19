@@ -154,7 +154,7 @@ jobs:
       pull-requests: read
     outputs:
       cd: ${{ steps.filter.outputs.cd }}
-      publish: ${{ steps.filter.outputs.publish }}
+      release: ${{ steps.filter.outputs.release }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -166,8 +166,8 @@ jobs:
               - 'Dockerfile'
               - 'packages/url-parser/**'
               - 'packages/proxy/**'
-            publish:
-              - '.github/workflows/publish.yml'
+            release:
+              - '.github/workflows/release.yml'
               - 'packages/url-parser/**'
               - 'packages/url-generator/**'
 
@@ -181,19 +181,19 @@ jobs:
       contents: read
       packages: write
 
-  publish:
+  release:
     if: |
       always() && needs.ci.result == 'success' &&
-      (github.event_name == 'push' || needs.changes.outputs.publish == 'true')
+      (github.event_name == 'push' || needs.changes.outputs.release == 'true')
     needs: [ci, changes]
-    uses: ./.github/workflows/publish.yml
+    uses: ./.github/workflows/release.yml
     permissions:
-      contents: read
+      contents: write
     secrets: inherit
 
   required:
     if: always()
-    needs: [ci, cd, publish]
+    needs: [ci, cd, release]
     runs-on: warp-ubuntu-latest-x64-2x
     steps:
       - name: Check required jobs
@@ -206,7 +206,7 @@ jobs:
             echo "CD failed"
             exit 1
           fi
-          if [ "${{ needs.publish.result }}" != "success" ] && [ "${{ needs.publish.result }}" != "skipped" ]; then
-            echo "Publish failed"
+          if [ "${{ needs.release.result }}" != "success" ] && [ "${{ needs.release.result }}" != "skipped" ]; then
+            echo "Release failed"
             exit 1
           fi

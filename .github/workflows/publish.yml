@@ -1,37 +1,122 @@
-name: Publish
+name: Prepare Release
 
 on:
-  workflow_call:
-
-concurrency:
-  group: publish-${{ github.event_name == 'push' && github.ref || github.sha }}
+  workflow_dispatch:
 
 jobs:
-  publish:
+  prepare-release:
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version-file: .tool-versions
-          cache: yarn
-          registry-url: "https://registry.npmjs.org"
 
-      - run: yarn install --immutable
+      - name: Prepare package releases
+        id: release
+        run: |
+          PACKAGES=("url-parser" "url-generator")
+          CHANGED=""
+          SUMMARY=""
 
-      - run: yarn workspace @asset-proxy/url-parser build
+          for pkg in "${PACKAGES[@]}"; do
+            PKG_DIR="packages/$pkg"
+            PKG_NAME=$(node -p "require('./$PKG_DIR/package.json').name")
+            CURRENT_VERSION=$(node -p "require('./$PKG_DIR/package.json').version")
 
-      - run: yarn workspace @asset-proxy/url-generator build
+            # Find latest tag for this package
+            LATEST_TAG=$(git tag -l "${PKG_NAME}@*" --sort=-v:refname | head -1)
 
-      - name: Publish @asset-proxy/url-parser
-        run: yarn workspace @asset-proxy/url-parser npm publish --access restricted || true
+            if [ -z "$LATEST_TAG" ]; then
+              # No tag — initial release, keep current version
+              CHANGELOG="## ${CURRENT_VERSION}\n\nInitial release."
+
+              if [ -f "$PKG_DIR/CHANGELOG.md" ]; then
+                PREV=$(cat "$PKG_DIR/CHANGELOG.md")
+                echo -e "${CHANGELOG}\n\n${PREV}" > "$PKG_DIR/CHANGELOG.md"
+              else
+                echo -e "$CHANGELOG" > "$PKG_DIR/CHANGELOG.md"
+              fi
+
+              CHANGED="${CHANGED} ${pkg}"
+              SUMMARY="${SUMMARY}\n- **${PKG_NAME}** \`${CURRENT_VERSION}\` (initial release)"
+            else
+              # Check for changes since last tag
+              TAG_COMMIT=$(git rev-list -1 "$LATEST_TAG")
+              LOG_ENTRIES=$(git log --format="- %s" "${TAG_COMMIT}..HEAD" -- "$PKG_DIR")
+
+              if [ -z "$LOG_ENTRIES" ]; then
+                echo "No changes in $PKG_NAME since $LATEST_TAG"
+                continue
+              fi
+
+              # Bump minor version
+              IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+              NEW_VERSION="${major}.$((minor + 1)).0"
+
+              node -e "
+                const fs = require('fs');
+                const pkg = JSON.parse(fs.readFileSync('$PKG_DIR/package.json', 'utf-8'));
+                pkg.version = '$NEW_VERSION';
+                fs.writeFileSync('$PKG_DIR/package.json', JSON.stringify(pkg, null, 2) + '\n');
+              "
+
+              NEW_SECTION="## ${NEW_VERSION}\n\n${LOG_ENTRIES}"
+
+              if [ -f "$PKG_DIR/CHANGELOG.md" ]; then
+                PREV=$(cat "$PKG_DIR/CHANGELOG.md")
+                echo -e "${NEW_SECTION}\n\n${PREV}" > "$PKG_DIR/CHANGELOG.md"
+              else
+                echo -e "$NEW_SECTION" > "$PKG_DIR/CHANGELOG.md"
+              fi
+
+              CHANGED="${CHANGED} ${pkg}"
+              SUMMARY="${SUMMARY}\n- **${PKG_NAME}** \`${CURRENT_VERSION}\` → \`${NEW_VERSION}\`"
+            fi
+          done
+
+          CHANGED=$(echo "$CHANGED" | xargs)
+          echo "changed=${CHANGED}" >> "$GITHUB_OUTPUT"
+
+          # Write summary to a file so we can use it in the PR body
+          echo -e "$SUMMARY" > /tmp/release-summary.md
+
+      - name: Create release PR
+        if: steps.release.outputs.changed != ''
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="release/$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "release: bump package versions"
+          git push origin "$BRANCH"
 
-      - name: Publish @asset-proxy/url-generator
-        run: yarn workspace @asset-proxy/url-generator npm publish --access restricted || true
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          SUMMARY=$(cat /tmp/release-summary.md)
+
+          PR_URL=$(gh pr create \
+            --title "release: bump package versions" \
+            --body "$(cat <<EOF
+          ## Packages
+
+          ${SUMMARY}
+
+          Merging this PR will automatically publish the updated packages to npm and create git tags.
+          EOF
+          )" \
+            --base main \
+            --head "$BRANCH")
+
+          echo "::notice::Release PR created. Merge it to publish packages: ${PR_URL}"
+
+      - name: No changes to release
+        if: steps.release.outputs.changed == ''
+        run: echo "::notice::No packages have changes to release."
