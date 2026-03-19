@@ -4,6 +4,10 @@ The image and video processing service, exposed via an [imgproxy](https://docs.i
 
 See the [project README](../../README.md) for full documentation on the URL format, processing options, deployment, and environment variables.
 
+## Deployment
+
+Deployed as a Docker image to GCP Cloud Run. The Dockerfile is in the repository root (`/Dockerfile`) since it depends on multiple packages (url-parser and proxy). The CD workflow builds and pushes the image to GitHub Container Registry on every push to main.
+
 ## Development
 
 ```bash

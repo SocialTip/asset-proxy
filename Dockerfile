@@ -1,3 +1,5 @@
+# Builds a production image for the @asset-proxy/proxy package. Includes ffmpeg, exiftool, heif-thumbnailer, and optional NVIDIA GPU acceleration. Deployed to GCP Cloud Run via the CD workflow.
+
 # Build stage — use exact Node version matching .tool-versions
 FROM node:24.13.0 AS build
 

@@ -374,13 +374,13 @@ yarn dev            # starts the proxy with hot reload on :8080
 ## Docker
 
 ```bash
-docker build -t asset-proxy .
+docker build -t asset-proxy -f packages/proxy/Dockerfile .
 ```
 
 ### CPU only
 
 ```bash
-docker run -p 8080:8080 asset-proxy
+docker run -e SKIP_GPU=1 -p 8080:8080 asset-proxy
 ```
 
 ### With GPU (NVIDIA)
