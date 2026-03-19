@@ -1,6 +1,6 @@
 # assets-proxy
 
-An image and video processing service with an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses sharp for images and ffmpeg (with optional NVIDIA GPU acceleration) for video.
+An image and video processing service with an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses ffmpeg (with optional NVIDIA GPU acceleration) for the vast majority of processing, and sharp for certain image-specific operations.
 
 ## URL format
 
