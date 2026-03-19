@@ -1,9 +1,24 @@
-# Prepares a release PR with version bumps and changelogs. Triggered manually. For each publishable package, finds changes since the last git tag, bumps the minor version, and generates a CHANGELOG.md entry. Opens a PR into main using peter-evans/create-pull-request. After merging the PR, run the Publish workflow to tag and release. See docs/Release.md for the full process.
+# Prepares a release PR with version bumps and changelogs. Triggered manually. For each publishable package, finds changes since the last git tag, bumps the version, and generates a CHANGELOG.md entry. Opens a PR into main using peter-evans/create-pull-request. After merging the PR, run the Publish workflow to tag and release. See docs/Release.md for the full process.
 
 name: Prepare Release
 
 on:
   workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        default: minor
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      force:
+        description: "Bump all packages, even those without changes"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   prepare-release:
@@ -66,23 +81,19 @@ jobs:
               TAG_COMMIT=$(git rev-list -1 "$LATEST_TAG")
               LOG_ENTRIES=$(git log --format="- %s" "${TAG_COMMIT}..HEAD" -- "$PKG_DIR")
 
-              if [ -z "$LOG_ENTRIES" ]; then
+              if [ -z "$LOG_ENTRIES" ] && [ "${{ inputs.force }}" != "true" ]; then
                 echo "No changes in $PKG_NAME since $LATEST_TAG"
                 continue
               fi
 
-              # Bump minor version
-              IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-              NEW_VERSION="${major}.$((minor + 1)).0"
+              # Bump version
+              NEW_VERSION=$(cd "$PKG_DIR" && npm version "${{ inputs.bump }}" --no-git-tag-version | tr -d 'v')
 
-              node -e "
-                const fs = require('fs');
-                const pkg = JSON.parse(fs.readFileSync('$PKG_DIR/package.json', 'utf-8'));
-                pkg.version = '$NEW_VERSION';
-                fs.writeFileSync('$PKG_DIR/package.json', JSON.stringify(pkg, null, 2) + '\n');
-              "
-
-              NEW_SECTION="## ${NEW_VERSION}\n\n${LOG_ENTRIES}"
+              if [ -n "$LOG_ENTRIES" ]; then
+                NEW_SECTION="## ${NEW_VERSION}\n\n${LOG_ENTRIES}"
+              else
+                NEW_SECTION="## ${NEW_VERSION}\n\nVersion bump only (no changes)."
+              fi
 
               if [ -f "$PKG_DIR/CHANGELOG.md" ]; then
                 PREV=$(cat "$PKG_DIR/CHANGELOG.md")
