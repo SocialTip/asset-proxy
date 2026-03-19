@@ -1,3 +1,10 @@
+# Continuous integration and deployment.
+#
+# Runs on every push to main and on pull requests. The CI job runs typecheck,
+# lint, build, and tests (unit + integration). On push to main or when
+# relevant files change in a PR, the CD job builds and pushes a Docker image
+# to GHCR. The required job gates CI and CD for branch protection.
+
 name: CI/CD
 
 on:
@@ -154,7 +161,6 @@ jobs:
       pull-requests: read
     outputs:
       cd: ${{ steps.filter.outputs.cd }}
-      release: ${{ steps.filter.outputs.release }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -166,10 +172,6 @@ jobs:
               - 'Dockerfile'
               - 'packages/url-parser/**'
               - 'packages/proxy/**'
-            release:
-              - '.github/workflows/release.yml'
-              - 'packages/url-parser/**'
-              - 'packages/url-generator/**'
 
   cd:
     if: |
@@ -181,19 +183,9 @@ jobs:
       contents: read
       packages: write
 
-  release:
-    if: |
-      always() && needs.ci.result == 'success' &&
-      (github.event_name == 'push' || needs.changes.outputs.release == 'true')
-    needs: [ci, changes]
-    uses: ./.github/workflows/release.yml
-    permissions:
-      contents: write
-    secrets: inherit
-
   required:
     if: always()
-    needs: [ci, cd, release]
+    needs: [ci, cd]
     runs-on: warp-ubuntu-latest-x64-2x
     steps:
       - name: Check required jobs
@@ -204,9 +196,5 @@ jobs:
           fi
           if [ "${{ needs.cd.result }}" != "success" ] && [ "${{ needs.cd.result }}" != "skipped" ]; then
             echo "CD failed"
-            exit 1
-          fi
-          if [ "${{ needs.release.result }}" != "success" ] && [ "${{ needs.release.result }}" != "skipped" ]; then
-            echo "Release failed"
             exit 1
           fi

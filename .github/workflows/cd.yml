@@ -1,3 +1,8 @@
+# Builds and pushes the Docker image to GitHub Container Registry.
+#
+# Called by cicd.yml on push to main or when Docker/proxy/url-parser files
+# change in a PR. Tags images with the commit SHA and (on main) `latest`.
+
 name: CD
 
 on:

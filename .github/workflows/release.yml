@@ -1,17 +1,26 @@
+# Publishes a package to npm when a version tag is pushed.
+#
+# Triggered automatically by tag pushes matching @asset-proxy/*@*.
+# Detects which package the tag belongs to, verifies the version matches
+# package.json, builds the package, and publishes to npm as restricted.
+#
+# Tags are created by the Publish workflow (publish.yml).
+# See docs/Release.md for the full process.
+
 name: Release
 
 on:
-  workflow_call:
+  push:
+    tags:
+      - "@asset-proxy/*@*"
 
 jobs:
   release:
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -21,31 +30,30 @@ jobs:
 
       - run: yarn install --immutable
 
+      - name: Detect package from tag
+        id: detect
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          # Tag format: @asset-proxy/<name>@<version>
+          PKG_NAME=$(echo "$TAG" | sed 's/@[^@]*$//')
+          VERSION=$(echo "$TAG" | sed 's/.*@//')
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "package=${PKG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version matches
+        run: |
+          ACTUAL=$(node -p "require('./node_modules/${{ steps.detect.outputs.package }}/package.json').version")
+          if [ "$ACTUAL" != "${{ steps.detect.outputs.version }}" ]; then
+            echo "::error::Tag version ${{ steps.detect.outputs.version }} does not match package.json version ${ACTUAL}"
+            exit 1
+          fi
+
       - run: yarn build
 
-      - name: Publish unreleased packages
+      - name: Publish to npm
+        run: yarn workspace ${{ steps.detect.outputs.package }} npm publish --access restricted
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          PACKAGES=("url-parser" "url-generator")
 
-          for pkg in "${PACKAGES[@]}"; do
-            PKG_DIR="packages/$pkg"
-            PKG_NAME=$(node -p "require('./$PKG_DIR/package.json').name")
-            VERSION=$(node -p "require('./$PKG_DIR/package.json').version")
-            TAG="${PKG_NAME}@${VERSION}"
-
-            if git tag -l "$TAG" | grep -q .; then
-              echo "::notice::${TAG} already released, skipping"
-              continue
-            fi
-
-            echo "Publishing ${TAG}..."
-            yarn workspace "$PKG_NAME" npm publish --access restricted
-
-            git tag "$TAG"
-            echo "::notice::Published ${TAG}"
-          done
-
-      - name: Push tags
-        run: git push origin --tags
+      - run: echo "::notice::Published ${{ steps.detect.outputs.tag }}"

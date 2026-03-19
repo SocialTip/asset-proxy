@@ -1,14 +1,23 @@
-name: Prepare Release
+# Creates git tags for the current package versions and pushes them.
+#
+# Triggered manually after a release PR has been merged. For each publishable
+# package, creates a tag in the format <package-name>@<version>. If a tag
+# already exists at a different commit, the workflow fails — this means the
+# Prepare Release workflow needs to be run first to bump versions.
+#
+# Pushing the tags automatically triggers release.yml to publish to npm.
+# See docs/Release.md for the full process.
+
+name: Publish
 
 on:
   workflow_dispatch:
 
 jobs:
-  prepare-release:
+  tag-and-push:
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,105 +27,40 @@ jobs:
         with:
           node-version-file: .tool-versions
 
-      - name: Prepare package releases
-        id: release
+      - name: Create tags for current versions
         run: |
           PACKAGES=("url-parser" "url-generator")
-          CHANGED=""
-          SUMMARY=""
+          TAGGED=""
 
           for pkg in "${PACKAGES[@]}"; do
             PKG_DIR="packages/$pkg"
             PKG_NAME=$(node -p "require('./$PKG_DIR/package.json').name")
-            CURRENT_VERSION=$(node -p "require('./$PKG_DIR/package.json').version")
+            VERSION=$(node -p "require('./$PKG_DIR/package.json').version")
+            TAG="${PKG_NAME}@${VERSION}"
 
-            # Find latest tag for this package
-            LATEST_TAG=$(git tag -l "${PKG_NAME}@*" --sort=-v:refname | head -1)
+            EXISTING=$(git tag -l "$TAG")
+            if [ -n "$EXISTING" ]; then
+              # Tag exists — check if it points to the current commit
+              TAG_COMMIT=$(git rev-list -1 "$TAG")
+              HEAD_COMMIT=$(git rev-parse HEAD)
 
-            if [ -z "$LATEST_TAG" ]; then
-              # No tag — initial release, keep current version
-              CHANGELOG="## ${CURRENT_VERSION}\n\nInitial release."
-
-              if [ -f "$PKG_DIR/CHANGELOG.md" ]; then
-                PREV=$(cat "$PKG_DIR/CHANGELOG.md")
-                echo -e "${CHANGELOG}\n\n${PREV}" > "$PKG_DIR/CHANGELOG.md"
-              else
-                echo -e "$CHANGELOG" > "$PKG_DIR/CHANGELOG.md"
-              fi
-
-              CHANGED="${CHANGED} ${pkg}"
-              SUMMARY="${SUMMARY}\n- **${PKG_NAME}** \`${CURRENT_VERSION}\` (initial release)"
-            else
-              # Check for changes since last tag
-              TAG_COMMIT=$(git rev-list -1 "$LATEST_TAG")
-              LOG_ENTRIES=$(git log --format="- %s" "${TAG_COMMIT}..HEAD" -- "$PKG_DIR")
-
-              if [ -z "$LOG_ENTRIES" ]; then
-                echo "No changes in $PKG_NAME since $LATEST_TAG"
+              if [ "$TAG_COMMIT" = "$HEAD_COMMIT" ]; then
+                echo "::notice::${TAG} already exists at HEAD, skipping"
                 continue
-              fi
-
-              # Bump minor version
-              IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-              NEW_VERSION="${major}.$((minor + 1)).0"
-
-              node -e "
-                const fs = require('fs');
-                const pkg = JSON.parse(fs.readFileSync('$PKG_DIR/package.json', 'utf-8'));
-                pkg.version = '$NEW_VERSION';
-                fs.writeFileSync('$PKG_DIR/package.json', JSON.stringify(pkg, null, 2) + '\n');
-              "
-
-              NEW_SECTION="## ${NEW_VERSION}\n\n${LOG_ENTRIES}"
-
-              if [ -f "$PKG_DIR/CHANGELOG.md" ]; then
-                PREV=$(cat "$PKG_DIR/CHANGELOG.md")
-                echo -e "${NEW_SECTION}\n\n${PREV}" > "$PKG_DIR/CHANGELOG.md"
               else
-                echo -e "$NEW_SECTION" > "$PKG_DIR/CHANGELOG.md"
+                echo "::error::Tag ${TAG} exists but points to a different commit. Run the Prepare Release workflow and merge the PR before publishing."
+                exit 1
               fi
-
-              CHANGED="${CHANGED} ${pkg}"
-              SUMMARY="${SUMMARY}\n- **${PKG_NAME}** \`${CURRENT_VERSION}\` → \`${NEW_VERSION}\`"
             fi
+
+            git tag "$TAG"
+            TAGGED="${TAGGED} ${TAG}"
+            echo "::notice::Tagged ${TAG}"
           done
 
-          CHANGED=$(echo "$CHANGED" | xargs)
-          echo "changed=${CHANGED}" >> "$GITHUB_OUTPUT"
+          if [ -z "$(echo "$TAGGED" | xargs)" ]; then
+            echo "::notice::No new tags to push — all versions are already tagged."
+          fi
 
-          # Write summary to a file so we can use it in the PR body
-          echo -e "$SUMMARY" > /tmp/release-summary.md
-
-      - name: Create release PR
-        if: steps.release.outputs.changed != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          BRANCH="release/$(date +%Y%m%d-%H%M%S)"
-          git checkout -b "$BRANCH"
-          git add -A
-          git -c user.name="github-actions[bot]" \
-              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -m "release: bump package versions"
-          git push origin "$BRANCH"
-
-          SUMMARY=$(cat /tmp/release-summary.md)
-
-          PR_URL=$(gh pr create \
-            --title "release: bump package versions" \
-            --body "$(cat <<EOF
-          ## Packages
-
-          ${SUMMARY}
-
-          Merging this PR will automatically publish the updated packages to npm and create git tags.
-          EOF
-          )" \
-            --base main \
-            --head "$BRANCH")
-
-          echo "::notice::Release PR created. Merge it to publish packages: ${PR_URL}"
-
-      - name: No changes to release
-        if: steps.release.outputs.changed == ''
-        run: echo "::notice::No packages have changes to release."
+      - name: Push tags
+        run: git push origin --tags
