@@ -1,4 +1,4 @@
-# Publishes a package to npm when a version tag is pushed. Triggered automatically by tag pushes matching @asset-proxy/*@*. Detects which package the tag belongs to, verifies the version matches package.json, builds the package, and publishes to npm as restricted. Tags are created by the Publish workflow (publish.yml). See docs/Release.md for the full process.
+# Publishes a package to the GitHub Packages registry when a version tag is pushed. Triggered automatically by tag pushes matching @asset-proxy/*@*. Detects which package the tag belongs to, verifies the version matches package.json, builds the package, and publishes. Tags are created by the Publish workflow (publish.yml). See docs/Release.md for the full process.
 
 name: Release
 
@@ -12,6 +12,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
       contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -21,7 +22,7 @@ jobs:
         with:
           node-version-file: .tool-versions
           cache: pnpm
-          registry-url: "https://registry.npmjs.org"
+          registry-url: "https://npm.pkg.github.com"
 
       - run: pnpm install --frozen-lockfile
 
@@ -46,9 +47,9 @@ jobs:
 
       - run: pnpm -w run build
 
-      - name: Publish to npm
+      - name: Publish to GitHub Packages
         run: pnpm --filter ${{ steps.detect.outputs.package }} publish --access restricted --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
 
       - run: echo "::notice::Published ${{ steps.detect.outputs.tag }}"

@@ -393,7 +393,7 @@ Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud
 
 ## Deployment
 
-CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`). The `@asset-proxy/url-parser` and `@asset-proxy/url-generator` packages are published to npm on pushes to `main`.
+CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`). The `@asset-proxy/url-parser` and `@asset-proxy/url-generator` packages are published to GitHub Packages on release.
 
 Images are tagged with the commit SHA. Pushes to `main` are additionally tagged `latest`.
 

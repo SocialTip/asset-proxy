@@ -75,7 +75,7 @@ Tags follow the pattern `<package-name>@<version>`:
 
 ## Packages
 
-Only the following packages are published to npm:
+Only the following packages are published to GitHub Packages:
 
 | Package                  | npm name                     | Access     |
 | ------------------------ | ---------------------------- | ---------- |
