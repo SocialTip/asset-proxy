@@ -1,6 +1,7 @@
 import "./instrument.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
+import { Readable } from "node:stream";
 import { promisify } from "node:util";
 import contentDisposition from "content-disposition";
 import { Storage } from "@google-cloud/storage";
@@ -294,8 +295,9 @@ async function processAndRespond(
     if (contentType) res.set("Content-Type", contentType);
     res.set("Cache-Control", env.CACHE_CONTROL);
     setContentDisposition(res, parsed);
-    const buffer = Buffer.from(await response.arrayBuffer());
-    res.send(buffer);
+    Readable.fromWeb(
+      response.body as import("node:stream/web").ReadableStream,
+    ).pipe(res);
     return;
   }
 
