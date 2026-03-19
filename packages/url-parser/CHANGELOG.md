@@ -1,3 +1,7 @@
+## 0.1.4
+
+- fix: add repository field so GitHub Packages can map the package owner (#47)
+
 ## 0.1.3
 
 - fix: add publishConfig registry for GitHub Packages (#45)
