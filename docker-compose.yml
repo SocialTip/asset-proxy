@@ -14,15 +14,7 @@ services:
       - ./packages/url-parser/package.json:/app/packages/url-parser/package.json:ro
       - ./package.json:/app/package.json:ro
     command:
-      [
-        "pnpm",
-        "--filter",
-        "@asset-proxy/proxy",
-        "exec",
-        "tsx",
-        "--watch",
-        "src/index.ts",
-      ]
+      ["pnpm", "--filter", "proxy", "exec", "tsx", "--watch", "src/index.ts"]
     depends_on:
       - file-server
 

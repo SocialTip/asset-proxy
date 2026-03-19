@@ -2,11 +2,11 @@ import {
   encryptSourceUrl,
   sign,
   type ParsedUrlInput,
-} from "@asset-proxy/url-parser";
+} from "@socialtip/asset-proxy-url-parser";
 
-export type { ParsedUrlInput } from "@asset-proxy/url-parser";
+export type { ParsedUrlInput } from "@socialtip/asset-proxy-url-parser";
 
-/** Options for generating a URL, derived from the assets-proxy parsed URL schema. All fields except `sourceUrl` are optional. */
+/** Options for generating a URL, derived from the asset-proxy parsed URL schema. All fields except `sourceUrl` are optional. */
 export type UrlGeneratorOptions = Partial<ParsedUrlInput> & {
   sourceUrl: string;
 };
@@ -23,7 +23,7 @@ export interface UrlGeneratorConfig {
   signingSalt?: string;
 }
 
-/** Generates an assets-proxy-compatible URL path. */
+/** Generates an asset-proxy-compatible URL path. */
 export function generateUrl(
   options: UrlGeneratorOptions,
   config?: UrlGeneratorConfig,

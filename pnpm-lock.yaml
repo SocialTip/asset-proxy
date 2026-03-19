@@ -37,12 +37,12 @@ importers:
 
   packages/proxy:
     dependencies:
-      "@asset-proxy/url-parser":
-        specifier: workspace:*
-        version: link:../url-parser
       "@google-cloud/storage":
         specifier: ^7.19.0
         version: 7.19.0
+      "@socialtip/asset-proxy-url-parser":
+        specifier: workspace:*
+        version: link:../url-parser
       express:
         specifier: ^5.1.0
         version: 5.2.1
@@ -92,7 +92,7 @@ importers:
 
   packages/url-generator:
     dependencies:
-      "@asset-proxy/url-parser":
+      "@socialtip/asset-proxy-url-parser":
         specifier: workspace:*
         version: link:../url-parser
     devDependencies:

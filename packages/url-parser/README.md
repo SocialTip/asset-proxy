@@ -1,11 +1,11 @@
-# @asset-proxy/url-parser
+# @socialtip/asset-proxy-url-parser
 
-Shared URL schema, parsing, signature verification/generation, and source URL encryption for the [assets-proxy](../../README.md) service.
+Shared URL schema, parsing, signature verification/generation, and source URL encryption for the [asset-proxy](../../README.md) service.
 
 ## Installation
 
 ```bash
-npm install @asset-proxy/url-parser
+npm install @socialtip/asset-proxy-url-parser
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @asset-proxy/url-parser
 ### Parsing a URL
 
 ```ts
-import { parseProcessingUrl } from "@asset-proxy/url-parser";
+import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 
 const parsed = parseProcessingUrl(
   "/resize:fill:480:360/q:80/plain/https://example.com/photo.jpg@webp",
@@ -36,7 +36,7 @@ const parsed = parseProcessingUrl("/resize:fill:480:360/enc/dGhpcyBpcy...", {
 ### Signature verification and generation
 
 ```ts
-import { verifySignature, sign } from "@asset-proxy/url-parser";
+import { verifySignature, sign } from "@socialtip/asset-proxy-url-parser";
 
 // Generate a signature
 const key = Buffer.from("...", "hex");
@@ -57,7 +57,10 @@ const pathAfterSignature = verifySignature(
 ### Source URL encryption
 
 ```ts
-import { encryptSourceUrl, decryptSourceUrl } from "@asset-proxy/url-parser";
+import {
+  encryptSourceUrl,
+  decryptSourceUrl,
+} from "@socialtip/asset-proxy-url-parser";
 
 const key = Buffer.from("0123456789abcdef...", "hex"); // 32-byte key
 const encrypted = encryptSourceUrl("https://example.com/photo.jpg", key);
@@ -71,5 +74,5 @@ import {
   parsedUrlSchema, // Zod schema for validated processing options
   type ParsedUrlInput, // Input type (z.input<typeof parsedUrlSchema>)
   type ParsedUrl, // Output type with resizingAlgorithm
-} from "@asset-proxy/url-parser";
+} from "@socialtip/asset-proxy-url-parser";
 ```

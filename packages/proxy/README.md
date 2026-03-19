@@ -1,4 +1,4 @@
-# @asset-proxy/proxy
+# proxy
 
 The image and video processing service, exposed via an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses [ffmpeg](https://ffmpeg.org/) (with optional NVIDIA GPU acceleration) for the vast majority of processing, and [sharp](https://sharp.pixelplumbing.com/) for certain image-specific operations like autoquality, format-specific encoder options, and max-bytes compression.
 

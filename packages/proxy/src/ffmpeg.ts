@@ -18,7 +18,7 @@ import {
   type ResizingAlgorithm,
   type ResizingType,
   type VideoUrl,
-} from "@asset-proxy/url-parser";
+} from "@socialtip/asset-proxy-url-parser";
 import { logger } from "./logger.js";
 
 export const gpuReady: Promise<boolean> = env.SKIP_GPU

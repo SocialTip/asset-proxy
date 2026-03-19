@@ -1,6 +1,6 @@
 # Release process
 
-This project uses a three-step manual release process for the publishable npm packages (`@asset-proxy/url-parser` and `@asset-proxy/url-generator`).
+This project uses a three-step manual release process for the publishable npm packages (`@socialtip/asset-proxy-url-parser` and `@socialtip/asset-proxy-url-generator`).
 
 ## Overview
 
@@ -21,7 +21,7 @@ Prepare Release  →  Merge PR  →  Publish  →  release.yml (automatic)
 
 Run the [Prepare Release](../.github/workflows/prepare-release.yml) workflow from the Actions tab. This will:
 
-- Find each package's latest git tag (e.g. `@asset-proxy/url-parser@0.1.0`)
+- Find each package's latest git tag (e.g. `@socialtip/asset-proxy-url-parser@0.1.0`)
 - For packages with changes since their last tag:
   - Bump the minor version in `package.json` (e.g. `0.1.0` → `0.2.0`)
   - Generate a `CHANGELOG.md` entry from commit messages
@@ -40,7 +40,7 @@ CI will run automatically on the merge. Wait for it to pass.
 
 After the release PR is merged and CI passes, run the [Publish](../.github/workflows/publish.yml) workflow from the Actions tab. This will:
 
-- Create a git tag for each package's current version (e.g. `@asset-proxy/url-parser@0.2.0`)
+- Create a git tag for each package's current version (e.g. `@socialtip/asset-proxy-url-parser@0.2.0`)
 - Push the tags to the repository
 
 Each pushed tag automatically triggers the **Release** workflow, which publishes the corresponding package to npm.
@@ -60,26 +60,26 @@ The package version is already tagged at the current commit. This is safe to ign
 If the Release workflow fails (e.g. npm auth issue), fix the problem and re-push the tag:
 
 ```bash
-git tag -d @asset-proxy/url-parser@0.2.0
-git push origin :refs/tags/@asset-proxy/url-parser@0.2.0
-git tag @asset-proxy/url-parser@0.2.0
-git push origin @asset-proxy/url-parser@0.2.0
+git tag -d @socialtip/asset-proxy-url-parser@0.2.0
+git push origin :refs/tags/@socialtip/asset-proxy-url-parser@0.2.0
+git tag @socialtip/asset-proxy-url-parser@0.2.0
+git push origin @socialtip/asset-proxy-url-parser@0.2.0
 ```
 
 ## Tag format
 
 Tags follow the pattern `<package-name>@<version>`:
 
-- `@asset-proxy/url-parser@0.1.0`
-- `@asset-proxy/url-generator@0.1.0`
+- `@socialtip/asset-proxy-url-parser@0.1.0`
+- `@socialtip/asset-proxy-url-generator@0.1.0`
 
 ## Packages
 
 Only the following packages are published to GitHub Packages:
 
-| Package                  | npm name                     | Access     |
-| ------------------------ | ---------------------------- | ---------- |
-| `packages/url-parser`    | `@asset-proxy/url-parser`    | restricted |
-| `packages/url-generator` | `@asset-proxy/url-generator` | restricted |
+| Package                  | npm name                               | Access     |
+| ------------------------ | -------------------------------------- | ---------- |
+| `packages/url-parser`    | `@socialtip/asset-proxy-url-parser`    | restricted |
+| `packages/url-generator` | `@socialtip/asset-proxy-url-generator` | restricted |
 
 The proxy package (`packages/proxy`) is not published — it is deployed as a Docker image via the CD workflow.

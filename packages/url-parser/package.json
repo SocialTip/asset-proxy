@@ -1,5 +1,5 @@
 {
-  "name": "@asset-proxy/url-parser",
+  "name": "@socialtip/asset-proxy-url-parser",
   "version": "0.1.4",
   "type": "module",
   "main": "dist/index.js",

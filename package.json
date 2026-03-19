@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "pnpm --filter @asset-proxy/proxy start",
-    "dev": "pnpm --filter @asset-proxy/proxy dev",
-    "build": "pnpm --filter @asset-proxy/url-parser build && pnpm --filter @asset-proxy/proxy build && pnpm --filter @asset-proxy/url-generator build",
+    "start": "pnpm --filter proxy start",
+    "dev": "pnpm --filter proxy dev",
+    "build": "pnpm --filter @socialtip/asset-proxy-url-parser build && pnpm --filter proxy build && pnpm --filter @socialtip/asset-proxy-url-generator build",
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest",
     "test:up": "docker compose up -d --build --wait",

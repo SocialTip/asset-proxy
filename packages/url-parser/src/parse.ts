@@ -780,7 +780,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
 });
 
 /**
- * Zod schema for a fully parsed assets-proxy URL. Validates all processing
+ * Zod schema for a fully parsed asset-proxy URL. Validates all processing
  * options after URL segments have been decoded and shorthand names expanded.
  *
  * Use `z.input<typeof parsedUrlSchema>` (exported as `ParsedUrlInput`) for

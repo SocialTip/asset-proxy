@@ -1,5 +1,5 @@
 {
-  "name": "@asset-proxy/proxy",
+  "name": "proxy",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@asset-proxy/url-parser": "workspace:*",
+    "@socialtip/asset-proxy-url-parser": "workspace:*",
     "@google-cloud/storage": "^7.19.0",
     "express": "^5.1.0",
     "winston": "^3.19.0",
