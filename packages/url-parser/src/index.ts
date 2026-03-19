@@ -25,4 +25,5 @@ export {
   type FocusPointGravity,
   type Gravity,
   type ResizeOptions,
+  SHORTHANDS,
 } from "./parse.js";
