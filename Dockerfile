@@ -59,6 +59,14 @@ COPY --from=build /app/node_modules ./node_modules/
 COPY --from=build /app/package.json ./
 COPY --from=build /app/pnpm-workspace.yaml ./
 
+ENV OTEL_SERVICE_NAME=asset-proxy
+ENV OTEL_EXPORTER_OTLP_ENDPOINT=
+ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+ENV OTEL_EXPORTER_OTLP_HEADERS=
+ENV OTEL_TRACES_SAMPLER=parentbased_always_on
+ENV OTEL_TRACES_SAMPLER_ARG=
+ENV OTEL_RESOURCE_ATTRIBUTES=
+
 ENV PORT=8080
 EXPOSE 8080
 
