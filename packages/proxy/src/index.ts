@@ -1,3 +1,4 @@
+import "./instrument.js";
 import { Storage } from "@google-cloud/storage";
 import express from "express";
 import {
@@ -87,7 +88,6 @@ async function handleRequest(req: express.Request, res: express.Response) {
     : parsed.sourceUrl;
 
   if (isImageUrl(parsed)) {
-    // TODO: add instrumentation (timing, source URL, options)
     try {
       const buffer = await processImage(sourceUrl, parsed);
       res.set(
@@ -109,7 +109,6 @@ async function handleRequest(req: express.Request, res: express.Response) {
       }
     }
   } else if (isVideoUrl(parsed)) {
-    // TODO: add instrumentation (timing, source URL, options)
     try {
       const result = await processVideo(sourceUrl, parsed);
       res.set(
