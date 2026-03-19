@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: write
       checks: read
+      actions: read
     steps:
       - uses: actions/create-github-app-token@v2
         id: app-token
@@ -23,17 +24,17 @@ jobs:
           fetch-tags: true
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Verify CI passed on HEAD
+      - name: Wait for CI to pass on HEAD
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           SHA=$(git rev-parse HEAD)
-          STATUS=$(gh api "repos/${{ github.repository }}/commits/${SHA}/check-runs" \
-            --jq '.check_runs[] | select(.name == "required") | .conclusion')
-          if [ "$STATUS" != "success" ]; then
-            echo "::error::CI has not passed on ${SHA}. Run CI first before publishing."
+          RUN_ID=$(gh run list --commit "$SHA" --workflow cicd.yml --json databaseId --jq '.[0].databaseId')
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::No CI run found for ${SHA}."
             exit 1
           fi
+          gh run watch "$RUN_ID" --exit-status
 
       - uses: actions/setup-node@v4
         with:
