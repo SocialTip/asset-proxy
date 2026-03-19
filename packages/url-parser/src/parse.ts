@@ -264,6 +264,11 @@ export const SHORTHANDS: Record<string, string> = {
   pr: "preset",
   fiu: "fallback_image_url",
   hs: "hashsum",
+  msr: "max_src_resolution",
+  msfs: "max_src_file_size",
+  maf: "max_animation_frames",
+  mafr: "max_animation_frame_resolution",
+  mrd: "max_result_dimension",
 };
 
 const rawOptionsSchema = z
@@ -705,6 +710,17 @@ const rawOptionsSchema = z
       })
       .optional(),
 
+    /** Max source resolution in megapixels. */
+    max_src_resolution: z.coerce.number().positive().optional(),
+    /** Max source file size in bytes. */
+    max_src_file_size: z.coerce.number().int().positive().optional(),
+    /** Max animation frames. */
+    max_animation_frames: z.coerce.number().int().positive().optional(),
+    /** Max animation frame resolution in megapixels. */
+    max_animation_frame_resolution: z.coerce.number().positive().optional(),
+    /** Max result width or height in pixels. */
+    max_result_dimension: z.coerce.number().int().positive().optional(),
+
     objects_position: notImplemented("objects_position").optional(),
     crop_aspect_ratio: z
       .string()
@@ -827,6 +843,11 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     returnAttachment: data.return_attachment,
     fallbackImageUrl: data.fallback_image_url,
     hashsum: data.hashsum,
+    maxSrcResolution: data.max_src_resolution,
+    maxSrcFileSize: data.max_src_file_size,
+    maxAnimationFrames: data.max_animation_frames,
+    maxAnimationFrameResolution: data.max_animation_frame_resolution,
+    maxResultDimension: data.max_result_dimension,
     enlarge: data.enlarge,
     bestFormat: data.format === "best" ? true : undefined,
     formatOverride:
@@ -1043,6 +1064,16 @@ export const parsedUrlSchema = z.object({
   fallbackImageUrl: z.string().optional(),
   /** Expected checksum of the source image. */
   hashsum: z.object({ type: z.string(), hash: z.string() }).optional(),
+  /** Max source resolution in megapixels. */
+  maxSrcResolution: z.number().optional(),
+  /** Max source file size in bytes. */
+  maxSrcFileSize: z.number().optional(),
+  /** Max animation frames. */
+  maxAnimationFrames: z.number().optional(),
+  /** Max animation frame resolution in megapixels. */
+  maxAnimationFrameResolution: z.number().optional(),
+  /** Max result width or height in pixels. */
+  maxResultDimension: z.number().optional(),
 });
 
 type ParsedUrlBase = z.output<typeof parsedUrlSchema>;
@@ -1218,6 +1249,11 @@ export function parseProcessingUrl(
     returnAttachment: parsedOptions.returnAttachment,
     fallbackImageUrl: parsedOptions.fallbackImageUrl,
     hashsum: parsedOptions.hashsum,
+    maxSrcResolution: parsedOptions.maxSrcResolution,
+    maxSrcFileSize: parsedOptions.maxSrcFileSize,
+    maxAnimationFrames: parsedOptions.maxAnimationFrames,
+    maxAnimationFrameResolution: parsedOptions.maxAnimationFrameResolution,
+    maxResultDimension: parsedOptions.maxResultDimension,
   });
 
   return {

@@ -289,6 +289,26 @@ Base64url-encoded URL to redirect to when processing fails. If the source cannot
 
 Verify the source file's integrity by computing a checksum and comparing it to the expected digest. The type is any algorithm supported by Node.js `crypto.createHash` (e.g. `sha256`, `md5`). Returns 422 if the hash does not match. Example: `hs:sha256:abc123...`.
 
+#### Max Source Resolution — `max_src_resolution:<megapixels>` (shorthand `msr`)
+
+Reject the source if its resolution exceeds the given megapixel limit. Uses ffprobe to detect source dimensions before processing. Returns 422 if exceeded. Can also be set via the `MAX_SRC_RESOLUTION` env var (0 = unlimited). Example: `msr:25`.
+
+#### Max Source File Size — `max_src_file_size:<bytes>` (shorthand `msfs`)
+
+Reject the source if its file size exceeds the given byte limit. Checks the `Content-Length` header via a HEAD request before downloading. Returns 422 if exceeded. Can also be set via the `MAX_SRC_FILE_SIZE` env var (0 = unlimited). Example: `msfs:10485760` (10MB).
+
+#### Max Animation Frames — `max_animation_frames:<count>` (shorthand `maf`)
+
+Limit the number of frames in video thumbnail animations (`vta`). Returns 422 if the requested frame count exceeds the limit. Can also be set via the `MAX_ANIMATION_FRAMES` env var (0 = unlimited). Example: `maf:100`.
+
+#### Max Animation Frame Resolution — `max_animation_frame_resolution:<megapixels>` (shorthand `mafr`)
+
+Limit the resolution of individual animation frames. Returns 422 if the frame width × height exceeds the megapixel limit. Can also be set via the `MAX_ANIMATION_FRAME_RESOLUTION` env var (0 = unlimited). Example: `mafr:5`.
+
+#### Max Result Dimension — `max_result_dimension:<pixels>` (shorthand `mrd`)
+
+Limit the maximum width or height of the output. Returns 422 if either the requested width or height exceeds the limit. Can also be set via the `MAX_RESULT_DIMENSION` env var (0 = unlimited). Example: `mrd:4096`.
+
 #### Not implemented
 
 The following imgproxy options are recognised but return 501 Not Implemented:
@@ -475,6 +495,11 @@ pnpm test:down    # stop and remove containers
 | `BEST_FORMAT_COMPLEXITY_THRESHOLD` | `5.5`                                 | Entropy threshold for best format selection. Below this, lossless formats are preferred; at or above, lossy formats are preferred.        |
 | `BEST_FORMAT_MAX_RESOLUTION`       | `0`                                   | When > 0, skip best format testing for images exceeding this megapixel count (falls back to JPEG).                                        |
 | `BEST_FORMAT_BY_DEFAULT`           | `false`                               | Automatically use best format selection when no explicit output format is specified.                                                      |
+| `MAX_SRC_RESOLUTION`               | `0`                                   | Max source resolution in megapixels. 0 = unlimited.                                                                                       |
+| `MAX_SRC_FILE_SIZE`                | `0`                                   | Max source file size in bytes. 0 = unlimited.                                                                                             |
+| `MAX_ANIMATION_FRAMES`             | `0`                                   | Max animation frames for video thumbnail animations. 0 = unlimited.                                                                       |
+| `MAX_ANIMATION_FRAME_RESOLUTION`   | `0`                                   | Max animation frame resolution in megapixels. 0 = unlimited.                                                                              |
+| `MAX_RESULT_DIMENSION`             | `0`                                   | Max result width or height in pixels. 0 = unlimited.                                                                                      |
 
 ## Health check
 

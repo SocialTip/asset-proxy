@@ -5,6 +5,7 @@ import request from "supertest";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
+  execFile: vi.fn(),
 }));
 vi.mock("@google-cloud/storage", () => ({ Storage: vi.fn() }));
 
@@ -1244,6 +1245,97 @@ describe("url parsing (ST-2500)", () => {
     expect(() => parseProcessingUrl(plain("/hs:abcdef"))).toThrow(
       "hashsum requires format",
     );
+  });
+
+  it("parses max_src_resolution", () => {
+    const result = parseProcessingUrl(plain("/msr:25"));
+    expect(result.maxSrcResolution).toBe(25);
+  });
+
+  it("parses max_src_file_size", () => {
+    const result = parseProcessingUrl(plain("/msfs:10485760"));
+    expect(result.maxSrcFileSize).toBe(10485760);
+  });
+
+  it("parses max_animation_frames", () => {
+    const result = parseProcessingUrl(plain("/maf:100"));
+    expect(result.maxAnimationFrames).toBe(100);
+  });
+
+  it("parses max_animation_frame_resolution", () => {
+    const result = parseProcessingUrl(plain("/mafr:5"));
+    expect(result.maxAnimationFrameResolution).toBe(5);
+  });
+
+  it("parses max_result_dimension", () => {
+    const result = parseProcessingUrl(plain("/mrd:4096"));
+    expect(result.maxResultDimension).toBe(4096);
+  });
+});
+
+describe("security limits", () => {
+  it("rejects when result dimension exceeds max_result_dimension", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/mrd:500/w:1000/plain/https://example.com/photo.jpg",
+    );
+    expect(res.status).toBe(422);
+    expect(res.text).toContain("exceeds limit");
+  });
+
+  it("allows result within max_result_dimension", async () => {
+    setupSpawnMock();
+    const res = await request(app)
+      .get("/insecure/mrd:2000/w:1000/plain/https://example.com/photo.jpg")
+      .buffer(true);
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects when source file size exceeds max_src_file_size", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi
+      .fn()
+      .mockImplementation((_url: string, opts?: { method?: string }) => {
+        if (opts?.method === "HEAD") {
+          return Promise.resolve(
+            new Response(null, {
+              headers: { "content-length": "20000000" },
+            }),
+          );
+        }
+        return Promise.resolve(
+          new Response(Buffer.from("data"), {
+            headers: { "content-type": "image/jpeg" },
+          }),
+        );
+      });
+    try {
+      const res = await request(app).get(
+        "/insecure/msfs:10000000/w:100/plain/https://example.com/photo.jpg",
+      );
+      expect(res.status).toBe(422);
+      expect(res.text).toContain("file size");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("rejects animation frame count exceeding limit", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/maf:5/vta:0.5:100:10:200:150/plain/https://example.com/video.mp4@gif",
+    );
+    expect(res.status).toBe(422);
+    expect(res.text).toContain("frame count");
+  });
+
+  it("rejects animation frame resolution exceeding limit", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/mafr:0.01/vta:0.5:100:10:200:150/plain/https://example.com/video.mp4@gif",
+    );
+    expect(res.status).toBe(422);
+    expect(res.text).toContain("frame resolution");
   });
 });
 

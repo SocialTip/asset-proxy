@@ -275,6 +275,22 @@ function serializeOptions(options: UrlGeneratorOptions): string[] {
     segments.push(`hs:${options.hashsum.type}:${options.hashsum.hash}`);
   }
 
+  if (options.maxSrcResolution !== undefined) {
+    segments.push(`msr:${options.maxSrcResolution}`);
+  }
+  if (options.maxSrcFileSize !== undefined) {
+    segments.push(`msfs:${options.maxSrcFileSize}`);
+  }
+  if (options.maxAnimationFrames !== undefined) {
+    segments.push(`maf:${options.maxAnimationFrames}`);
+  }
+  if (options.maxAnimationFrameResolution !== undefined) {
+    segments.push(`mafr:${options.maxAnimationFrameResolution}`);
+  }
+  if (options.maxResultDimension !== undefined) {
+    segments.push(`mrd:${options.maxResultDimension}`);
+  }
+
   if (options.bestFormat) {
     segments.push("f:best");
   }

@@ -1,5 +1,7 @@
 import "./instrument.js";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import contentDisposition from "content-disposition";
 import { Storage } from "@google-cloud/storage";
 import express from "express";
@@ -13,6 +15,8 @@ import {
 import { env } from "./env.js";
 import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
 import { logger } from "./logger.js";
+
+const execFileAsync = promisify(execFile);
 
 const CONTENT_TYPES: Record<string, string> = {
   mp4: "video/mp4",
@@ -108,6 +112,110 @@ async function verifyHashsum(
   }
 }
 
+async function checkSourceLimits(
+  sourceUrl: string,
+  parsed: ReturnType<typeof parseProcessingUrl>,
+): Promise<void> {
+  const maxFileSize = parsed.maxSrcFileSize ?? env.MAX_SRC_FILE_SIZE;
+  const maxResolution = parsed.maxSrcResolution ?? env.MAX_SRC_RESOLUTION;
+
+  if (!maxFileSize && !maxResolution) return;
+
+  if (maxFileSize) {
+    const response = await fetch(sourceUrl, { method: "HEAD" });
+    if (response.ok) {
+      const contentLength = response.headers.get("content-length");
+      if (contentLength && parseInt(contentLength, 10) > maxFileSize) {
+        throw new HTTPError(
+          `Source file size ${contentLength} exceeds limit of ${maxFileSize} bytes`,
+          { code: "UNPROCESSABLE_ENTITY" },
+        );
+      }
+    }
+  }
+
+  if (maxResolution) {
+    try {
+      const { stdout } = await execFileAsync("ffprobe", [
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "json",
+        sourceUrl,
+      ]);
+      const probe = JSON.parse(stdout);
+      const stream = probe.streams?.[0];
+      if (stream?.width && stream?.height) {
+        const mp = (stream.width * stream.height) / 1_000_000;
+        if (mp > maxResolution) {
+          throw new HTTPError(
+            `Source resolution ${mp.toFixed(1)}MP exceeds limit of ${maxResolution}MP`,
+            { code: "UNPROCESSABLE_ENTITY" },
+          );
+        }
+      }
+    } catch (err) {
+      if (err instanceof HTTPError) throw err;
+      logger.warn("Failed to probe source resolution", {
+        error: err instanceof Error ? err.message : String(err),
+        sourceUrl,
+      });
+    }
+  }
+}
+
+function checkResultLimits(
+  parsed: ReturnType<typeof parseProcessingUrl>,
+): void {
+  const maxDim = parsed.maxResultDimension ?? env.MAX_RESULT_DIMENSION;
+  if (!maxDim) return;
+
+  const w = parsed.resize?.width ?? 0;
+  const h = parsed.resize?.height ?? 0;
+  if ((w && w > maxDim) || (h && h > maxDim)) {
+    throw new HTTPError(
+      `Result dimension ${Math.max(w, h)} exceeds limit of ${maxDim} pixels`,
+      { code: "UNPROCESSABLE_ENTITY" },
+    );
+  }
+}
+
+function checkAnimationLimits(
+  parsed: ReturnType<typeof parseProcessingUrl>,
+): void {
+  const maxFrames = parsed.maxAnimationFrames ?? env.MAX_ANIMATION_FRAMES;
+  const maxFrameRes =
+    parsed.maxAnimationFrameResolution ?? env.MAX_ANIMATION_FRAME_RESOLUTION;
+
+  if (maxFrames && parsed.videoThumbnailAnimation) {
+    const frames = parsed.videoThumbnailAnimation.frames;
+    if (frames && frames > maxFrames) {
+      throw new HTTPError(
+        `Animation frame count ${frames} exceeds limit of ${maxFrames}`,
+        { code: "UNPROCESSABLE_ENTITY" },
+      );
+    }
+  }
+
+  if (maxFrameRes && parsed.videoThumbnailAnimation) {
+    const fw = parsed.videoThumbnailAnimation.frameWidth;
+    const fh = parsed.videoThumbnailAnimation.frameHeight;
+    if (fw && fh) {
+      const mp = (fw * fh) / 1_000_000;
+      if (mp > maxFrameRes) {
+        throw new HTTPError(
+          `Animation frame resolution ${mp.toFixed(1)}MP exceeds limit of ${maxFrameRes}MP`,
+          { code: "UNPROCESSABLE_ENTITY" },
+        );
+      }
+    }
+  }
+}
+
 function setContentDisposition(
   res: express.Response,
   parsed: ReturnType<typeof parseProcessingUrl>,
@@ -144,6 +252,10 @@ async function handleRequest(req: express.Request, res: express.Response) {
   if (parsed.hashsum) {
     await verifyHashsum(sourceUrl, parsed.hashsum);
   }
+
+  checkResultLimits(parsed);
+  checkAnimationLimits(parsed);
+  await checkSourceLimits(sourceUrl, parsed);
 
   try {
     await processAndRespond(req, res, parsed, sourceUrl);
