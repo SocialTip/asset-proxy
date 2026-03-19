@@ -1,6 +1,6 @@
 {
   "name": "@asset-proxy/url-generator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Generate assets-proxy-compatible URL paths with optional encryption and signing",
   "type": "module",
   "main": "dist/index.js",
