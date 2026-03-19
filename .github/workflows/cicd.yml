@@ -79,14 +79,19 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq libimage-exiftool-perl heif-thumbnailer
 
       - name: Start asset-proxy
-        run: nohup pnpm exec tsx packages/proxy/src/index.ts > /tmp/asset-proxy.log 2>&1 &
+        run: nohup pnpm --filter @asset-proxy/proxy exec tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
           ALLOWED_ORIGINS: "http://file-server"
 
       - name: Wait for asset-proxy
+        id: wait
         run: timeout 30 bash -c 'until curl -sf http://localhost:8080/health; do sleep 1; done'
+
+      - name: Print asset-proxy startup logs
+        if: failure() && steps.wait.outcome == 'failure'
+        run: tail -100 /tmp/asset-proxy.log
 
       - run: pnpm -w run test --coverage
 
