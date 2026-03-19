@@ -1,6 +1,7 @@
 # Publishes a package to the GitHub Packages registry when a version tag is pushed. Triggered automatically by tag pushes matching @socialtip/asset-proxy-*@*. Detects which package the tag belongs to, verifies the version matches package.json, builds the package, and publishes. Tags are created by the Publish workflow (publish.yml). See docs/Release.md for the full process.
 
 name: Release
+run-name: "Release: ${{ github.ref_name }}"
 
 on:
   push:
@@ -9,6 +10,7 @@ on:
 
 jobs:
   release:
+    name: "Release package: ${{ github.ref_name }}"
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
       contents: read
