@@ -352,7 +352,7 @@ const url = generateUrl(
 
 ## Project structure
 
-This repository is a yarn monorepo with three packages:
+This repository is a pnpm monorepo with three packages:
 
 | Package                      | Path                     | Description                                                                   |
 | ---------------------------- | ------------------------ | ----------------------------------------------------------------------------- |
@@ -366,9 +366,9 @@ Requires [asdf](https://asdf-vm.com/) with the `nodejs` plugin.
 
 ```bash
 asdf install        # installs Node version from .tool-versions
-corepack enable     # enables yarn
-yarn install
-yarn dev            # starts the proxy with hot reload on :8080
+corepack enable     # enables pnpm
+pnpm install
+pnpm dev            # starts the proxy with hot reload on :8080
 ```
 
 ## Docker
@@ -402,9 +402,9 @@ Images are tagged with the commit SHA. Pushes to `main` are additionally tagged 
 Integration tests require a running service via Docker Compose. This starts the asset-proxy container (CPU mode) alongside an nginx file server that serves test fixtures:
 
 ```bash
-yarn test:up      # start containers (builds image, waits for healthy)
-yarn test         # run all tests across all packages
-yarn test:down    # stop and remove containers
+pnpm test:up      # start containers (builds image, waits for healthy)
+pnpm test         # run all tests across all packages
+pnpm test:down    # stop and remove containers
 ```
 
 ## Environment variables

@@ -20,9 +20,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@asset-proxy/url-parser": "*"
+    "@asset-proxy/url-parser": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   },

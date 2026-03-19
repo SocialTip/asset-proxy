@@ -13,7 +13,16 @@ services:
       - ./packages/proxy/package.json:/app/packages/proxy/package.json:ro
       - ./packages/url-parser/package.json:/app/packages/url-parser/package.json:ro
       - ./package.json:/app/package.json:ro
-    command: ["npx", "tsx", "--watch", "packages/proxy/src/index.ts"]
+    command:
+      [
+        "pnpm",
+        "--filter",
+        "@asset-proxy/proxy",
+        "exec",
+        "tsx",
+        "--watch",
+        "src/index.ts",
+      ]
     depends_on:
       - file-server
 

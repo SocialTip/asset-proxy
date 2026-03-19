@@ -8,6 +8,6 @@ beforeAll(async () => {
     // not reachable
   }
   throw new Error(
-    `Service at ${SERVICE_URL} is not running. Run \`yarn test:up\` to start it via Docker Compose.`,
+    `Service at ${SERVICE_URL} is not running. Run \`pnpm test:up\` to start it via Docker Compose.`,
   );
 });

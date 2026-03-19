@@ -7,14 +7,14 @@ RUN corepack enable
 
 WORKDIR /app
 
-COPY package.json yarn.lock ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/url-parser/package.json packages/url-parser/
 COPY packages/proxy/package.json packages/proxy/
 COPY packages/url-generator/package.json packages/url-generator/
-RUN yarn install --immutable
+RUN pnpm install --frozen-lockfile
 
 COPY packages/ packages/
-RUN yarn workspace @asset-proxy/url-parser build && yarn workspace @asset-proxy/proxy build
+RUN pnpm --filter @asset-proxy/url-parser build && pnpm --filter @asset-proxy/proxy build
 
 # Production stage
 FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
@@ -45,14 +45,19 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+RUN corepack enable
+
 WORKDIR /app
 
 COPY --from=build /app/packages/proxy/dist ./packages/proxy/dist/
 COPY --from=build /app/packages/proxy/package.json ./packages/proxy/
+COPY --from=build /app/packages/proxy/node_modules ./packages/proxy/node_modules/
 COPY --from=build /app/packages/url-parser/dist ./packages/url-parser/dist/
 COPY --from=build /app/packages/url-parser/package.json ./packages/url-parser/
+COPY --from=build /app/packages/url-parser/node_modules ./packages/url-parser/node_modules/
 COPY --from=build /app/node_modules ./node_modules/
 COPY --from=build /app/package.json ./
+COPY --from=build /app/pnpm-workspace.yaml ./
 
 ENV PORT=8080
 EXPOSE 8080

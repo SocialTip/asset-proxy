@@ -11,13 +11,13 @@ Deployed as a Docker image to GCP Cloud Run. The Dockerfile is in the repository
 ## Development
 
 ```bash
-yarn dev  # starts the proxy with hot reload on :8080
+pnpm dev  # starts the proxy with hot reload on :8080
 ```
 
 ## Testing
 
 ```bash
-yarn test:up    # start containers (from repo root)
-yarn test       # run all tests
-yarn test:down  # stop containers
+pnpm test:up    # start containers (from repo root)
+pnpm test       # run all tests
+pnpm test:down  # stop containers
 ```
