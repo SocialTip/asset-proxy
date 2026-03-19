@@ -19,6 +19,9 @@ on:
         required: false
         default: false
         type: boolean
+  pull_request:
+    paths:
+      - .github/workflows/prepare-release.yml
 
 jobs:
   prepare-release:
@@ -42,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ steps.app-token.outputs.token }}
-          fetch-tags: true
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -51,6 +54,8 @@ jobs:
       - name: Prepare package releases
         id: release
         run: |
+          BUMP="${{ inputs.bump || 'minor' }}"
+          FORCE="${{ inputs.force || 'false' }}"
           PACKAGES=("url-parser" "url-generator")
           CHANGED=""
           SUMMARY=""
@@ -62,6 +67,8 @@ jobs:
 
             # Find latest tag for this package
             LATEST_TAG=$(git tag -l "${PKG_NAME}@*" --sort=-v:refname | head -1)
+            echo "::debug::${PKG_NAME}: LATEST_TAG=${LATEST_TAG:-<none>}, CURRENT_VERSION=${CURRENT_VERSION}"
+            echo "::debug::All tags for ${PKG_NAME}: $(git tag -l "${PKG_NAME}@*" | tr '\n' ' ')"
 
             if [ -z "$LATEST_TAG" ]; then
               # No tag — initial release, keep current version
@@ -81,13 +88,13 @@ jobs:
               TAG_COMMIT=$(git rev-list -1 "$LATEST_TAG")
               LOG_ENTRIES=$(git log --format="- %s" "${TAG_COMMIT}..HEAD" -- "$PKG_DIR")
 
-              if [ -z "$LOG_ENTRIES" ] && [ "${{ inputs.force }}" != "true" ]; then
+              if [ -z "$LOG_ENTRIES" ] && [ "$FORCE" != "true" ]; then
                 echo "No changes in $PKG_NAME since $LATEST_TAG"
                 continue
               fi
 
               # Bump version
-              NEW_VERSION=$(cd "$PKG_DIR" && npm version "${{ inputs.bump }}" --no-git-tag-version | tr -d 'v')
+              NEW_VERSION=$(cd "$PKG_DIR" && npm version "$BUMP" --no-git-tag-version | tr -d 'v')
 
               if [ -n "$LOG_ENTRIES" ]; then
                 NEW_SECTION="## ${NEW_VERSION}\n\n${LOG_ENTRIES}"
@@ -123,9 +130,10 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           committer: ${{ steps.app-token.outputs.app-slug }}[bot] <${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>
           sign-commits: true
-          branch: release/packages
+          branch: release/packages${{ github.event_name == 'pull_request' && format('-test-{0}', github.event.pull_request.number) || '' }}
+          base: ${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
           commit-message: "release: bump package versions"
-          title: "release: bump package versions"
+          title: "${{ github.event_name == 'pull_request' && '[TEST] ' || '' }}release: bump package versions"
           body: |
             ## Packages
 
