@@ -41,11 +41,19 @@ jobs:
 
       - name: Create tags for current versions
         run: |
-          PACKAGES=("url-parser" "url-generator")
           TAGGED=""
 
-          for pkg in "${PACKAGES[@]}"; do
-            PKG_DIR="packages/$pkg"
+          for PKG_DIR in packages/*/; do
+            PKG_DIR="${PKG_DIR%/}"
+            pkg=$(basename "$PKG_DIR")
+
+            # Skip private packages
+            PRIVATE=$(node -p "require('./$PKG_DIR/package.json').private || false")
+            if [ "$PRIVATE" = "true" ]; then
+              echo "Skipping private package: $pkg"
+              continue
+            fi
+
             PKG_NAME=$(node -p "require('./$PKG_DIR/package.json').name")
             VERSION=$(node -p "require('./$PKG_DIR/package.json').version")
             TAG="${PKG_NAME}@${VERSION}"
