@@ -210,6 +210,10 @@ Remove borders from an image using colour similarity detection. The threshold (r
 
 Limits output duration to the given number of seconds. Example: `ct:10`.
 
+#### Mute — `mute:1` (shorthand `mu`) — video only
+
+Strip audio from video output. The resulting video will have no audio track. Example: `mu:1`.
+
 #### Enforce Thumbnail — `enforce_thumbnail:1` (shorthand `eth`)
 
 Prefer embedded thumbnail over the full image when available. Uses exiftool for AVIF (EXIF thumbnails) and heif-thumbnailer for HEIC (container thumbnails). Falls back gracefully to the main image if no thumbnail exists. Controlled by `ENFORCE_THUMBNAIL` env var (default: false).
