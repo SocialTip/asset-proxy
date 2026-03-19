@@ -19,7 +19,7 @@ Prepare Release  →  Merge PR  →  Publish  →  release.yml (automatic)
 
 ### 1. Prepare the release
 
-Run the [Prepare Release](../../actions/workflows/prepare-release.yml) workflow from the Actions tab. This will:
+Run the [Prepare Release](../.github/workflows/prepare-release.yml) workflow from the Actions tab. This will:
 
 - Find each package's latest git tag (e.g. `@asset-proxy/url-parser@0.1.0`)
 - For packages with changes since their last tag:
@@ -38,7 +38,7 @@ CI will run automatically on the merge. Wait for it to pass.
 
 ### 3. Publish
 
-After the release PR is merged and CI passes, run the [Publish](../../actions/workflows/publish.yml) workflow from the Actions tab. This will:
+After the release PR is merged and CI passes, run the [Publish](../.github/workflows/publish.yml) workflow from the Actions tab. This will:
 
 - Create a git tag for each package's current version (e.g. `@asset-proxy/url-parser@0.2.0`)
 - Push the tags to the repository
