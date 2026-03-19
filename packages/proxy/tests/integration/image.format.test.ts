@@ -216,7 +216,10 @@ describe("best format", () => {
   });
 
   it("falls back to JPEG when image exceeds max resolution", async () => {
-    // At w:200, output is ~200x150 = 30000 pixels > 5000 (BEST_FORMAT_MAX_RESOLUTION=0.005)
+    // Requires BEST_FORMAT_MAX_RESOLUTION=0.005 in docker-compose.yml and cicd.yml.
+    expect(process.env.BEST_FORMAT_MAX_RESOLUTION).toBe("0.005");
+
+    // At w:200, output is ~200x150 = 30000 pixels which exceeds 0.005 MP → JPEG fallback.
     const url = `${SERVICE_URL}/insecure/w:200/f:best/plain/${SOURCE_URL}`;
     const res = await fetch(url);
     expect(res.status).toBe(200);
