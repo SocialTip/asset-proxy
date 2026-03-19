@@ -1,5 +1,9 @@
 export { HTTPError, ERROR_CODES } from "./error.js";
-export { decryptSourceUrl, encryptSourceUrl } from "./crypto.js";
+export {
+  decryptSourceUrl,
+  encryptSourceUrl,
+  type EncryptOptions,
+} from "./crypto.js";
 export { verifySignature, sign, type SignatureOptions } from "./signature.js";
 export {
   parseProcessingUrl,

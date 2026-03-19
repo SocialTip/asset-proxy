@@ -15,6 +15,8 @@ export type UrlGeneratorOptions = Partial<ParsedUrlInput> & {
 export interface UrlGeneratorConfig {
   /** Hex-encoded 32-byte AES-256-CBC key for encrypting the source URL. When set, the source URL is encrypted and the `/enc/` prefix is used. */
   encryptionKey?: string;
+  /** When true (and `encryptionKey` is set), derives the encryption IV from the source URL instead of using random bytes. This makes the generated URL deterministic for the same input, which is useful when URLs need to be stable for caching purposes. */
+  deterministicEncryption?: boolean;
   /** Hex-encoded HMAC-SHA256 key for URL signing. Must be set together with `signingSalt`. */
   signingKey?: string;
   /** Hex-encoded salt prepended to the path before HMAC signing. Must be set together with `signingKey`. */
@@ -31,7 +33,7 @@ export function generateUrl(
   let sourceUrlPart: string;
   if (config?.encryptionKey) {
     const key = Buffer.from(config.encryptionKey, "hex");
-    sourceUrlPart = `enc/${encryptSourceUrl(options.sourceUrl, key)}`;
+    sourceUrlPart = `enc/${encryptSourceUrl(options.sourceUrl, key, { deterministic: config.deterministicEncryption })}`;
   } else {
     sourceUrlPart = `plain/${options.sourceUrl}`;
   }

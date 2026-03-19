@@ -1,8 +1,17 @@
 import { generateUrl } from "../src/index.js";
-import { parseProcessingUrl, decryptSourceUrl } from "@asset-proxy/url-parser";
+import {
+  parseProcessingUrl,
+  decryptSourceUrl,
+  verifySignature,
+} from "@asset-proxy/url-parser";
 import { createHmac } from "node:crypto";
 
 const SRC = "https://example.com/photo.jpg";
+const KEY_HEX =
+  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const KEY = Buffer.from(KEY_HEX, "hex");
+const SIGNING_KEY = "736563726574";
+const SIGNING_SALT = "68656c6c6f";
 
 describe("generateUrl", () => {
   it("generates a basic URL with no options", () => {
@@ -80,37 +89,100 @@ describe("generateUrl", () => {
   });
 
   it("encrypts the source URL when encryptionKey is provided", () => {
-    const keyHex =
-      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-    const key = Buffer.from(keyHex, "hex");
-
-    const url = generateUrl({ sourceUrl: SRC }, { encryptionKey: keyHex });
+    const url = generateUrl({ sourceUrl: SRC }, { encryptionKey: KEY_HEX });
 
     expect(url).toMatch(/^\/_\/enc\//);
     const encPart = url.replace("/_/enc/", "");
-    const decrypted = decryptSourceUrl(encPart, key);
+    const decrypted = decryptSourceUrl(encPart, KEY);
     expect(decrypted).toBe(SRC);
   });
 
   it("signs the URL when signingKey and signingSalt are provided", () => {
-    const signingKey = "736563726574";
-    const signingSalt = "68656c6c6f";
-
     const url = generateUrl(
       { sourceUrl: SRC, resize: { type: "fill", width: 480, height: 360 } },
-      { signingKey, signingSalt },
+      { signingKey: SIGNING_KEY, signingSalt: SIGNING_SALT },
     );
 
     const sigEnd = url.indexOf("/", 1);
     const signature = url.slice(1, sigEnd);
     const pathAfterSig = url.slice(sigEnd);
 
-    const hmac = createHmac("sha256", Buffer.from(signingKey, "hex"));
-    hmac.update(Buffer.from(signingSalt, "hex"));
+    const hmac = createHmac("sha256", Buffer.from(SIGNING_KEY, "hex"));
+    hmac.update(Buffer.from(SIGNING_SALT, "hex"));
     hmac.update(pathAfterSig);
     const expected = hmac.digest("base64url");
 
     expect(signature).toBe(expected);
+  });
+
+  it("generates a signed, encrypted URL that round-trips through the parser", () => {
+    const url = generateUrl(
+      {
+        sourceUrl: SRC,
+        outputFormat: "webp",
+        resize: { type: "fill", width: 480, height: 360 },
+      },
+      {
+        encryptionKey: KEY_HEX,
+        signingKey: SIGNING_KEY,
+        signingSalt: SIGNING_SALT,
+      },
+    );
+
+    const pathAfterSig = verifySignature(url, {
+      signingKey: Buffer.from(SIGNING_KEY, "hex"),
+      signingSalt: Buffer.from(SIGNING_SALT, "hex"),
+    });
+    const parsed = parseProcessingUrl(pathAfterSig, { encryptionKey: KEY });
+
+    expect(parsed.sourceUrl).toBe(SRC);
+    expect(parsed.outputFormat).toBe("webp");
+    expect(parsed.resize).toEqual({ type: "fill", width: 480, height: 360 });
+  });
+
+  it("generates deterministic URLs when deterministicEncryption is enabled", () => {
+    const config = { encryptionKey: KEY_HEX, deterministicEncryption: true };
+
+    const url1 = generateUrl({ sourceUrl: SRC, quality: 80 }, config);
+    const url2 = generateUrl({ sourceUrl: SRC, quality: 80 }, config);
+
+    expect(url1).toBe(url2);
+
+    const encPart = url1.replace("/_/q:80/enc/", "");
+    const decrypted = decryptSourceUrl(encPart, KEY);
+    expect(decrypted).toBe(SRC);
+  });
+
+  it("generates deterministic signed, encrypted URLs that are cacheable", () => {
+    const config = {
+      encryptionKey: KEY_HEX,
+      deterministicEncryption: true,
+      signingKey: SIGNING_KEY,
+      signingSalt: SIGNING_SALT,
+    };
+    const opts = {
+      sourceUrl: SRC,
+      outputFormat: "webp" as const,
+      resize: { type: "fill" as const, width: 480, height: 360 },
+    };
+
+    const url1 = generateUrl(opts, config);
+    const url2 = generateUrl(opts, config);
+
+    expect(url1).toBe(url2);
+    expect(url1).toMatchInlineSnapshot(
+      `"/vP_XaH5NRJAv08DJB8fC1FJqnAid8bt9uYgiX4UPLzc/rs:fill:480:360/enc/XNdtlrwvKuz5k1blTLNJxc2lHaNIK8oYXzPu89BKYD_AyGTTL1aIvY2tfvTWHxvH@webp"`,
+    );
+
+    const pathAfterSig = verifySignature(url1, {
+      signingKey: Buffer.from(SIGNING_KEY, "hex"),
+      signingSalt: Buffer.from(SIGNING_SALT, "hex"),
+    });
+    const parsed = parseProcessingUrl(pathAfterSig, { encryptionKey: KEY });
+
+    expect(parsed.sourceUrl).toBe(SRC);
+    expect(parsed.outputFormat).toBe("webp");
+    expect(parsed.resize).toEqual({ type: "fill", width: 480, height: 360 });
   });
 
   it("round-trips through parseProcessingUrl", () => {
