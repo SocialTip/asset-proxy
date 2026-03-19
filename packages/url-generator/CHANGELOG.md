@@ -1,3 +1,7 @@
+## 0.1.3
+
+- fix: add publishConfig registry for GitHub Packages (#45)
+
 ## 0.1.2
 
 Version bump only (no changes).
