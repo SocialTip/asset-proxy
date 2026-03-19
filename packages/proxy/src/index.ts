@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import contentDisposition from "content-disposition";
 import { Storage } from "@google-cloud/storage";
 import express from "express";
 import {
@@ -70,6 +72,54 @@ async function resolveGcsUrl(gsUrl: string): Promise<string> {
   return signedUrl;
 }
 
+function shouldSkipProcessing(
+  parsed: ReturnType<typeof parseProcessingUrl>,
+): boolean {
+  if (parsed.raw) return true;
+  if (parsed.skipProcessing?.length) {
+    const ext = parsed.sourceUrl
+      .match(/\.([a-z0-9]+)(?:[?#]|$)/i)?.[1]
+      ?.toLowerCase();
+    if (ext && parsed.skipProcessing.includes(ext === "jpeg" ? "jpg" : ext)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function verifyHashsum(
+  sourceUrl: string,
+  hashsum: { type: string; hash: string },
+): Promise<void> {
+  const response = await fetch(sourceUrl);
+  if (!response.ok) {
+    throw new HTTPError(`Failed to fetch source: ${response.status}`, {
+      code: "BAD_REQUEST",
+    });
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const digest = createHash(hashsum.type).update(buffer).digest("hex");
+  if (digest !== hashsum.hash) {
+    throw new HTTPError(
+      `Source hashsum mismatch: expected ${hashsum.hash}, got ${digest}`,
+      { code: "UNPROCESSABLE_ENTITY" },
+    );
+  }
+}
+
+function setContentDisposition(
+  res: express.Response,
+  parsed: ReturnType<typeof parseProcessingUrl>,
+): void {
+  if (parsed.filename || parsed.returnAttachment) {
+    const type = parsed.returnAttachment ? "attachment" : "inline";
+    res.set(
+      "Content-Disposition",
+      contentDisposition(parsed.filename ?? undefined, { type }),
+    );
+  }
+}
+
 async function handleRequest(req: express.Request, res: express.Response) {
   const pathAfterSignature = verifySignature(req.path, {
     signingKey: env.SIGNING_KEY,
@@ -81,13 +131,62 @@ async function handleRequest(req: express.Request, res: express.Response) {
 
   assertOriginAllowed(parsed.sourceUrl);
 
+  if (parsed.expires && Date.now() / 1000 > parsed.expires) {
+    throw new HTTPError("URL has expired", { code: "NOT_FOUND" });
+  }
+
   // Resolve gs:// URLs to signed HTTP URLs
   const sourceUrl = parsed.sourceUrl.startsWith("gs://")
     ? await resolveGcsUrl(parsed.sourceUrl)
     : parsed.sourceUrl;
 
+  if (parsed.hashsum) {
+    await verifyHashsum(sourceUrl, parsed.hashsum);
+  }
+
+  try {
+    await processAndRespond(req, res, parsed, sourceUrl);
+  } catch (err) {
+    if (parsed.fallbackImageUrl && !res.headersSent) {
+      const fallbackUrl = Buffer.from(
+        parsed.fallbackImageUrl,
+        "base64url",
+      ).toString("utf-8");
+      logger.info("Falling back to fallback image", {
+        sourceUrl: parsed.sourceUrl,
+        fallbackUrl,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.redirect(302, fallbackUrl);
+      return;
+    }
+    throw err;
+  }
+}
+
+async function processAndRespond(
+  _req: express.Request,
+  res: express.Response,
+  parsed: ReturnType<typeof parseProcessingUrl>,
+  sourceUrl: string,
+): Promise<void> {
+  if (shouldSkipProcessing(parsed)) {
+    const response = await fetch(sourceUrl);
+    if (!response.ok) {
+      throw new HTTPError(`Failed to fetch source: ${response.status}`, {
+        code: "BAD_REQUEST",
+      });
+    }
+    const contentType = response.headers.get("content-type");
+    if (contentType) res.set("Content-Type", contentType);
+    res.set("Cache-Control", env.CACHE_CONTROL);
+    setContentDisposition(res, parsed);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    res.send(buffer);
+    return;
+  }
+
   if (isImageUrl(parsed)) {
-    // TODO: add instrumentation (timing, source URL, options)
     try {
       const result = await processImage(sourceUrl, parsed);
       res.set(
@@ -95,21 +194,19 @@ async function handleRequest(req: express.Request, res: express.Response) {
         CONTENT_TYPES[result.outputFormat] || "image/jpeg",
       );
       res.set("Cache-Control", env.CACHE_CONTROL);
+      setContentDisposition(res, parsed);
       res.send(result.buffer);
     } catch (err) {
-      const status = err instanceof HTTPError ? err.status : 500;
-      const message =
-        err instanceof HTTPError ? err.message : "Error processing image";
+      if (err instanceof HTTPError) throw err;
       logger.error("Error processing image", {
         error: err instanceof Error ? err.message : String(err),
         sourceUrl: parsed.sourceUrl,
       });
-      if (!res.headersSent) {
-        res.status(status).send(message);
-      }
+      throw new HTTPError("Error processing image", {
+        code: "INTERNAL_SERVER_ERROR",
+      });
     }
   } else if (isVideoUrl(parsed)) {
-    // TODO: add instrumentation (timing, source URL, options)
     try {
       const result = await processVideo(sourceUrl, parsed);
       res.set(
@@ -117,28 +214,22 @@ async function handleRequest(req: express.Request, res: express.Response) {
         CONTENT_TYPES[parsed.outputFormat] || "video/mp4",
       );
       res.set("Cache-Control", env.CACHE_CONTROL);
+      setContentDisposition(res, parsed);
       result.pipe(res);
 
-      result.on("error", (err) => {
-        logger.error("Error processing video (stream)", {
-          error: err.message,
-          sourceUrl: parsed.sourceUrl,
-        });
-        if (!res.headersSent) {
-          res.status(500).send("Error processing video");
-        }
+      await new Promise<void>((resolve, reject) => {
+        result.on("end", resolve);
+        result.on("error", reject);
       });
     } catch (err) {
-      const status = err instanceof HTTPError ? err.status : 500;
-      const message =
-        err instanceof HTTPError ? err.message : "Error processing video";
+      if (err instanceof HTTPError) throw err;
       logger.error("Error processing video", {
         error: err instanceof Error ? err.message : String(err),
         sourceUrl: parsed.sourceUrl,
       });
-      if (!res.headersSent) {
-        res.status(status).send(message);
-      }
+      throw new HTTPError("Error processing video", {
+        code: "INTERNAL_SERVER_ERROR",
+      });
     }
   }
 }
