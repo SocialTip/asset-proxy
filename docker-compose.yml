@@ -5,6 +5,7 @@ services:
       - SKIP_GPU=1
       - SOURCE_URL_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       - ALLOWED_ORIGINS=http://file-server
+      - BEST_FORMAT_MAX_RESOLUTION=0.005
     ports:
       - "8080:8080"
     volumes:

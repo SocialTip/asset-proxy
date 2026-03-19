@@ -185,6 +185,26 @@ describe("generateUrl", () => {
     expect(parsed.resize).toEqual({ type: "fill", width: 480, height: 360 });
   });
 
+  it("generates best format option", () => {
+    const url = generateUrl({
+      sourceUrl: SRC,
+      bestFormat: true,
+    });
+    expect(url).toBe(`/_/f:best/plain/${SRC}`);
+  });
+
+  it("round-trips bestFormat through parseProcessingUrl", () => {
+    const url = generateUrl({
+      sourceUrl: SRC,
+      bestFormat: true,
+      resize: { type: "fill", width: 480, height: 360 },
+    });
+    const pathAfterSig = url.slice(url.indexOf("/", 1));
+    const parsed = parseProcessingUrl(pathAfterSig);
+    expect(parsed.bestFormat).toBe(true);
+    expect(parsed.sourceUrl).toBe(SRC);
+  });
+
   it("round-trips through parseProcessingUrl", () => {
     const url = generateUrl({
       sourceUrl: SRC,
