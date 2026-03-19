@@ -1,5 +1,6 @@
 import "./instrument.js";
 import { createHash } from "node:crypto";
+import contentDisposition from "content-disposition";
 import { Storage } from "@google-cloud/storage";
 import express from "express";
 import {
@@ -112,15 +113,11 @@ function setContentDisposition(
   parsed: ReturnType<typeof parseProcessingUrl>,
 ): void {
   if (parsed.filename || parsed.returnAttachment) {
-    const disposition = parsed.returnAttachment ? "attachment" : "inline";
-    if (parsed.filename) {
-      res.set(
-        "Content-Disposition",
-        `${disposition}; filename="${parsed.filename.replace(/"/g, '\\"')}"`,
-      );
-    } else {
-      res.set("Content-Disposition", disposition);
-    }
+    const type = parsed.returnAttachment ? "attachment" : "inline";
+    res.set(
+      "Content-Disposition",
+      contentDisposition(parsed.filename ?? undefined, { type }),
+    );
   }
 }
 

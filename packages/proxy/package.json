@@ -21,11 +21,14 @@
     "@opentelemetry/sdk-metrics": "^2.6.0",
     "@opentelemetry/sdk-node": "^0.213.0",
     "@socialtip/asset-proxy-url-parser": "workspace:*",
+    "@socialtip/asset-proxy-url-parser": "workspace:*",
+    "content-disposition": "^1.0.1",
     "express": "^5.1.0",
     "winston": "^3.19.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/content-disposition": "^0.5.9",
     "@types/express": "^5.0.6",
     "@types/express-serve-static-core": "^5.1.1",
     "@types/jest-image-snapshot": "^6.4.1",
