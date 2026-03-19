@@ -1,4 +1,4 @@
-# Continuous integration and deployment. Runs on every push to main and on pull requests. The CI job runs typecheck, lint, build, and tests (unit + integration). On push to main or when relevant files change in a PR, the CD job builds and pushes a Docker image to GHCR. The required job gates CI and CD for branch protection.
+# Continuous integration and deployment. The test job runs typecheck, lint, build, and tests for the proxy and url-parser packages. The build job typechecks and builds the url-generator package. CD pushes a Docker image to GHCR on push to main after a successful test job. The required job gates test and build for branch protection.
 
 name: CI/CD
 
@@ -12,7 +12,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  ci:
+  test:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     permissions:
       contents: write
       pull-requests: write
@@ -29,13 +30,29 @@ jobs:
         with:
           lfs: true
 
+      - name: Check for relevant changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            relevant:
+              - '.github/workflows/cicd.yml'
+              - '.github/workflows/cd.yml'
+              - 'Dockerfile'
+              - 'packages/url-parser/**'
+              - 'packages/proxy/**'
+
       - name: Map file-server hostname
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
         run: echo "127.0.0.1 file-server" | sudo tee -a /etc/hosts
 
       - name: Copy test fixtures into nginx
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
         run: sudo cp -a packages/proxy/tests/fixtures/. /tmp/nginx/html/
 
       - name: Configure nginx to serve all files
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
         run: |
           CONTAINER_ID=$(docker ps -qf "ancestor=nginx:alpine")
           docker exec "$CONTAINER_ID" sh -c 'cat > /etc/nginx/conf.d/default.conf << EOF
@@ -50,23 +67,33 @@ jobs:
           docker exec "$CONTAINER_ID" nginx -s reload
 
       - name: Verify file-server
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
         run: curl -sf http://file-server/test-image.png -o /dev/null
 
       - uses: actions/setup-node@v4
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
         with:
           node-version-file: .tool-versions
           cache: yarn
 
-      - run: yarn install --immutable
+      - name: Install dependencies
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
+        run: yarn install --immutable
 
-      - run: yarn typecheck
+      - name: Typecheck
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
+        run: yarn typecheck
 
-      - run: yarn lint
+      - name: Lint
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
+        run: yarn lint
 
       - name: Build packages
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
         run: yarn build
 
       - name: Install ffmpeg, exiftool, and heif-thumbnailer
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
         env:
           FFMPEG_VERSION: "7.0"
           FFMPEG_RELEASE: "autobuild-2024-08-31-12-50"
@@ -77,6 +104,7 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq libimage-exiftool-perl heif-thumbnailer
 
       - name: Start asset-proxy
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
         run: nohup npx tsx packages/proxy/src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
           SKIP_GPU: "1"
@@ -84,9 +112,12 @@ jobs:
           ALLOWED_ORIGINS: "http://file-server"
 
       - name: Wait for asset-proxy
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
         run: timeout 30 bash -c 'until curl -sf http://localhost:8080/health; do sleep 1; done'
 
-      - run: yarn test --coverage
+      - name: Test
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
+        run: yarn test --coverage
 
       - name: Update snapshots
         if: failure()
@@ -148,31 +179,42 @@ jobs:
         if: failure() && steps.snapshots.outputs.changed != 'true'
         run: cat /tmp/asset-proxy.log
 
-  changes:
-    if: github.event_name == 'pull_request'
+  build:
     runs-on: warp-ubuntu-latest-x64-2x
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      cd: ${{ steps.filter.outputs.cd }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
+
+      - name: Check for relevant changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: changes
         with:
           filters: |
-            cd:
-              - '.github/workflows/cd.yml'
-              - 'Dockerfile'
-              - 'packages/url-parser/**'
-              - 'packages/proxy/**'
+            relevant:
+              - '.github/workflows/cicd.yml'
+              - 'packages/url-generator/**'
+
+      - uses: actions/setup-node@v4
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
+        with:
+          node-version-file: .tool-versions
+          cache: yarn
+
+      - name: Install dependencies
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
+        run: yarn install --immutable
+
+      - name: Typecheck
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
+        run: yarn typecheck
+
+      - name: Build
+        if: github.event_name == 'push' || steps.changes.outputs.relevant == 'true'
+        run: yarn build
 
   cd:
-    if: |
-      always() && needs.ci.result == 'success' &&
-      (github.event_name == 'push' || needs.changes.outputs.cd == 'true')
-    needs: [ci, changes]
+    if: github.event_name == 'push'
+    needs: [test]
     uses: ./.github/workflows/cd.yml
     permissions:
       contents: read
@@ -180,16 +222,23 @@ jobs:
 
   required:
     if: always()
-    needs: [ci, cd]
+    needs: [test, build, cd]
     runs-on: warp-ubuntu-latest-x64-2x
     steps:
       - name: Check required jobs
         run: |
-          if [ "${{ needs.ci.result }}" != "success" ]; then
-            echo "CI failed"
+          for job in test build cd; do
+            result="${{ needs[job].result }}"
+          done
+          if [ "${{ needs.test.result }}" != "success" ] && [ "${{ needs.test.result }}" != "skipped" ]; then
+            echo "test: ${{ needs.test.result }}"
+            exit 1
+          fi
+          if [ "${{ needs.build.result }}" != "success" ] && [ "${{ needs.build.result }}" != "skipped" ]; then
+            echo "build: ${{ needs.build.result }}"
             exit 1
           fi
           if [ "${{ needs.cd.result }}" != "success" ] && [ "${{ needs.cd.result }}" != "skipped" ]; then
-            echo "CD failed"
+            echo "cd: ${{ needs.cd.result }}"
             exit 1
           fi
