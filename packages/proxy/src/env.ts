@@ -112,6 +112,16 @@ const envSchema = z
       .optional()
       .transform((v) => parseFormatMap(v)),
 
+    /** Complexity threshold for best format selection. Images below this entropy value are considered "simple" and will prefer lossless formats. */
+    BEST_FORMAT_COMPLEXITY_THRESHOLD: z.coerce.number().default(5.5),
+    /** When > 0, skip best format testing for images exceeding this megapixel count. */
+    BEST_FORMAT_MAX_RESOLUTION: z.coerce.number().default(0),
+    /** When true, automatically select the best format when no explicit output format is specified. */
+    BEST_FORMAT_BY_DEFAULT: z
+      .string()
+      .optional()
+      .transform((v) => v === "1" || v === "true"),
+
     /** Cache-Control header value for successful responses. */
     CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
   })

@@ -246,6 +246,17 @@ Format-specific WebP encoding options. Compression is effort level (0-6), smart_
 
 Format-specific AVIF encoding options. Subsample controls chroma subsampling (e.g. `4:2:0`, `4:4:4`). Example: `avo:4:4:4`.
 
+#### Best Format — `format:best` or `@best`
+
+Automatically select the most efficient image format. The service analyses image complexity (entropy) and encodes the result in multiple candidate formats, returning the smallest output.
+
+- **Low complexity** (entropy below threshold): candidates are PNG and WebP (lossless)
+- **High complexity** (entropy at or above threshold): candidates are JPEG, WebP, and AVIF
+
+When `BEST_FORMAT_BY_DEFAULT` is enabled, best format selection is used automatically whenever no explicit output format is specified. Quality and format-specific quality (`q`, `fq`) settings are respected during the comparison.
+
+Example: `/_/w:300/plain/https://example.com/photo.jpg@best`
+
 #### Not implemented
 
 The following imgproxy options are recognised but return 501 Not Implemented:
@@ -409,26 +420,29 @@ pnpm test:down    # stop and remove containers
 
 ## Environment variables
 
-| Variable                    | Default                               | Description                                                                                                                               |
-| --------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                      | `8080`                                | Server listen port                                                                                                                        |
-| `SKIP_GPU`                  | —                                     | Set to `1` to fall back to CPU encoding. Without this, GPU is required and the process will fail if NVENC is not available.               |
-| `SIGNING_KEY`               | —                                     | Hex-encoded HMAC-SHA256 key for URL signature verification. Must be set together with `SIGNING_SALT`.                                     |
-| `SIGNING_SALT`              | —                                     | Hex-encoded salt prepended to the path before HMAC signing. Must be set together with `SIGNING_KEY`.                                      |
-| `SOURCE_URL_ENCRYPTION_KEY` | —                                     | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs. When unset, encrypted URLs are not supported. |
-| `ALLOWED_ORIGINS`           | —                                     | Comma-separated list of allowed source URL origins (e.g. `https://example.com,gs://my-bucket`). When unset, all origins are permitted.    |
-| `CACHE_CONTROL`             | `public, max-age=31536000, immutable` | Cache-Control header value for successful responses.                                                                                      |
-| `STRIP_METADATA`            | `true`                                | Strip EXIF/IPTC metadata from output images by default.                                                                                   |
-| `KEEP_COPYRIGHT`            | `true`                                | Preserve copyright metadata when stripping. Uses exiftool to copy from source.                                                            |
-| `STRIP_COLOR_PROFILE`       | `true`                                | Strip embedded ICC colour profile from output images by default.                                                                          |
-| `ENFORCE_THUMBNAIL`         | `false`                               | Prefer embedded thumbnails over full image for HEIC/AVIF sources.                                                                         |
-| `AUTOQUALITY_METHOD`        | `none`                                | Autoquality method: `none`, `dssim`, or `size`.                                                                                           |
-| `AUTOQUALITY_TARGET`        | —                                     | Target value (DSSIM for dssim, bytes for size).                                                                                           |
-| `AUTOQUALITY_MIN`           | —                                     | Minimum quality for autoquality search.                                                                                                   |
-| `AUTOQUALITY_MAX`           | —                                     | Maximum quality for autoquality search.                                                                                                   |
-| `AUTOQUALITY_ALLOWED_ERROR` | —                                     | Allowed DSSIM deviation from target.                                                                                                      |
-| `AUTOQUALITY_FORMAT_MIN`    | —                                     | Format-specific min quality, e.g. `avif=60,webp=70`.                                                                                      |
-| `AUTOQUALITY_FORMAT_MAX`    | —                                     | Format-specific max quality, e.g. `avif=65,webp=80`.                                                                                      |
+| Variable                           | Default                               | Description                                                                                                                               |
+| ---------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                             | `8080`                                | Server listen port                                                                                                                        |
+| `SKIP_GPU`                         | —                                     | Set to `1` to fall back to CPU encoding. Without this, GPU is required and the process will fail if NVENC is not available.               |
+| `SIGNING_KEY`                      | —                                     | Hex-encoded HMAC-SHA256 key for URL signature verification. Must be set together with `SIGNING_SALT`.                                     |
+| `SIGNING_SALT`                     | —                                     | Hex-encoded salt prepended to the path before HMAC signing. Must be set together with `SIGNING_KEY`.                                      |
+| `SOURCE_URL_ENCRYPTION_KEY`        | —                                     | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs. When unset, encrypted URLs are not supported. |
+| `ALLOWED_ORIGINS`                  | —                                     | Comma-separated list of allowed source URL origins (e.g. `https://example.com,gs://my-bucket`). When unset, all origins are permitted.    |
+| `CACHE_CONTROL`                    | `public, max-age=31536000, immutable` | Cache-Control header value for successful responses.                                                                                      |
+| `STRIP_METADATA`                   | `true`                                | Strip EXIF/IPTC metadata from output images by default.                                                                                   |
+| `KEEP_COPYRIGHT`                   | `true`                                | Preserve copyright metadata when stripping. Uses exiftool to copy from source.                                                            |
+| `STRIP_COLOR_PROFILE`              | `true`                                | Strip embedded ICC colour profile from output images by default.                                                                          |
+| `ENFORCE_THUMBNAIL`                | `false`                               | Prefer embedded thumbnails over full image for HEIC/AVIF sources.                                                                         |
+| `AUTOQUALITY_METHOD`               | `none`                                | Autoquality method: `none`, `dssim`, or `size`.                                                                                           |
+| `AUTOQUALITY_TARGET`               | —                                     | Target value (DSSIM for dssim, bytes for size).                                                                                           |
+| `AUTOQUALITY_MIN`                  | —                                     | Minimum quality for autoquality search.                                                                                                   |
+| `AUTOQUALITY_MAX`                  | —                                     | Maximum quality for autoquality search.                                                                                                   |
+| `AUTOQUALITY_ALLOWED_ERROR`        | —                                     | Allowed DSSIM deviation from target.                                                                                                      |
+| `AUTOQUALITY_FORMAT_MIN`           | —                                     | Format-specific min quality, e.g. `avif=60,webp=70`.                                                                                      |
+| `AUTOQUALITY_FORMAT_MAX`           | —                                     | Format-specific max quality, e.g. `avif=65,webp=80`.                                                                                      |
+| `BEST_FORMAT_COMPLEXITY_THRESHOLD` | `5.5`                                 | Entropy threshold for best format selection. Below this, lossless formats are preferred; at or above, lossy formats are preferred.        |
+| `BEST_FORMAT_MAX_RESOLUTION`       | `0`                                   | When > 0, skip best format testing for images exceeding this megapixel count (falls back to JPEG).                                        |
+| `BEST_FORMAT_BY_DEFAULT`           | `false`                               | Automatically use best format selection when no explicit output format is specified.                                                      |
 
 ## Health check
 

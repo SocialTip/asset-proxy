@@ -115,15 +115,18 @@ The Docker image supports GPU-accelerated rendering on GCP Cloud Run.
 
 All configuration is via environment variables.
 
-| Variable                    | Default                               | Description                                                                                                                                               |
-| --------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                      | `8080`                                | Server listen port                                                                                                                                        |
-| `SKIP_GPU`                  | —                                     | Set to skip GPU acceleration and fall back to CPU encoding                                                                                                |
-| `SIGNING_KEY`               | —                                     | Hex-encoded HMAC-SHA256 key for URL signature verification                                                                                                |
-| `SIGNING_SALT`              | —                                     | Hex-encoded salt for URL signing. Required when `SIGNING_KEY` is set                                                                                      |
-| `ALLOWED_ORIGINS`           | —                                     | Comma-separated list of allowed source URL origins (e.g. `https://cdn.example.com,https://storage.googleapis.com`). When unset, all origins are permitted |
-| `CACHE_CONTROL`             | `public, max-age=31536000, immutable` | Value of the `Cache-Control` response header                                                                                                              |
-| `SOURCE_URL_ENCRYPTION_KEY` | —                                     | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs                                                                |
+| Variable                           | Default                               | Description                                                                                                                                               |
+| ---------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                             | `8080`                                | Server listen port                                                                                                                                        |
+| `SKIP_GPU`                         | —                                     | Set to skip GPU acceleration and fall back to CPU encoding                                                                                                |
+| `SIGNING_KEY`                      | —                                     | Hex-encoded HMAC-SHA256 key for URL signature verification                                                                                                |
+| `SIGNING_SALT`                     | —                                     | Hex-encoded salt for URL signing. Required when `SIGNING_KEY` is set                                                                                      |
+| `ALLOWED_ORIGINS`                  | —                                     | Comma-separated list of allowed source URL origins (e.g. `https://cdn.example.com,https://storage.googleapis.com`). When unset, all origins are permitted |
+| `BEST_FORMAT_COMPLEXITY_THRESHOLD` | `5.5`                                 | Entropy threshold for best format: below = lossless preferred, at/above = lossy preferred                                                                 |
+| `BEST_FORMAT_MAX_RESOLUTION`       | `0`                                   | When > 0, skip best format testing for images exceeding this megapixel count                                                                              |
+| `BEST_FORMAT_BY_DEFAULT`           | —                                     | Set to use best format selection automatically when no explicit output format is specified                                                                |
+| `CACHE_CONTROL`                    | `public, max-age=31536000, immutable` | Value of the `Cache-Control` response header                                                                                                              |
+| `SOURCE_URL_ENCRYPTION_KEY`        | —                                     | 32-byte hex-encoded AES-256-CBC key (64 hex characters) for decrypting `/enc/` source URLs                                                                |
 
 Environment variables are validated at startup. The process exits immediately with a descriptive error if validation fails.
 

@@ -390,7 +390,7 @@ const rawOptionsSchema = z
     format: z
       .string()
       .transform((v) => (v === "jpeg" ? "jpg" : v))
-      .pipe(z.string().refine((v) => ALL_FORMATS.has(v)))
+      .pipe(z.string().refine((v) => v === "best" || ALL_FORMATS.has(v)))
       .optional(),
 
     /** Output framerate in fps (video only). */
@@ -775,7 +775,11 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     cropAspectRatio: data.crop_aspect_ratio,
     gravity: data.gravity,
     enlarge: data.enlarge,
-    formatOverride: data.format as OutputFormat | undefined,
+    bestFormat: data.format === "best" ? true : undefined,
+    formatOverride:
+      data.format && data.format !== "best"
+        ? (data.format as OutputFormat)
+        : undefined,
   };
 });
 
@@ -968,6 +972,8 @@ export const parsedUrlSchema = z.object({
   gravity: gravitySchema.optional(),
   /** Allow upscaling when the image is smaller than the target. */
   enlarge: z.boolean().optional(),
+  /** Automatically select the most efficient output format. */
+  bestFormat: z.boolean().optional(),
 });
 
 type ParsedUrlBase = z.output<typeof parsedUrlSchema>;
@@ -1035,11 +1041,15 @@ export function parseProcessingUrl(
   // Parse @format suffix from source URL
   let format: OutputFormat = "mp4";
   let hasFormatSuffix = false;
+  let bestFormatSuffix = false;
   const formatMatch = sourceUrl.match(/@([a-z0-9]+)$/);
   if (formatMatch) {
     let fmt = formatMatch[1];
     if (fmt === "jpeg") fmt = "jpg";
-    if (ALL_FORMATS.has(fmt)) {
+    if (fmt === "best") {
+      bestFormatSuffix = true;
+      sourceUrl = sourceUrl.slice(0, -formatMatch[0].length);
+    } else if (ALL_FORMATS.has(fmt)) {
       format = fmt as OutputFormat;
       sourceUrl = sourceUrl.slice(0, -formatMatch[0].length);
       hasFormatSuffix = true;
@@ -1130,6 +1140,7 @@ export function parseProcessingUrl(
     cropAspectRatio: parsedOptions.cropAspectRatio,
     gravity: parsedOptions.gravity,
     enlarge: parsedOptions.enlarge,
+    bestFormat: parsedOptions.bestFormat || bestFormatSuffix || undefined,
   });
 
   return {

@@ -252,5 +252,9 @@ function serializeOptions(options: UrlGeneratorOptions): string[] {
     segments.push(`avo:${options.avifOptions.subsample}`);
   }
 
+  if (options.bestFormat) {
+    segments.push("f:best");
+  }
+
   return segments;
 }
