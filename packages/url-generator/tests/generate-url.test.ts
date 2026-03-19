@@ -263,6 +263,38 @@ describe("generateUrl", () => {
     expect(parsed.raw).toBe(true);
   });
 
+  it("generates security limit options", () => {
+    const url = generateUrl({
+      sourceUrl: SRC,
+      maxSrcResolution: 25,
+      maxSrcFileSize: 10485760,
+      maxAnimationFrames: 100,
+      maxAnimationFrameResolution: 5,
+      maxResultDimension: 4096,
+    });
+    expect(url).toBe(
+      `/insecure/mafr:5/maf:100/mrd:4096/msfs:10485760/msr:25/plain/${SRC}`,
+    );
+  });
+
+  it("round-trips security limit options through parseProcessingUrl", () => {
+    const url = generateUrl({
+      sourceUrl: SRC,
+      maxSrcResolution: 25,
+      maxSrcFileSize: 10485760,
+      maxAnimationFrames: 100,
+      maxAnimationFrameResolution: 5,
+      maxResultDimension: 4096,
+    });
+    const pathAfterSig = url.slice(url.indexOf("/", 1));
+    const parsed = parseProcessingUrl(pathAfterSig);
+    expect(parsed.maxSrcResolution).toBe(25);
+    expect(parsed.maxSrcFileSize).toBe(10485760);
+    expect(parsed.maxAnimationFrames).toBe(100);
+    expect(parsed.maxAnimationFrameResolution).toBe(5);
+    expect(parsed.maxResultDimension).toBe(4096);
+  });
+
   it("round-trips through parseProcessingUrl", () => {
     const url = generateUrl({
       sourceUrl: SRC,

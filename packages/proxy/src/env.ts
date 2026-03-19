@@ -122,6 +122,17 @@ const envSchema = z
       .optional()
       .transform((v) => v === "1" || v === "true"),
 
+    /** Max source resolution in megapixels. 0 = unlimited. */
+    MAX_SRC_RESOLUTION: z.coerce.number().default(0),
+    /** Max source file size in bytes. 0 = unlimited. */
+    MAX_SRC_FILE_SIZE: z.coerce.number().int().default(0),
+    /** Max animation frames. 0 = unlimited. */
+    MAX_ANIMATION_FRAMES: z.coerce.number().int().default(0),
+    /** Max animation frame resolution in megapixels. 0 = unlimited. */
+    MAX_ANIMATION_FRAME_RESOLUTION: z.coerce.number().default(0),
+    /** Max result width or height in pixels. 0 = unlimited. */
+    MAX_RESULT_DIMENSION: z.coerce.number().int().default(0),
+
     /** Cache-Control header value for successful responses. */
     CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
   })
