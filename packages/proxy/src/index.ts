@@ -1,3 +1,4 @@
+import "./instrument.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { Readable } from "node:stream";
