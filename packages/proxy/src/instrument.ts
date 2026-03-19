@@ -20,9 +20,7 @@ const sdk = new NodeSDK({
       : new SimpleLogRecordProcessor(new OTLPLogExporter()),
   ],
   instrumentations: [
-    getNodeAutoInstrumentations({
-      "@opentelemetry/instrumentation-fs": { enabled: false },
-    }),
+    getNodeAutoInstrumentations({}),
   ],
 });
 
