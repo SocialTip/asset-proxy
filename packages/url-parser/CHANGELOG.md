@@ -1,6 +1,5 @@
 ## 0.3.0
 
-- Merge branch 'main' into task/fm/st-2553/imgproxy-backcomp
 - feat: ensure URL generator produces identical URLs to @imgproxy/imgproxy-node
 - feat: add best format selection for images
 
