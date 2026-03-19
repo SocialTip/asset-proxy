@@ -151,6 +151,7 @@ export async function processVideo(
       cut: parsed.cut,
       quality: parsed.formatQuality?.[parsed.outputFormat] ?? parsed.quality,
       maxBytes: parsed.maxBytes,
+      mute: parsed.mute,
       outputFormat: parsed.outputFormat,
       gpu: await gpuReady,
     }),
@@ -843,6 +844,7 @@ export interface VideoParams {
   cut?: number;
   quality?: number;
   maxBytes?: number;
+  mute?: boolean;
   outputFormat: OutputFormat;
   gpu: boolean;
 }
@@ -961,7 +963,11 @@ export function buildVideoArgs(
       args.push("-crf", String(Math.round(63 - (quality / 100) * 63)));
       args.push("-b:v", "0");
     }
-    args.push("-c:a", "libopus");
+    if (params.mute) {
+      args.push("-an");
+    } else {
+      args.push("-c:a", "libopus");
+    }
     if (maxBytes) args.push("-fs", String(maxBytes));
     args.push("-f", "webm", "pipe:1");
   } else {
@@ -978,7 +984,11 @@ export function buildVideoArgs(
         args.push("-crf", String(Math.round(51 - (quality / 100) * 51)));
       }
     }
-    args.push("-c:a", "copy");
+    if (params.mute) {
+      args.push("-an");
+    } else {
+      args.push("-c:a", "copy");
+    }
     args.push("-movflags", "frag_keyframe+empty_moov+faststart");
     if (maxBytes) args.push("-fs", String(maxBytes));
     args.push("-f", "mp4", "pipe:1");

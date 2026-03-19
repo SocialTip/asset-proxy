@@ -264,6 +264,7 @@ export const SHORTHANDS: Record<string, string> = {
   pr: "preset",
   fiu: "fallback_image_url",
   hs: "hashsum",
+  mu: "mute",
   msr: "max_src_resolution",
   msfs: "max_src_file_size",
   maf: "max_animation_frames",
@@ -410,6 +411,8 @@ const rawOptionsSchema = z
     framerate: zPositiveFloat.optional(),
     /** Limit video duration in seconds (video only). */
     cut: zPositiveFloat.optional(),
+    /** Strip audio from video output. */
+    mute: zBool.optional(),
 
     /** Remove uniform borders. Format: `<threshold>[:<colour>[:<equal_hor>[:<equal_vert>]]]`. */
     trim: z
@@ -798,6 +801,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     extendAspectRatio: data.extend_aspect_ratio,
     framerate: data.framerate,
     cut: data.cut,
+    mute: data.mute,
     trim: data.trim,
     brightness: data.brightness ?? data.adjust?.brightness ?? 0,
     contrast: data.contrast ?? data.adjust?.contrast ?? 1,
@@ -888,6 +892,8 @@ export const parsedUrlSchema = z.object({
   framerate: z.number().optional(),
   /** Limit output duration in seconds (video only). */
   cut: z.number().optional(),
+  /** Strip audio from video output. */
+  mute: z.boolean().optional(),
   /** Remove uniform borders from an image via cropdetect. */
   trim: z
     .object({
@@ -1216,6 +1222,7 @@ export function parseProcessingUrl(
     extendAspectRatio: parsedOptions.extendAspectRatio,
     framerate: parsedOptions.framerate,
     cut: parsedOptions.cut,
+    mute: parsedOptions.mute,
     trim: parsedOptions.trim,
     brightness: parsedOptions.brightness,
     contrast: parsedOptions.contrast,
