@@ -87,19 +87,7 @@ jobs:
               fi
 
               # Bump version
-              IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-              case "${{ inputs.bump }}" in
-                major) NEW_VERSION="$((major + 1)).0.0" ;;
-                minor) NEW_VERSION="${major}.$((minor + 1)).0" ;;
-                patch) NEW_VERSION="${major}.${minor}.$((patch + 1))" ;;
-              esac
-
-              node -e "
-                const fs = require('fs');
-                const pkg = JSON.parse(fs.readFileSync('$PKG_DIR/package.json', 'utf-8'));
-                pkg.version = '$NEW_VERSION';
-                fs.writeFileSync('$PKG_DIR/package.json', JSON.stringify(pkg, null, 2) + '\n');
-              "
+              NEW_VERSION=$(cd "$PKG_DIR" && npm version "${{ inputs.bump }}" --no-git-tag-version | tr -d 'v')
 
               if [ -n "$LOG_ENTRIES" ]; then
                 NEW_SECTION="## ${NEW_VERSION}\n\n${LOG_ENTRIES}"
