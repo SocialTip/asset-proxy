@@ -56,12 +56,20 @@ jobs:
         run: |
           BUMP="${{ inputs.bump || 'minor' }}"
           FORCE="${{ inputs.force || 'false' }}"
-          PACKAGES=("url-parser" "url-generator")
           CHANGED=""
           SUMMARY=""
 
-          for pkg in "${PACKAGES[@]}"; do
-            PKG_DIR="packages/$pkg"
+          for PKG_DIR in packages/*/; do
+            PKG_DIR="${PKG_DIR%/}"
+            pkg=$(basename "$PKG_DIR")
+
+            # Skip private packages
+            PRIVATE=$(node -p "require('./$PKG_DIR/package.json').private || false")
+            if [ "$PRIVATE" = "true" ]; then
+              echo "Skipping private package: $pkg"
+              continue
+            fi
+
             PKG_NAME=$(node -p "require('./$PKG_DIR/package.json').name")
             CURRENT_VERSION=$(node -p "require('./$PKG_DIR/package.json').version")
 

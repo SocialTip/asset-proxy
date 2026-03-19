@@ -705,7 +705,7 @@ describe("video ffmpeg args (GPU)", () => {
     width?: number;
     height?: number;
     framerate?: number;
-    trim?: number;
+    cut?: number;
     outputFormat?: string;
   }): string[] {
     return buildVideoArgs("https://example.com/video.mp4", {
@@ -715,7 +715,7 @@ describe("video ffmpeg args (GPU)", () => {
       width: opts.width ?? 480,
       height: opts.height ?? 360,
       framerate: opts.framerate,
-      trim: opts.trim,
+      cut: opts.cut,
       outputFormat: (opts.outputFormat ?? "mp4") as never,
       gpu: true,
     });
