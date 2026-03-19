@@ -10,6 +10,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
       contents: write
+      checks: read
     steps:
       - uses: actions/checkout@v4
         with:
