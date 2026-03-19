@@ -89,13 +89,13 @@ async function handleRequest(req: express.Request, res: express.Response) {
 
   if (isImageUrl(parsed)) {
     try {
-      const buffer = await processImage(sourceUrl, parsed);
+      const result = await processImage(sourceUrl, parsed);
       res.set(
         "Content-Type",
-        CONTENT_TYPES[parsed.outputFormat] || "image/jpeg",
+        CONTENT_TYPES[result.outputFormat] || "image/jpeg",
       );
       res.set("Cache-Control", env.CACHE_CONTROL);
-      res.send(buffer);
+      res.send(result.buffer);
     } catch (err) {
       const status = err instanceof HTTPError ? err.status : 500;
       const message =
