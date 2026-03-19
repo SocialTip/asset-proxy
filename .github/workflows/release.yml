@@ -1,11 +1,4 @@
-# Publishes a package to npm when a version tag is pushed.
-#
-# Triggered automatically by tag pushes matching @asset-proxy/*@*.
-# Detects which package the tag belongs to, verifies the version matches
-# package.json, builds the package, and publishes to npm as restricted.
-#
-# Tags are created by the Publish workflow (publish.yml).
-# See docs/Release.md for the full process.
+# Publishes a package to npm when a version tag is pushed. Triggered automatically by tag pushes matching @asset-proxy/*@*. Detects which package the tag belongs to, verifies the version matches package.json, builds the package, and publishes to npm as restricted. Tags are created by the Publish workflow (publish.yml). See docs/Release.md for the full process.
 
 name: Release
 

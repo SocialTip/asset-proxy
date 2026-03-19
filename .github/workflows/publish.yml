@@ -1,12 +1,4 @@
-# Creates git tags for the current package versions and pushes them.
-#
-# Triggered manually after a release PR has been merged. For each publishable
-# package, creates a tag in the format <package-name>@<version>. If a tag
-# already exists at a different commit, the workflow fails — this means the
-# Prepare Release workflow needs to be run first to bump versions.
-#
-# Pushing the tags automatically triggers release.yml to publish to npm.
-# See docs/Release.md for the full process.
+# Creates git tags for the current package versions and pushes them. Triggered manually after a release PR has been merged. For each publishable package, creates a tag in the format <package-name>@<version>. If a tag already exists at a different commit, the workflow fails — run the Prepare Release workflow first to bump versions. Pushing the tags automatically triggers release.yml to publish to npm. See docs/Release.md for the full process.
 
 name: Publish
 

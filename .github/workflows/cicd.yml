@@ -1,9 +1,4 @@
-# Continuous integration and deployment.
-#
-# Runs on every push to main and on pull requests. The CI job runs typecheck,
-# lint, build, and tests (unit + integration). On push to main or when
-# relevant files change in a PR, the CD job builds and pushes a Docker image
-# to GHCR. The required job gates CI and CD for branch protection.
+# Continuous integration and deployment. Runs on every push to main and on pull requests. The CI job runs typecheck, lint, build, and tests (unit + integration). On push to main or when relevant files change in a PR, the CD job builds and pushes a Docker image to GHCR. The required job gates CI and CD for branch protection.
 
 name: CI/CD
 

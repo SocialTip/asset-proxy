@@ -1,11 +1,4 @@
-# Prepares a release PR with version bumps and changelogs.
-#
-# Triggered manually. For each publishable package, finds changes since the
-# last git tag, bumps the minor version, and generates a CHANGELOG.md entry.
-# Opens a PR into main using peter-evans/create-pull-request.
-#
-# After merging the PR, run the Publish workflow to tag and release.
-# See docs/Release.md for the full process.
+# Prepares a release PR with version bumps and changelogs. Triggered manually. For each publishable package, finds changes since the last git tag, bumps the minor version, and generates a CHANGELOG.md entry. Opens a PR into main using peter-evans/create-pull-request. After merging the PR, run the Publish workflow to tag and release. See docs/Release.md for the full process.
 
 name: Prepare Release
 
