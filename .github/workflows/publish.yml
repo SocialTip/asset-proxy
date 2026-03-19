@@ -25,7 +25,7 @@ jobs:
 
       - name: Verify CI passed on HEAD
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           SHA=$(git rev-parse HEAD)
           STATUS=$(gh api "repos/${{ github.repository }}/commits/${SHA}/check-runs" \
