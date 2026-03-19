@@ -167,7 +167,7 @@ jobs:
       packages: write
 
   required:
-    if: always()
+    if: always() && !cancelled() && github.event_name == 'pull_request'
     needs: [test, docker-build, cd]
     permissions: {}
     runs-on: warp-ubuntu-latest-x64-2x
