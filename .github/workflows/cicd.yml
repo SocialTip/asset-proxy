@@ -79,7 +79,7 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq libimage-exiftool-perl heif-thumbnailer
 
       - name: Start asset-proxy
-        run: nohup pnpm --filter @asset-proxy/proxy exec tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
+        run: nohup pnpm --filter proxy exec tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

@@ -1,11 +1,11 @@
-# Publishes a package to the GitHub Packages registry when a version tag is pushed. Triggered automatically by tag pushes matching @asset-proxy/*@*. Detects which package the tag belongs to, verifies the version matches package.json, builds the package, and publishes. Tags are created by the Publish workflow (publish.yml). See docs/Release.md for the full process.
+# Publishes a package to the GitHub Packages registry when a version tag is pushed. Triggered automatically by tag pushes matching @socialtip/asset-proxy-*@*. Detects which package the tag belongs to, verifies the version matches package.json, builds the package, and publishes. Tags are created by the Publish workflow (publish.yml). See docs/Release.md for the full process.
 
 name: Release
 
 on:
   push:
     tags:
-      - "@asset-proxy/*@*"
+      - "@socialtip/asset-proxy-*@*"
 
 jobs:
   release:
@@ -30,7 +30,7 @@ jobs:
         id: detect
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          # Tag format: @asset-proxy/<name>@<version>
+          # Tag format: @socialtip/asset-proxy-<name>@<version>
           PKG_NAME=$(echo "$TAG" | sed 's/@[^@]*$//')
           VERSION=$(echo "$TAG" | sed 's/.*@//')
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"

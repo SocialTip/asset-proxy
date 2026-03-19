@@ -1,4 +1,4 @@
-# Builds a production image for the @asset-proxy/proxy package. Includes ffmpeg, exiftool, heif-thumbnailer, and optional NVIDIA GPU acceleration. Deployed to GCP Cloud Run via the CD workflow.
+# Builds a production image for the proxy package. Includes ffmpeg, exiftool, heif-thumbnailer, and optional NVIDIA GPU acceleration. Deployed to GCP Cloud Run via the CD workflow.
 
 # Build stage — use exact Node version matching .tool-versions
 FROM node:24.13.0 AS build
@@ -14,7 +14,7 @@ COPY packages/url-generator/package.json packages/url-generator/
 RUN pnpm install --frozen-lockfile
 
 COPY packages/ packages/
-RUN pnpm --filter @asset-proxy/url-parser build && pnpm --filter @asset-proxy/proxy build
+RUN pnpm --filter @socialtip/asset-proxy-url-parser build && pnpm --filter proxy build
 
 # Production stage
 FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04

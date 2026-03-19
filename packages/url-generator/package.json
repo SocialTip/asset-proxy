@@ -1,7 +1,7 @@
 {
-  "name": "@asset-proxy/url-generator",
+  "name": "@socialtip/asset-proxy-url-generator",
   "version": "0.1.4",
-  "description": "Generate assets-proxy-compatible URL paths with optional encryption and signing",
+  "description": "Generate asset-proxy-compatible URL paths with optional encryption and signing",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,7 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@asset-proxy/url-parser": "workspace:*"
+    "@socialtip/asset-proxy-url-parser": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

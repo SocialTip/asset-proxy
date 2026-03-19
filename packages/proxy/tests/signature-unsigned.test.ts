@@ -1,4 +1,4 @@
-import { verifySignature } from "@asset-proxy/url-parser";
+import { verifySignature } from "@socialtip/asset-proxy-url-parser";
 
 describe("verifySignature (keys not configured)", () => {
   it("accepts any signature value when keys are not set", () => {

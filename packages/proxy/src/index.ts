@@ -6,7 +6,7 @@ import {
   isVideoUrl,
   parseProcessingUrl,
   verifySignature,
-} from "@asset-proxy/url-parser";
+} from "@socialtip/asset-proxy-url-parser";
 import { env } from "./env.js";
 import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
 import { logger } from "./logger.js";

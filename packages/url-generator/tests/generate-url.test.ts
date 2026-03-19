@@ -3,7 +3,7 @@ import {
   parseProcessingUrl,
   decryptSourceUrl,
   verifySignature,
-} from "@asset-proxy/url-parser";
+} from "@socialtip/asset-proxy-url-parser";
 import { createHmac } from "node:crypto";
 
 const SRC = "https://example.com/photo.jpg";

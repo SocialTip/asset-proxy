@@ -61,7 +61,7 @@ vi.hoisted(() => {
 });
 
 const { parseProcessingUrl, isImageUrl } =
-  await import("@asset-proxy/url-parser");
+  await import("@socialtip/asset-proxy-url-parser");
 const { processImage, processVideo, buildVideoArgs } =
   await import("../src/ffmpeg.js");
 const { app } = await import("../src/index.js");

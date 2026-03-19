@@ -1,4 +1,4 @@
-# assets-proxy
+# asset-proxy
 
 An image and video processing service with an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses ffmpeg (with optional NVIDIA GPU acceleration) for the vast majority of processing, and sharp for certain image-specific operations.
 
@@ -319,14 +319,14 @@ When `SIGNING_KEY` and `SIGNING_SALT` are not set, the signature segment is stil
 
 ## URL generator package
 
-The `@asset-proxy/url-generator` npm package generates assets-proxy-compatible URL paths programmatically. It uses the same types as the server's URL parser.
+The `@socialtip/asset-proxy-url-generator` npm package generates asset-proxy-compatible URL paths programmatically. It uses the same types as the server's URL parser.
 
 ```bash
-npm install @asset-proxy/url-generator
+npm install @socialtip/asset-proxy-url-generator
 ```
 
 ```ts
-import { generateUrl } from "@asset-proxy/url-generator";
+import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 
 const url = generateUrl({
   sourceUrl: "https://example.com/photo.jpg",
@@ -354,11 +354,11 @@ const url = generateUrl(
 
 This repository is a pnpm monorepo with three packages:
 
-| Package                      | Path                     | Description                                                                   |
-| ---------------------------- | ------------------------ | ----------------------------------------------------------------------------- |
-| `@asset-proxy/url-parser`    | `packages/url-parser`    | Shared URL schema, parsing, signature verification/generation, and encryption |
-| `@asset-proxy/proxy`         | `packages/proxy`         | The image/video processing service (Express + ffmpeg + sharp)                 |
-| `@asset-proxy/url-generator` | `packages/url-generator` | Published npm package for generating compatible URL paths                     |
+| Package                                | Path                     | Published | Description                                                                        |
+| -------------------------------------- | ------------------------ | --------- | ---------------------------------------------------------------------------------- |
+| `@socialtip/asset-proxy-url-parser`    | `packages/url-parser`    | Yes       | Shared URL schema, parsing, signature verification/generation, and encryption      |
+| `@socialtip/asset-proxy-url-generator` | `packages/url-generator` | Yes       | Generates asset-proxy-compatible URL paths with encryption and signing             |
+| `proxy`                                | `packages/proxy`         | No        | The image/video processing service (Express + ffmpeg + sharp), deployed via Docker |
 
 ## Development
 
@@ -393,7 +393,7 @@ Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud
 
 ## Deployment
 
-CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`). The `@asset-proxy/url-parser` and `@asset-proxy/url-generator` packages are published to GitHub Packages on release.
+CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`). The `@socialtip/asset-proxy-url-parser` and `@socialtip/asset-proxy-url-generator` packages are published to GitHub Packages on release.
 
 Images are tagged with the commit SHA. Pushes to `main` are additionally tagged `latest`.
 

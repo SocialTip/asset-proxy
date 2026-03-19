@@ -1,17 +1,17 @@
-# @asset-proxy/url-generator
+# @socialtip/asset-proxy-url-generator
 
-Generate [assets-proxy](../../README.md)-compatible URL paths programmatically, with optional source URL encryption and HMAC signing.
+Generate [asset-proxy](../../README.md)-compatible URL paths programmatically, with optional source URL encryption and HMAC signing.
 
 ## Installation
 
 ```bash
-npm install @asset-proxy/url-generator
+npm install @socialtip/asset-proxy-url-generator
 ```
 
 ## Usage
 
 ```ts
-import { generateUrl } from "@asset-proxy/url-generator";
+import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 
 const url = generateUrl({
   sourceUrl: "https://example.com/photo.jpg",
@@ -47,4 +47,4 @@ const url = generateUrl(
 
 ### All options
 
-The `generateUrl` function accepts all processing options from the assets-proxy URL schema. See the [full options reference](../../README.md#processing-options) for details.
+The `generateUrl` function accepts all processing options from the asset-proxy URL schema. See the [full options reference](../../README.md#processing-options) for details.
