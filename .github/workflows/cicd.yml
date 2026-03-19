@@ -155,6 +155,7 @@ jobs:
       push: false
     permissions:
       contents: read
+      packages: write
 
   cd:
     if: github.event_name == 'push'
