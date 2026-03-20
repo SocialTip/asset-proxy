@@ -110,6 +110,42 @@ The component accepts:
 
 It defaults to `loading="lazy"` and `decoding="async"`, matching Astro's built-in behaviour.
 
+## Custom `<Video>` component
+
+The `<Video>` component works identically to `<Image>` but renders a `<video>` tag:
+
+```astro
+---
+import Video from "@socialtip/asset-proxy-astro/Video.astro";
+
+const config = {
+  baseUrl: "https://assets.example.com",
+};
+---
+
+<Video
+  src="https://example.com/clip.mp4"
+  config={config}
+  options={{
+    resize: { type: "fit", width: 1280, height: 720 },
+    outputFormat: "mp4",
+    framerate: 30,
+    cut: 10,
+    mute: true,
+  }}
+  controls
+  autoplay
+  muted
+/>
+```
+
+The component accepts:
+
+- **`src`** (required) — the source video URL
+- **`config`** (required) — an `AssetProxyServiceConfig` object (`baseUrl` + optional signing/encryption)
+- **`options`** — a `Partial<ParsedUrlInput>` object with proxy processing options (e.g. `resize`, `framerate`, `cut`, `mute`, `outputFormat`, etc.)
+- Standard HTML `<video>` attributes (`controls`, `autoplay`, `muted`, `loop`, `poster`, `width`, `height`, etc.)
+
 ## `getImageUrl` helper
 
 For cases where you need the URL string directly (e.g. in CSS, `srcset`, or server endpoints), use `getImageUrl`:

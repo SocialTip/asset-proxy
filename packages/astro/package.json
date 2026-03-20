@@ -10,11 +10,13 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./Image.astro": "./src/Image.astro"
+    "./Image.astro": "./src/Image.astro",
+    "./Video.astro": "./src/Video.astro"
   },
   "files": [
     "dist",
     "src/Image.astro",
+    "src/Video.astro",
     "src/get-image-url.ts"
   ],
   "scripts": {
