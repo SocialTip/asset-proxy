@@ -81,7 +81,8 @@ jobs:
 
           if [ -z "$(echo "$TAGGED" | xargs)" ]; then
             echo "::notice::No new tags to push — all versions are already tagged."
+          else
+            for TAG in $TAGGED; do
+              git push origin "$TAG"
+            done
           fi
-
-      - name: Push tags
-        run: git push origin --tags
