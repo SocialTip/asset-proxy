@@ -81,15 +81,10 @@ The Astro image service only exposes the subset of proxy options that Astro's `I
 ```astro
 ---
 import Image from "@socialtip/asset-proxy-astro/Image.astro";
-
-const config = {
-  baseUrl: "https://assets.example.com",
-};
 ---
 
 <Image
   src="https://example.com/photo.jpg"
-  config={config}
   options={{
     resize: { type: "fill", width: 640, height: 480 },
     quality: 90,
@@ -101,10 +96,12 @@ const config = {
 />
 ```
 
+The component reads `baseUrl` and signing/encryption settings from your `astro.config.mjs` image service config automatically. No need to pass `config` unless you want to override it per-image.
+
 The component accepts:
 
 - **`src`** (required) — the source image/video URL
-- **`config`** (required) — an `AssetProxyServiceConfig` object (`baseUrl` + optional signing/encryption)
+- **`config`** — override the global `AssetProxyServiceConfig` for this image (optional — defaults to the config from `astro.config.mjs`)
 - **`options`** — a `Partial<ParsedUrlInput>` object with proxy processing options (e.g. `resize`, `crop`, `gravity`, `blur`, `sharpen`, `monochrome`, `framerate`, etc.)
 - Standard HTML `<img>` attributes (`alt`, `class`, `loading`, `decoding`, etc.)
 
@@ -117,15 +114,10 @@ The `<Video>` component works identically to `<Image>` but renders a `<video>` t
 ```astro
 ---
 import Video from "@socialtip/asset-proxy-astro/Video.astro";
-
-const config = {
-  baseUrl: "https://assets.example.com",
-};
 ---
 
 <Video
   src="https://example.com/clip.mp4"
-  config={config}
   options={{
     resize: { type: "fit", width: 1280, height: 720 },
     outputFormat: "mp4",
@@ -142,7 +134,7 @@ const config = {
 The component accepts:
 
 - **`src`** (required) — the source video URL
-- **`config`** (required) — an `AssetProxyServiceConfig` object (`baseUrl` + optional signing/encryption)
+- **`config`** — override the global `AssetProxyServiceConfig` for this video (optional — defaults to the config from `astro.config.mjs`)
 - **`options`** — a `Partial<ParsedUrlInput>` object with proxy processing options (e.g. `resize`, `framerate`, `cut`, `mute`, `outputFormat`, etc.)
 - Standard HTML `<video>` attributes (`controls`, `autoplay`, `muted`, `loop`, `poster`, `width`, `height`, etc.)
 
