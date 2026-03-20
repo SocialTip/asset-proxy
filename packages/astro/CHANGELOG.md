@@ -1,3 +1,9 @@
+## 0.3.0
+
+- feat(astro): read config from astro.config automatically
+- feat(astro): add custom Video component
+- feat(astro): add custom Image component and getImageUrl helper
+
 ## 0.2.0
 
 - test: update image snapshots
