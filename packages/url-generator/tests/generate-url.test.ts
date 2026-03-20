@@ -306,34 +306,42 @@ describe("generateUrl", () => {
   it("generates CPU resizing algorithm", () => {
     const url = generateUrl({
       sourceUrl: SRC,
+      resize: { type: "fit", width: 480, height: 360 },
       resizingAlgorithm: { mode: "cpu", algorithm: "lanczos3" },
     });
-    expect(url).toBe(`/insecure/ra:lanczos3/plain/${SRC}`);
+    expect(url).toBe(`/insecure/rs:fit:480:360/ra:lanczos3/plain/${SRC}`);
   });
 
   it("generates GPU resizing algorithm without interpolation", () => {
     const url = generateUrl({
       sourceUrl: SRC,
+      resize: { type: "fill", width: 480, height: 360 },
       resizingAlgorithm: { mode: "gpu", scaler: "scale_cuda" },
     });
-    expect(url).toBe(`/insecure/ra:gpu:scale_cuda/plain/${SRC}`);
+    expect(url).toBe(
+      `/insecure/rs:fill:480:360/ra:gpu:scale_cuda/plain/${SRC}`,
+    );
   });
 
   it("generates GPU resizing algorithm with interpolation", () => {
     const url = generateUrl({
       sourceUrl: SRC,
+      resize: { type: "force", width: 1920, height: 1080 },
       resizingAlgorithm: {
         mode: "gpu",
         scaler: "scale_npp",
         algorithm: "lanczos3",
       },
     });
-    expect(url).toBe(`/insecure/ra:gpu:scale_npp:lanczos3/plain/${SRC}`);
+    expect(url).toBe(
+      `/insecure/rs:force:1920:1080/ra:gpu:scale_npp:lanczos3/plain/${SRC}`,
+    );
   });
 
   it("round-trips resizing algorithm through parseProcessingUrl", () => {
     const cpuUrl = generateUrl({
       sourceUrl: SRC,
+      resize: { type: "fit", width: 300, height: 200 },
       resizingAlgorithm: { mode: "cpu", algorithm: "cubic" },
     });
     const cpuParsed = parseProcessingUrl(cpuUrl.slice(cpuUrl.indexOf("/", 1)));
@@ -341,9 +349,11 @@ describe("generateUrl", () => {
       mode: "cpu",
       algorithm: "cubic",
     });
+    expect(cpuParsed.resize).toEqual({ type: "fit", width: 300, height: 200 });
 
     const gpuUrl = generateUrl({
       sourceUrl: SRC,
+      resize: { type: "fill", width: 480, height: 360 },
       resizingAlgorithm: {
         mode: "gpu",
         scaler: "scale_npp",
@@ -355,6 +365,11 @@ describe("generateUrl", () => {
       mode: "gpu",
       scaler: "scale_npp",
       algorithm: "lanczos2",
+    });
+    expect(gpuParsed.resize).toEqual({
+      type: "fill",
+      width: 480,
+      height: 360,
     });
   });
 
