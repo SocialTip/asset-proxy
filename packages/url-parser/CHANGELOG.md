@@ -1,3 +1,8 @@
+## 0.4.1
+
+- fix: preserve JSDoc on ParsedUrlInput in declaration output
+- feat: add resizingAlgorithm to parsedUrlSchema and URL generator
+
 ## 0.4.0
 
 - feat: add mute option to strip audio from video (ST-2456)
