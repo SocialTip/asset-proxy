@@ -1,3 +1,8 @@
+## 0.4.1
+
+- test: include resize dimensions in resizing algorithm tests
+- feat: add resizingAlgorithm to parsedUrlSchema and URL generator
+
 ## 0.4.0
 
 - feat: add /info/ endpoint for source asset metadata (ST-2517)
