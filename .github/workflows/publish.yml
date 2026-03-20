@@ -45,9 +45,6 @@ jobs:
         with:
           node-version-file: .tool-versions
 
-      - name: Debug — list existing tags
-        run: git tag -l
-
       - name: Create tags for current versions
         run: |
           TAGGED=""
