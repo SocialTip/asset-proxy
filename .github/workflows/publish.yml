@@ -67,19 +67,9 @@ jobs:
             VERSION=$(node -p "require('./$PKG_DIR/package.json').version")
             TAG="${PKG_NAME}@${VERSION}"
 
-            EXISTING=$(git tag -l "$TAG")
-            if [ -n "$EXISTING" ]; then
-              # Tag exists — check if it points to the current commit
-              TAG_COMMIT=$(git rev-list -1 "$TAG")
-              HEAD_COMMIT=$(git rev-parse HEAD)
-
-              if [ "$TAG_COMMIT" = "$HEAD_COMMIT" ]; then
-                echo "::notice::${TAG} already exists at HEAD, skipping"
-                continue
-              else
-                echo "::error::Tag ${TAG} exists but points to a different commit. Run the Prepare Release workflow and merge the PR before publishing."
-                exit 1
-              fi
+            if git tag -l "$TAG" | grep -q .; then
+              echo "::notice::${TAG} already exists, skipping"
+              continue
             fi
 
             git tag "$TAG"
