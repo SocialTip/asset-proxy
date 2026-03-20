@@ -318,7 +318,7 @@ async function processAndRespond(
         error: err instanceof Error ? err.message : String(err),
         sourceUrl: parsed.sourceUrl,
       });
-      throw new HTTPError("Error processing image", {
+      throw new HTTPError("Unhandled error", {
         code: "INTERNAL_SERVER_ERROR",
       });
     }
@@ -343,7 +343,7 @@ async function processAndRespond(
         error: err instanceof Error ? err.message : String(err),
         sourceUrl: parsed.sourceUrl,
       });
-      throw new HTTPError("Error processing video", {
+      throw new HTTPError("Unhandled error", {
         code: "INTERNAL_SERVER_ERROR",
       });
     }
