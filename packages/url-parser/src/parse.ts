@@ -23,6 +23,18 @@ export type ResizingAlgorithm =
 const cpuAlgorithmSet = new Set<string>(cpuAlgorithms);
 const gpuScalerSet = new Set<string>(gpuScalers);
 
+const resizingAlgorithmSchema = z.union([
+  z.object({
+    mode: z.literal("cpu"),
+    algorithm: z.enum(cpuAlgorithms),
+  }),
+  z.object({
+    mode: z.literal("gpu"),
+    scaler: z.enum(gpuScalers),
+    algorithm: z.enum(cpuAlgorithms).optional(),
+  }),
+]);
+
 const zResizingAlgorithm = z.string().transform((v): ResizingAlgorithm => {
   if (v.startsWith("gpu:")) {
     const parts = v.slice(4).split(":");
@@ -861,63 +873,209 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
   };
 });
 
-/**
- * Zod schema for a fully parsed asset-proxy URL. Validates all processing
- * options after URL segments have been decoded and shorthand names expanded.
- *
- * Use `z.input<typeof parsedUrlSchema>` (exported as `ParsedUrlInput`) for
- * the type accepted when constructing a URL, and `z.output<typeof parsedUrlSchema>`
- * for the validated result.
- */
-export const parsedUrlSchema = z.object({
+/** All processing options for an asset-proxy URL. Defined as an explicit interface so JSDoc is preserved in declaration output. */
+export interface ParsedUrlInput {
   /** Resize dimensions and mode (fit, fill, fill-down, force, auto). */
-  resize: resizeOptions.optional(),
+  resize?: ResizeOptions;
+  /** Scaling algorithm — CPU interpolation (e.g. lanczos3) or GPU scaler (scale_cuda, scale_npp). */
+  resizingAlgorithm?: ResizingAlgorithm;
   /** The source image/video URL to process. */
-  sourceUrl: z.string(),
+  sourceUrl: string;
   /** Output format: jpg, png, webp, avif, gif, mp4, webm. */
-  outputFormat,
+  outputFormat: OutputFormat;
   /** Minimum output width — upscales if the result would be narrower. */
-  minWidth: z.number().optional(),
+  minWidth?: number;
   /** Minimum output height — upscales if the result would be shorter. */
-  minHeight: z.number().optional(),
+  minHeight?: number;
   /** Pad undersized images to fill the target resize dimensions. */
+  extend?: { enabled: boolean; gravity: CompassGravity };
+  /** Extend the image to match the target aspect ratio. */
+  extendAspectRatio?: { enabled: boolean; gravity: CompassGravity };
+  /** Output framerate in fps (video only). */
+  framerate?: number;
+  /** Limit output duration in seconds (video only). */
+  cut?: number;
+  /** Strip audio from video output. */
+  mute?: boolean;
+  /** Remove uniform borders from an image via cropdetect. */
+  trim?: {
+    /** Colour similarity tolerance (0–255). */
+    threshold: number;
+    /** Hex colour to trim. Auto-detected if omitted. */
+    colour?: string;
+    /** Trim equal amounts from left and right. */
+    equalHor: boolean;
+    /** Trim equal amounts from top and bottom. */
+    equalVert: boolean;
+  };
+  /** Brightness adjustment (-255 to 255, 0 = no change). */
+  brightness: number;
+  /** Contrast multiplier (1 = no change). */
+  contrast: number;
+  /** Saturation multiplier (1 = no change). */
+  saturation: number;
+  /** Convert to monochrome with optional intensity and base colour. */
+  monochrome?: { intensity: number; colour: string };
+  /** Apply duotone effect with two colours. */
+  duotone?: { intensity: number; colour1: string; colour2: string };
+  /** Output quality 1–100 for lossy formats (JPEG, WebP, AVIF). */
+  quality?: number;
+  /** Per-format quality overrides: { jpg: 80, webp: 90, ... }. */
+  formatQuality?: Record<string, number>;
+  /** Autoquality: dssim (target DSSIM) or size (target bytes). */
+  autoquality?: {
+    method: "dssim" | "size";
+    target: number;
+    min: number;
+    max: number;
+    allowedError: number;
+  };
+  /** Max output size in bytes — degrades quality to fit. */
+  maxBytes?: number;
+  /** JPEG encoder options. */
+  jpegOptions?: {
+    progressive: boolean;
+    noSubsample: boolean;
+    trellisQuant: boolean;
+    overshootDeringing: boolean;
+    optimizeScans: boolean;
+    quantTable?: number;
+  };
+  /** PNG encoder options. */
+  pngOptions?: {
+    interlaced: boolean;
+    quantize: boolean;
+    quantizationColours?: number;
+  };
+  /** WebP encoder options. */
+  webpOptions?: {
+    compression?: number;
+    smartSubsample: boolean;
+    preset?: string;
+  };
+  /** AVIF encoder options. */
+  avifOptions?: { subsample?: string };
+  /** Gaussian blur sigma. */
+  blur?: number;
+  /** Sharpening sigma. */
+  sharpen?: number;
+  /** Pixelate block size in pixels. */
+  pixelate?: number;
+  /** Unsharp masking: mode (auto/always/none), weight, divider. */
+  unsharpMasking?: { mode: string; weight: number; divider: number };
+  /** Colour overlay with opacity. */
+  colorize?: { opacity: number; colour: string; keepAlpha: boolean };
+  /** Gradient overlay from transparent to colour. */
+  gradient?: {
+    opacity: number;
+    colour: string;
+    direction: string;
+    start: number;
+    stop: number;
+  };
+  /** Rotation angle: 0, 90, 180, or 270 degrees. */
+  rotate?: number;
+  /** Flip the image horizontally and/or vertically. */
+  flip?: { horizontal: boolean; vertical: boolean };
+  /** Rotate based on EXIF orientation data. */
+  autoRotate?: boolean;
+  /** Background colour (RGB) for padding, extend, and alpha flattening. */
+  background?: { r: number; g: number; b: number };
+  /** Background opacity (0–1). */
+  backgroundAlpha?: number;
+  /** Canvas padding in pixels: top, right, bottom, left. */
+  padding?: { top: number; right: number; bottom: number; left: number };
+  /** Remove EXIF and other metadata from the output. */
+  stripMetadata?: boolean;
+  /** Preserve copyright metadata when stripping. */
+  keepCopyright?: boolean;
+  /** Convert ICC colour profile to sRGB and remove it. */
+  stripColorProfile?: boolean;
+  /** Output DPI metadata value. */
+  dpi?: number;
+  /** Prefer embedded thumbnail over full image (HEIC/AVIF). */
+  enforceThumbnail?: boolean;
+  /** Extract video frame at this second. */
+  videoThumbnailSecond?: number;
+  /** Use only keyframes for video thumbnails. */
+  videoThumbnailKeyframes?: boolean;
+  /** Video animation config. */
+  videoThumbnailAnimation?: {
+    step: number;
+    delay: number;
+    frames: number;
+    frameWidth: number;
+    frameHeight: number;
+  };
+  /** Extract a region before resizing (width, height, optional gravity). */
+  crop?: { width: number; height: number; gravity?: Gravity };
+  /** Crop to a target aspect ratio (width/height as a float). */
+  cropAspectRatio?: number;
+  /** Anchor point for crop: compass direction or focus point. */
+  gravity?: Gravity;
+  /** Allow upscaling when the image is smaller than the target. */
+  enlarge?: boolean;
+  /** Automatically select the most efficient output format. */
+  bestFormat?: boolean;
+  /** Skip processing when the source extension matches one of these formats. */
+  skipProcessing?: string[];
+  /** Return the source without any processing. */
+  raw?: boolean;
+  /** Ignored cache-busting value. */
+  cacheBuster?: string;
+  /** Unix timestamp after which the URL returns 404. */
+  expires?: number;
+  /** Override the download filename in Content-Disposition. */
+  filename?: string;
+  /** When true, set Content-Disposition: attachment. */
+  returnAttachment?: boolean;
+  /** Fallback image URL (base64url-encoded) to serve when the source fails. */
+  fallbackImageUrl?: string;
+  /** Expected checksum of the source image. */
+  hashsum?: { type: string; hash: string };
+  /** Max source resolution in megapixels. */
+  maxSrcResolution?: number;
+  /** Max source file size in bytes. */
+  maxSrcFileSize?: number;
+  /** Max animation frames. */
+  maxAnimationFrames?: number;
+  /** Max animation frame resolution in megapixels. */
+  maxAnimationFrameResolution?: number;
+  /** Max result width or height in pixels. */
+  maxResultDimension?: number;
+}
+
+/** Zod schema for runtime validation of parsed asset-proxy URL options. The `ParsedUrlInput` interface is the authoritative type definition; this schema validates against it at compile time via `satisfies`. */
+export const parsedUrlSchema = z.object({
+  resize: resizeOptions.optional(),
+  resizingAlgorithm: resizingAlgorithmSchema.optional(),
+  sourceUrl: z.string(),
+  outputFormat,
+  minWidth: z.number().optional(),
+  minHeight: z.number().optional(),
   extend: z
     .object({ enabled: z.boolean(), gravity: compassGravity })
     .optional(),
-  /** Extend the image to match the target aspect ratio. */
   extendAspectRatio: z
     .object({ enabled: z.boolean(), gravity: compassGravity })
     .optional(),
-  /** Output framerate in fps (video only). */
   framerate: z.number().optional(),
-  /** Limit output duration in seconds (video only). */
   cut: z.number().optional(),
-  /** Strip audio from video output. */
   mute: z.boolean().optional(),
-  /** Remove uniform borders from an image via cropdetect. */
   trim: z
     .object({
-      /** Colour similarity tolerance (0–255). */
       threshold: z.number(),
-      /** Hex colour to trim. Auto-detected if omitted. */
       colour: z.string().optional(),
-      /** Trim equal amounts from left and right. */
       equalHor: z.boolean(),
-      /** Trim equal amounts from top and bottom. */
       equalVert: z.boolean(),
     })
     .optional(),
-  /** Brightness adjustment (-255 to 255, 0 = no change). */
   brightness: z.number(),
-  /** Contrast multiplier (1 = no change). */
   contrast: z.number(),
-  /** Saturation multiplier (1 = no change). */
   saturation: z.number(),
-  /** Convert to monochrome with optional intensity and base colour. */
   monochrome: z
     .object({ intensity: z.number(), colour: z.string() })
     .optional(),
-  /** Apply duotone effect with two colours. */
   duotone: z
     .object({
       intensity: z.number(),
@@ -925,11 +1083,8 @@ export const parsedUrlSchema = z.object({
       colour2: z.string(),
     })
     .optional(),
-  /** Output quality 1–100 for lossy formats (JPEG, WebP, AVIF). */
   quality: z.number().optional(),
-  /** Per-format quality overrides: { jpg: 80, webp: 90, ... }. */
   formatQuality: z.record(z.string(), z.number()).optional(),
-  /** Autoquality: dssim (target DSSIM) or size (target bytes). */
   autoquality: z
     .object({
       method: z.enum(["dssim", "size"]),
@@ -939,9 +1094,7 @@ export const parsedUrlSchema = z.object({
       allowedError: z.number(),
     })
     .optional(),
-  /** Max output size in bytes — degrades quality to fit. */
   maxBytes: z.number().optional(),
-  /** JPEG encoder options. */
   jpegOptions: z
     .object({
       progressive: z.boolean(),
@@ -952,7 +1105,6 @@ export const parsedUrlSchema = z.object({
       quantTable: z.number().optional(),
     })
     .optional(),
-  /** PNG encoder options. */
   pngOptions: z
     .object({
       interlaced: z.boolean(),
@@ -960,7 +1112,6 @@ export const parsedUrlSchema = z.object({
       quantizationColours: z.number().optional(),
     })
     .optional(),
-  /** WebP encoder options. */
   webpOptions: z
     .object({
       compression: z.number().optional(),
@@ -968,23 +1119,17 @@ export const parsedUrlSchema = z.object({
       preset: z.string().optional(),
     })
     .optional(),
-  /** AVIF encoder options. */
   avifOptions: z
     .object({
       subsample: z.string().optional(),
     })
     .optional(),
-  /** Gaussian blur sigma. */
   blur: z.number().optional(),
-  /** Sharpening sigma. */
   sharpen: z.number().optional(),
-  /** Pixelate block size in pixels. */
   pixelate: z.number().optional(),
-  /** Unsharp masking: mode (auto/always/none), weight, divider. */
   unsharpMasking: z
     .object({ mode: z.string(), weight: z.number(), divider: z.number() })
     .optional(),
-  /** Colour overlay with opacity. */
   colorize: z
     .object({
       opacity: z.number(),
@@ -992,7 +1137,6 @@ export const parsedUrlSchema = z.object({
       keepAlpha: z.boolean(),
     })
     .optional(),
-  /** Gradient overlay from transparent to colour. */
   gradient: z
     .object({
       opacity: z.number(),
@@ -1002,33 +1146,19 @@ export const parsedUrlSchema = z.object({
       stop: z.number(),
     })
     .optional(),
-  /** Rotation angle: 0, 90, 180, or 270 degrees. */
   rotate: z.number().optional(),
-  /** Flip the image horizontally and/or vertically. */
   flip: z.object({ horizontal: z.boolean(), vertical: z.boolean() }).optional(),
-  /** Rotate based on EXIF orientation data. */
   autoRotate: z.boolean().optional(),
-  /** Background colour (RGB) for padding, extend, and alpha flattening. */
   background: rgb.optional(),
-  /** Background opacity (0–1). */
   backgroundAlpha: z.number().optional(),
-  /** Canvas padding in pixels: top, right, bottom, left. */
   padding: sides.optional(),
-  /** Remove EXIF and other metadata from the output. */
   stripMetadata: z.boolean().optional(),
-  /** Preserve copyright metadata when stripping. */
   keepCopyright: z.boolean().optional(),
-  /** Convert ICC colour profile to sRGB and remove it. */
   stripColorProfile: z.boolean().optional(),
-  /** Output DPI metadata value. */
   dpi: z.number().optional(),
-  /** Prefer embedded thumbnail over full image (HEIC/AVIF). */
   enforceThumbnail: z.boolean().optional(),
-  /** Extract video frame at this second. */
   videoThumbnailSecond: z.number().optional(),
-  /** Use only keyframes for video thumbnails. */
   videoThumbnailKeyframes: z.boolean().optional(),
-  /** Video animation config. */
   videoThumbnailAnimation: z
     .object({
       step: z.number(),
@@ -1038,7 +1168,6 @@ export const parsedUrlSchema = z.object({
       frameHeight: z.number(),
     })
     .optional(),
-  /** Extract a region before resizing (width, height, optional gravity). */
   crop: z
     .object({
       width: z.number(),
@@ -1046,52 +1175,27 @@ export const parsedUrlSchema = z.object({
       gravity: gravitySchema.optional(),
     })
     .optional(),
-  /** Crop to a target aspect ratio (width/height as a float). */
   cropAspectRatio: z.number().optional(),
-  /** Anchor point for crop: compass direction or focus point. */
   gravity: gravitySchema.optional(),
-  /** Allow upscaling when the image is smaller than the target. */
   enlarge: z.boolean().optional(),
-  /** Automatically select the most efficient output format. */
   bestFormat: z.boolean().optional(),
-  /** Skip processing when the source extension matches one of these formats. */
   skipProcessing: z.array(z.string()).optional(),
-  /** Return the source without any processing. */
   raw: z.boolean().optional(),
-  /** Ignored cache-busting value. */
   cacheBuster: z.string().optional(),
-  /** Unix timestamp after which the URL returns 404. */
   expires: z.number().optional(),
-  /** Override the download filename in Content-Disposition. */
   filename: z.string().optional(),
-  /** When true, set Content-Disposition: attachment. */
   returnAttachment: z.boolean().optional(),
-  /** Fallback image URL (base64url-encoded) to serve when the source fails. */
   fallbackImageUrl: z.string().optional(),
-  /** Expected checksum of the source image. */
   hashsum: z.object({ type: z.string(), hash: z.string() }).optional(),
-  /** Max source resolution in megapixels. */
   maxSrcResolution: z.number().optional(),
-  /** Max source file size in bytes. */
   maxSrcFileSize: z.number().optional(),
-  /** Max animation frames. */
   maxAnimationFrames: z.number().optional(),
-  /** Max animation frame resolution in megapixels. */
   maxAnimationFrameResolution: z.number().optional(),
-  /** Max result width or height in pixels. */
   maxResultDimension: z.number().optional(),
-});
+}) satisfies z.ZodType<ParsedUrlInput>;
 
-type ParsedUrlBase = z.output<typeof parsedUrlSchema>;
-
-/** The input type for generating URLs — all fields from parsedUrlSchema. */
-export type ParsedUrlInput = z.input<typeof parsedUrlSchema>;
-
-/** Fully parsed URL including fields not validated by the Zod schema. */
-export type ParsedUrl = ParsedUrlBase & {
-  /** Scaling algorithm — CPU (sws_flags) or GPU (scale_cuda/scale_npp). */
-  resizingAlgorithm?: ResizingAlgorithm;
-};
+/** Fully parsed URL with all processing options validated. */
+export type ParsedUrl = z.output<typeof parsedUrlSchema>;
 
 export type ImageUrl = ParsedUrl & { outputFormat: ImageFormat };
 export type VideoUrl = ParsedUrl & { outputFormat: VideoFormat };
@@ -1214,6 +1318,7 @@ export function parseProcessingUrl(
 
   const parsed = parsedUrlSchema.parse({
     resize: parsedOptions.resize,
+    resizingAlgorithm: parsedOptions.resizingAlgorithm,
     sourceUrl,
     outputFormat: format,
     minWidth: parsedOptions.minWidth,
@@ -1277,8 +1382,5 @@ export function parseProcessingUrl(
     maxResultDimension: parsedOptions.maxResultDimension,
   });
 
-  return {
-    ...parsed,
-    resizingAlgorithm: parsedOptions.resizingAlgorithm,
-  };
+  return parsed;
 }

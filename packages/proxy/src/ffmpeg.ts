@@ -418,8 +418,10 @@ async function extractThumbnail(
   // Try exiftool first (works for AVIF/JPEG EXIF thumbnails)
   const exifThumb = join(dir, "thumbnail.jpg");
   try {
+    const exiftoolExtractArgs = ["-b", "-ThumbnailImage", sourcePath];
+    logger.verbose("Running exiftool", { args: exiftoolExtractArgs.join(" ") });
     await new Promise<void>((resolve, reject) => {
-      const proc = spawn("exiftool", ["-b", "-ThumbnailImage", sourcePath]);
+      const proc = spawn("exiftool", exiftoolExtractArgs);
       const chunks: Buffer[] = [];
       proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
       proc.on("close", async (code) => {
@@ -440,8 +442,10 @@ async function extractThumbnail(
   // Try heif-thumbnailer (works for HEIC container thumbnails)
   const heifThumb = join(dir, "thumbnail.png");
   try {
+    const heifArgs = [sourcePath, heifThumb];
+    logger.verbose("Running heif-thumbnailer", { args: heifArgs.join(" ") });
     await new Promise<void>((resolve, reject) => {
-      const proc = spawn("heif-thumbnailer", [sourcePath, heifThumb]);
+      const proc = spawn("heif-thumbnailer", heifArgs);
       proc.on("close", async (code) => {
         if (code !== 0) {
           reject(new Error("No HEIC thumbnail"));
@@ -528,7 +532,7 @@ async function computeDssim(a: Buffer, b: Buffer): Promise<number> {
   await writeFile(pathB, await sharp(b).png().toBuffer());
 
   return new Promise<number>((resolve) => {
-    const proc = spawn("ffmpeg", [
+    const ssimArgs = [
       "-hide_banner",
       "-i",
       pathA,
@@ -539,7 +543,9 @@ async function computeDssim(a: Buffer, b: Buffer): Promise<number> {
       "-f",
       "null",
       "-",
-    ]);
+    ];
+    logger.verbose("Running ffmpeg", { args: ssimArgs.join(" ") });
+    const proc = spawn("ffmpeg", ssimArgs);
 
     let stderr = "";
     proc.stderr.on("data", (chunk: Buffer) => {
@@ -732,6 +738,7 @@ async function runExiftool(
     );
   }
   exiftoolArgs.push(outPath);
+  logger.verbose("Running exiftool", { args: exiftoolArgs.join(" ") });
 
   await new Promise<void>((resolve, reject) => {
     const proc = spawn("exiftool", exiftoolArgs);
@@ -748,6 +755,7 @@ async function runExiftool(
 }
 
 function runFfmpeg(args: string[]): Readable {
+  logger.verbose("Running ffmpeg", { args: args.join(" ") });
   const proc = spawn("ffmpeg", args);
 
   let stderr = "";
@@ -799,6 +807,7 @@ function detectTrimCrop(
       "null",
       "-",
     ];
+    logger.verbose("Running ffmpeg", { args: args.join(" ") });
 
     const proc = spawn("ffmpeg", args);
     let stderr = "";
@@ -902,13 +911,22 @@ export function buildVideoArgs(
         "CPU resizing algorithms are not supported with GPU acceleration — use gpu:scale_cuda or gpu:scale_npp, or disable GPU",
         { code: "BAD_REQUEST" },
       );
+    } else if (hasResize && resizingType && resizingType !== "force") {
+      const defaultScaler: ResizingAlgorithm = {
+        mode: "gpu",
+        scaler: "scale_cuda",
+      };
+      args.push("-i", sourceUrl);
+      const scaleFilter = buildScaleFilter({
+        resizingType,
+        resizingAlgorithm: defaultScaler,
+        width,
+        height,
+        gpu: true,
+      });
+      const vf = [...preFilters, scaleFilter, ...postFilters].join(",");
+      args.push("-vf", vf);
     } else if (hasResize) {
-      if (resizingType && resizingType !== "force") {
-        throw new HTTPError(
-          `Resize type '${resizingType}' is not supported with default GPU resize — specify ra:gpu:scale_cuda or ra:gpu:scale_npp for ${resizingType} mode`,
-          { code: "BAD_REQUEST" },
-        );
-      }
       if (width <= 0 || height <= 0) {
         throw new HTTPError(
           "Both width and height are required for default GPU resize",
