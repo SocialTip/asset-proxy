@@ -73,3 +73,85 @@ https://assets.example.com/_/rs:fit:800:600/q:80/plain/https://example.com/photo
 | `quality` | `quality` (numeric or preset: `low` = 30, `mid` = 50, `high` = 80, `max` = 100)    |
 | `format`  | Output format suffix (`jpeg` is normalised to `jpg`)                               |
 | `fit`     | Resizing type (`contain`/`scale-down` → `fit`, `cover` → `fill`, `fill` → `force`) |
+
+## Custom `<Image>` component
+
+The Astro image service only exposes the subset of proxy options that Astro's `ImageTransform` supports. For full access to all ~70 proxy options, use the custom `<Image>` component:
+
+```astro
+---
+import Image from "@socialtip/asset-proxy-astro/Image.astro";
+---
+
+<Image
+  src="https://example.com/photo.jpg"
+  options={{
+    resize: { type: "fill", width: 640, height: 480 },
+    quality: 90,
+    outputFormat: "avif",
+    blur: 2,
+    gravity: "ce",
+  }}
+  alt="A photo"
+/>
+```
+
+The component reads `baseUrl` and signing/encryption settings from your `astro.config.mjs` image service config automatically. No need to pass `config` unless you want to override it per-image.
+
+The component accepts:
+
+- **`src`** (required) — the source image/video URL
+- **`config`** — override the global `AssetProxyServiceConfig` for this image (optional — defaults to the config from `astro.config.mjs`)
+- **`options`** — a `Partial<ParsedUrlInput>` object with proxy processing options (e.g. `resize`, `crop`, `gravity`, `blur`, `sharpen`, `monochrome`, `framerate`, etc.)
+- Standard HTML `<img>` attributes (`alt`, `class`, `loading`, `decoding`, etc.)
+
+It defaults to `loading="lazy"` and `decoding="async"`, matching Astro's built-in behaviour.
+
+## Custom `<Video>` component
+
+The `<Video>` component works identically to `<Image>` but renders a `<video>` tag:
+
+```astro
+---
+import Video from "@socialtip/asset-proxy-astro/Video.astro";
+---
+
+<Video
+  src="https://example.com/clip.mp4"
+  options={{
+    resize: { type: "fit", width: 1280, height: 720 },
+    outputFormat: "mp4",
+    framerate: 30,
+    cut: 10,
+    mute: true,
+  }}
+  controls
+  autoplay
+  muted
+/>
+```
+
+The component accepts:
+
+- **`src`** (required) — the source video URL
+- **`config`** — override the global `AssetProxyServiceConfig` for this video (optional — defaults to the config from `astro.config.mjs`)
+- **`options`** — a `Partial<ParsedUrlInput>` object with proxy processing options (e.g. `resize`, `framerate`, `cut`, `mute`, `outputFormat`, etc.)
+- Standard HTML `<video>` attributes (`controls`, `autoplay`, `muted`, `loop`, `poster`, `width`, `height`, etc.)
+
+## `getImageUrl` helper
+
+For cases where you need the URL string directly (e.g. in CSS, `srcset`, or server endpoints), use `getImageUrl`:
+
+```ts
+import { getImageUrl } from "@socialtip/asset-proxy-astro";
+
+const url = getImageUrl(
+  {
+    src: "https://example.com/photo.jpg",
+    resize: { type: "fit", width: 800, height: 600 },
+    quality: 80,
+    outputFormat: "webp",
+  },
+  { baseUrl: "https://assets.example.com" },
+);
+```

@@ -95,14 +95,26 @@ beforeEach(() => {
 });
 
 describe("error handling", () => {
-  it("returns 500 with generic message when image processing fails", async () => {
+  it("returns 500 with 'Unhandled error' when image processing fails", async () => {
     setupSpawnMockError();
     const res = await request(app)
       .get("/insecure/w:100/plain/https://example.com/photo.jpg")
       .buffer(true);
 
     expect(res.status).toBe(500);
-    expect(res.text).toBe("Error processing image");
+    expect(res.text).toBe("Unhandled error");
+  });
+
+  it("returns the error message for handled errors", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      "/insecure/ra:gpu:scale_cuda/w:100/plain/https://example.com/photo.jpg",
+    );
+
+    expect(res.status).toBe(400);
+    expect(res.text).toMatchInlineSnapshot(
+      `"GPU resizing algorithms (gpu:*) are only available for video processing with GPU acceleration — use CPU algorithms for image thumbnails"`,
+    );
   });
 });
 
