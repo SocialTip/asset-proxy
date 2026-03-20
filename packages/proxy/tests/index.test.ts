@@ -112,7 +112,9 @@ describe("error handling", () => {
     );
 
     expect(res.status).toBe(400);
-    expect(res.text).toContain("GPU resizing algorithms");
+    expect(res.text).toMatchInlineSnapshot(
+      `"GPU resizing algorithms (gpu:*) are only available for video processing with GPU acceleration — use CPU algorithms for image thumbnails"`,
+    );
   });
 });
 
