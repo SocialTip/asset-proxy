@@ -4,6 +4,9 @@ name: Publish
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/publish.yml
 
 jobs:
   tag-and-push:
@@ -21,10 +24,12 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           fetch-tags: true
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Wait for CI to pass on HEAD
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -39,6 +44,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .tool-versions
+
+      - name: Debug — list existing tags
+        run: git tag -l
 
       - name: Create tags for current versions
         run: |
@@ -81,6 +89,8 @@ jobs:
 
           if [ -z "$(echo "$TAGGED" | xargs)" ]; then
             echo "::notice::No new tags to push — all versions are already tagged."
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "::notice::Dry run — would push tags:${TAGGED}"
           else
             for TAG in $TAGGED; do
               git push origin "$TAG"
