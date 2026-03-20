@@ -505,6 +505,81 @@ pnpm test:down    # stop and remove containers
 | `MAX_ANIMATION_FRAME_RESOLUTION`   | `0`                                   | Max animation frame resolution in megapixels. 0 = unlimited.                                                                              |
 | `MAX_RESULT_DIMENSION`             | `0`                                   | Max result width or height in pixels. 0 = unlimited.                                                                                      |
 
+## Info endpoint
+
+The `/info/` endpoint returns JSON metadata about a source asset (image or video) without processing it.
+
+### URL format
+
+```
+/info/<signature>/<options>/plain/<source_url>
+/info/<signature>/<options>/enc/<encrypted_source_url>
+```
+
+The path after `/info` follows the same format as processing URLs — the same signature verification, encryption, and origin checks apply. Processing options in the URL are ignored; only the source URL and security options are used.
+
+**Example:**
+
+```
+/info/_/plain/https://example.com/photo.jpg
+/info/oKfUtW34Dvo.../enc/dGhpcyBpcyBhIGJhc2U2NC...
+```
+
+### Response
+
+Returns `application/json` with a `Cache-Control` header.
+
+**Image response:**
+
+```json
+{
+  "format": "png",
+  "mime_type": "image/png",
+  "width": 1920,
+  "height": 1080,
+  "size": 245760
+}
+```
+
+**Video response:**
+
+```json
+{
+  "format": "mov",
+  "mime_type": "video/quicktime",
+  "width": 1920,
+  "height": 1080,
+  "size": 5242880,
+  "duration": 30.5,
+  "video_meta": {
+    "codec": "h264",
+    "bitrate": 1200000,
+    "framerate": 29.97
+  }
+}
+```
+
+| Field        | Type   | Description                                      |
+| ------------ | ------ | ------------------------------------------------ |
+| `format`     | string | Codec name (images) or container format (videos) |
+| `mime_type`  | string | MIME type of the source                          |
+| `width`      | number | Width in pixels                                  |
+| `height`     | number | Height in pixels                                 |
+| `size`       | number | File size in bytes (from `Content-Length` HEAD)  |
+| `duration`   | number | Duration in seconds (video only)                 |
+| `video_meta` | object | Video stream details (video only)                |
+
+### URL generator
+
+```ts
+import { generateInfoUrl } from "@socialtip/asset-proxy-url-generator";
+
+const url = generateInfoUrl({
+  sourceUrl: "https://example.com/photo.jpg",
+});
+// => /info/_/plain/https://example.com/photo.jpg
+```
+
 ## Health check
 
 ```

@@ -59,6 +59,16 @@ export function generateUrl(
   return `/${signature}${pathAfterSignature}`;
 }
 
+/** Generates an asset-proxy info URL path that returns JSON metadata about the source asset. */
+export function generateInfoUrl(
+  options: UrlGeneratorOptions,
+  config?: UrlGeneratorConfig,
+): string {
+  const processingUrl = generateUrl(options, config);
+  // Insert /info before the signature
+  return `/info${processingUrl}`;
+}
+
 function bool(v: boolean): string {
   return v ? "1" : "0";
 }
