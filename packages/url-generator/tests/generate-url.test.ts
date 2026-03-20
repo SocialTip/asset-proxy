@@ -303,6 +303,61 @@ describe("generateUrl", () => {
     expect(parsed.mute).toBe(true);
   });
 
+  it("generates CPU resizing algorithm", () => {
+    const url = generateUrl({
+      sourceUrl: SRC,
+      resizingAlgorithm: { mode: "cpu", algorithm: "lanczos3" },
+    });
+    expect(url).toBe(`/insecure/ra:lanczos3/plain/${SRC}`);
+  });
+
+  it("generates GPU resizing algorithm without interpolation", () => {
+    const url = generateUrl({
+      sourceUrl: SRC,
+      resizingAlgorithm: { mode: "gpu", scaler: "scale_cuda" },
+    });
+    expect(url).toBe(`/insecure/ra:gpu:scale_cuda/plain/${SRC}`);
+  });
+
+  it("generates GPU resizing algorithm with interpolation", () => {
+    const url = generateUrl({
+      sourceUrl: SRC,
+      resizingAlgorithm: {
+        mode: "gpu",
+        scaler: "scale_npp",
+        algorithm: "lanczos3",
+      },
+    });
+    expect(url).toBe(`/insecure/ra:gpu:scale_npp:lanczos3/plain/${SRC}`);
+  });
+
+  it("round-trips resizing algorithm through parseProcessingUrl", () => {
+    const cpuUrl = generateUrl({
+      sourceUrl: SRC,
+      resizingAlgorithm: { mode: "cpu", algorithm: "cubic" },
+    });
+    const cpuParsed = parseProcessingUrl(cpuUrl.slice(cpuUrl.indexOf("/", 1)));
+    expect(cpuParsed.resizingAlgorithm).toEqual({
+      mode: "cpu",
+      algorithm: "cubic",
+    });
+
+    const gpuUrl = generateUrl({
+      sourceUrl: SRC,
+      resizingAlgorithm: {
+        mode: "gpu",
+        scaler: "scale_npp",
+        algorithm: "lanczos2",
+      },
+    });
+    const gpuParsed = parseProcessingUrl(gpuUrl.slice(gpuUrl.indexOf("/", 1)));
+    expect(gpuParsed.resizingAlgorithm).toEqual({
+      mode: "gpu",
+      scaler: "scale_npp",
+      algorithm: "lanczos2",
+    });
+  });
+
   it("round-trips through parseProcessingUrl", () => {
     const url = generateUrl({
       sourceUrl: SRC,

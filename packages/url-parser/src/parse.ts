@@ -23,6 +23,18 @@ export type ResizingAlgorithm =
 const cpuAlgorithmSet = new Set<string>(cpuAlgorithms);
 const gpuScalerSet = new Set<string>(gpuScalers);
 
+const resizingAlgorithmSchema = z.union([
+  z.object({
+    mode: z.literal("cpu"),
+    algorithm: z.enum(cpuAlgorithms),
+  }),
+  z.object({
+    mode: z.literal("gpu"),
+    scaler: z.enum(gpuScalers),
+    algorithm: z.enum(cpuAlgorithms).optional(),
+  }),
+]);
+
 const zResizingAlgorithm = z.string().transform((v): ResizingAlgorithm => {
   if (v.startsWith("gpu:")) {
     const parts = v.slice(4).split(":");
@@ -872,6 +884,8 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
 export const parsedUrlSchema = z.object({
   /** Resize dimensions and mode (fit, fill, fill-down, force, auto). */
   resize: resizeOptions.optional(),
+  /** Scaling algorithm — CPU interpolation (e.g. lanczos3) or GPU scaler (scale_cuda, scale_npp). */
+  resizingAlgorithm: resizingAlgorithmSchema.optional(),
   /** The source image/video URL to process. */
   sourceUrl: z.string(),
   /** Output format: jpg, png, webp, avif, gif, mp4, webm. */
@@ -1082,16 +1096,11 @@ export const parsedUrlSchema = z.object({
   maxResultDimension: z.number().optional(),
 });
 
-type ParsedUrlBase = z.output<typeof parsedUrlSchema>;
-
 /** The input type for generating URLs — all fields from parsedUrlSchema. */
 export type ParsedUrlInput = z.input<typeof parsedUrlSchema>;
 
-/** Fully parsed URL including fields not validated by the Zod schema. */
-export type ParsedUrl = ParsedUrlBase & {
-  /** Scaling algorithm — CPU (sws_flags) or GPU (scale_cuda/scale_npp). */
-  resizingAlgorithm?: ResizingAlgorithm;
-};
+/** Fully parsed URL with all processing options validated. */
+export type ParsedUrl = z.output<typeof parsedUrlSchema>;
 
 export type ImageUrl = ParsedUrl & { outputFormat: ImageFormat };
 export type VideoUrl = ParsedUrl & { outputFormat: VideoFormat };
@@ -1214,6 +1223,7 @@ export function parseProcessingUrl(
 
   const parsed = parsedUrlSchema.parse({
     resize: parsedOptions.resize,
+    resizingAlgorithm: parsedOptions.resizingAlgorithm,
     sourceUrl,
     outputFormat: format,
     minWidth: parsedOptions.minWidth,
@@ -1277,8 +1287,5 @@ export function parseProcessingUrl(
     maxResultDimension: parsedOptions.maxResultDimension,
   });
 
-  return {
-    ...parsed,
-    resizingAlgorithm: parsedOptions.resizingAlgorithm,
-  };
+  return parsed;
 }

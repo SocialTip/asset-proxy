@@ -91,6 +91,17 @@ function serializeOptions(options: UrlGeneratorOptions): string[] {
     );
   }
 
+  if (options.resizingAlgorithm) {
+    const ra = options.resizingAlgorithm;
+    if (ra.mode === "cpu") {
+      segments.push(`ra:${ra.algorithm}`);
+    } else {
+      let s = `ra:gpu:${ra.scaler}`;
+      if (ra.algorithm) s += `:${ra.algorithm}`;
+      segments.push(s);
+    }
+  }
+
   if (options.minWidth !== undefined) segments.push(`mw:${options.minWidth}`);
   if (options.minHeight !== undefined) segments.push(`mh:${options.minHeight}`);
   if (options.enlarge !== undefined)
