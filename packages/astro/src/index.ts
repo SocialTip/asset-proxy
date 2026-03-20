@@ -5,6 +5,12 @@ import {
   type UrlGeneratorOptions,
 } from "@socialtip/asset-proxy-url-generator";
 
+export type {
+  UrlGeneratorOptions,
+  ParsedUrlInput,
+} from "@socialtip/asset-proxy-url-generator";
+export { getImageUrl, type GetImageUrlOptions } from "./get-image-url.js";
+
 export interface AssetProxyServiceConfig extends UrlGeneratorConfig {
   /** Base URL of the asset-proxy instance, e.g. `https://assets.example.com`. */
   baseUrl: string;

@@ -73,3 +73,57 @@ https://assets.example.com/_/rs:fit:800:600/q:80/plain/https://example.com/photo
 | `quality` | `quality` (numeric or preset: `low` = 30, `mid` = 50, `high` = 80, `max` = 100)    |
 | `format`  | Output format suffix (`jpeg` is normalised to `jpg`)                               |
 | `fit`     | Resizing type (`contain`/`scale-down` → `fit`, `cover` → `fill`, `fill` → `force`) |
+
+## Custom `<Image>` component
+
+The Astro image service only exposes the subset of proxy options that Astro's `ImageTransform` supports. For full access to all ~70 proxy options, use the custom `<Image>` component:
+
+```astro
+---
+import Image from "@socialtip/asset-proxy-astro/Image.astro";
+
+const config = {
+  baseUrl: "https://assets.example.com",
+};
+---
+
+<Image
+  src="https://example.com/photo.jpg"
+  config={config}
+  options={{
+    resize: { type: "fill", width: 640, height: 480 },
+    quality: 90,
+    outputFormat: "avif",
+    blur: 2,
+    gravity: "ce",
+  }}
+  alt="A photo"
+/>
+```
+
+The component accepts:
+
+- **`src`** (required) — the source image/video URL
+- **`config`** (required) — an `AssetProxyServiceConfig` object (`baseUrl` + optional signing/encryption)
+- **`options`** — a `Partial<ParsedUrlInput>` object with proxy processing options (e.g. `resize`, `crop`, `gravity`, `blur`, `sharpen`, `monochrome`, `framerate`, etc.)
+- Standard HTML `<img>` attributes (`alt`, `class`, `loading`, `decoding`, etc.)
+
+It defaults to `loading="lazy"` and `decoding="async"`, matching Astro's built-in behaviour.
+
+## `getImageUrl` helper
+
+For cases where you need the URL string directly (e.g. in CSS, `srcset`, or server endpoints), use `getImageUrl`:
+
+```ts
+import { getImageUrl } from "@socialtip/asset-proxy-astro";
+
+const url = getImageUrl(
+  {
+    src: "https://example.com/photo.jpg",
+    resize: { type: "fit", width: 800, height: 600 },
+    quality: 80,
+    outputFormat: "webp",
+  },
+  { baseUrl: "https://assets.example.com" },
+);
+```

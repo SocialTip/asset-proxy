@@ -1,0 +1,22 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import type { ParsedUrlInput } from "@socialtip/asset-proxy-url-generator";
+import type { AssetProxyServiceConfig } from "./index.js";
+import { getImageUrl } from "./get-image-url.js";
+
+type Props = {
+  src: string;
+  config: AssetProxyServiceConfig;
+  /** Asset-proxy processing options — resize, crop, quality, format, effects, video options, etc. See `ParsedUrlInput` for the full list of available fields. */
+  options?: Partial<Omit<ParsedUrlInput, "sourceUrl">>;
+} & Omit<HTMLAttributes<"img">, "src">;
+
+const { src, config, options, ...htmlAttrs } = Astro.props;
+
+const imageUrl = getImageUrl({ src, ...options }, config);
+
+if (!("loading" in htmlAttrs)) (htmlAttrs as Record<string, unknown>).loading = "lazy";
+if (!("decoding" in htmlAttrs)) (htmlAttrs as Record<string, unknown>).decoding = "async";
+---
+
+<img src={imageUrl} {...htmlAttrs} />
