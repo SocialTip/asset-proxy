@@ -733,7 +733,7 @@ describe("video ffmpeg args (GPU)", () => {
     });
   }
 
-  it("default GPU resize (cuvid -resize)", () => {
+  it("default GPU resize uses cuvid -resize for force mode", () => {
     expect(gpuVideoArgs({ resizingType: "force" })).toMatchInlineSnapshot(`
       [
         "-hide_banner",
@@ -837,10 +837,71 @@ describe("video ffmpeg args (GPU)", () => {
     `);
   });
 
-  it("rejects non-force resize type without explicit scaler", () => {
-    expect(() => gpuVideoArgs({ resizingType: "fill" })).toThrow(
-      "not supported with default GPU resize",
-    );
+  it("defaults to scale_cuda for non-force resize types", () => {
+    const args = gpuVideoArgs({ resizingType: "fill" });
+    expect(args).toContain("-vf");
+    const vf = args[args.indexOf("-vf") + 1];
+    expect(vf).toMatch(/^scale_cuda=/);
+    expect(args).toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-hwaccel",
+        "cuda",
+        "-hwaccel_output_format",
+        "cuda",
+        "-i",
+        "https://example.com/video.mp4",
+        "-vf",
+        "scale_cuda=w='max(480,iw*max(480/iw\\,360/ih))':h='max(360,ih*max(480/iw\\,360/ih))',hwdownload,format=nv12,crop=480:360,hwupload_cuda",
+        "-c:v",
+        "h264_nvenc",
+        "-preset",
+        "p4",
+        "-tune",
+        "hq",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "frag_keyframe+empty_moov+faststart",
+        "-f",
+        "mp4",
+        "pipe:1",
+      ]
+    `);
+  });
+
+  it("defaults to scale_cuda when only width is set", () => {
+    const args = gpuVideoArgs({ resizingType: "fit", width: 480, height: 0 });
+    const vf = args[args.indexOf("-vf") + 1];
+    expect(vf).toMatch(/^scale_cuda=/);
+    expect(args).toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-hwaccel",
+        "cuda",
+        "-hwaccel_output_format",
+        "cuda",
+        "-i",
+        "https://example.com/video.mp4",
+        "-vf",
+        "scale_cuda=w='min(480,iw*min(480/iw\\,99999/ih))':h='min(99999,ih*min(480/iw\\,99999/ih))'",
+        "-c:v",
+        "h264_nvenc",
+        "-preset",
+        "p4",
+        "-tune",
+        "hq",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "frag_keyframe+empty_moov+faststart",
+        "-f",
+        "mp4",
+        "pipe:1",
+      ]
+    `);
   });
 
   it("rejects CPU resizing algorithm with GPU", () => {

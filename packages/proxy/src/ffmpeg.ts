@@ -902,13 +902,22 @@ export function buildVideoArgs(
         "CPU resizing algorithms are not supported with GPU acceleration — use gpu:scale_cuda or gpu:scale_npp, or disable GPU",
         { code: "BAD_REQUEST" },
       );
+    } else if (hasResize && resizingType && resizingType !== "force") {
+      const defaultScaler: ResizingAlgorithm = {
+        mode: "gpu",
+        scaler: "scale_cuda",
+      };
+      args.push("-i", sourceUrl);
+      const scaleFilter = buildScaleFilter({
+        resizingType,
+        resizingAlgorithm: defaultScaler,
+        width,
+        height,
+        gpu: true,
+      });
+      const vf = [...preFilters, scaleFilter, ...postFilters].join(",");
+      args.push("-vf", vf);
     } else if (hasResize) {
-      if (resizingType && resizingType !== "force") {
-        throw new HTTPError(
-          `Resize type '${resizingType}' is not supported with default GPU resize — specify ra:gpu:scale_cuda or ra:gpu:scale_npp for ${resizingType} mode`,
-          { code: "BAD_REQUEST" },
-        );
-      }
       if (width <= 0 || height <= 0) {
         throw new HTTPError(
           "Both width and height are required for default GPU resize",
