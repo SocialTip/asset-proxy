@@ -15,6 +15,7 @@ import {
 } from "@socialtip/asset-proxy-url-parser";
 import { env } from "./env.js";
 import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
+import { handleInfoRequest } from "./info.js";
 import { logger } from "./logger.js";
 
 const execFileAsync = promisify(execFile);
@@ -348,6 +349,8 @@ async function processAndRespond(
     }
   }
 }
+
+app.get("/info/:signature/*rest", handleInfoRequest);
 
 app.get("/:signature/*rest", handleRequest);
 
