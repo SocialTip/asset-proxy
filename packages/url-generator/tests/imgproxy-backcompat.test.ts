@@ -1,6 +1,9 @@
 import crypto from "node:crypto";
-import { generateImageUrl } from "@imgproxy/imgproxy-node";
-import { generateUrl } from "../src/index.js";
+import {
+  generateImageUrl,
+  generateImageInfoUrl,
+} from "@imgproxy/imgproxy-node";
+import { generateUrl, generateInfoUrl } from "../src/index.js";
 
 vi.mock("node:crypto", async (importOriginal) => {
   const actual = await importOriginal<typeof crypto>();
@@ -228,6 +231,105 @@ describe("imgproxy backward compatibility", () => {
 
     expect(ours).toMatchInlineSnapshot(
       `"/sN4H5lhgyeCFcrMsGvDZufFo5txvr9G29SIqtuZ6Zac/f:webp/q:80/rs:fill:480:360/enc/NWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-"`,
+    );
+    expect(ours).toBe(theirs);
+  });
+});
+
+describe("imgproxy backward compatibility: info URL", () => {
+  it("plain URL, no options", () => {
+    const ours = generateInfoUrl({ sourceUrl: SRC });
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "plain" },
+    });
+
+    expect(ours).toMatchInlineSnapshot(
+      `"/info/insecure/plain/https://example.com/photo.jpg"`,
+    );
+    expect(ours).toBe(theirs);
+  });
+
+  it("encrypted source URL with deterministic IV", () => {
+    const ours = generateInfoUrl(
+      { sourceUrl: SRC },
+      { encryptionKey: KEY_HEX, deterministicEncryption: true },
+    );
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "encrypted" },
+      encryptKey: KEY_HEX,
+      encryptIV: imgproxyEncryptIV(SRC),
+    });
+
+    expect(ours).toMatchInlineSnapshot(
+      `"/info/insecure/enc/NWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-"`,
+    );
+    expect(ours).toBe(theirs);
+  });
+
+  it("encrypted source URL with random IV", () => {
+    const fakeIV = Buffer.alloc(16, 0xab);
+    vi.mocked(crypto.randomBytes).mockReturnValue(fakeIV as never);
+
+    const ours = generateInfoUrl(
+      { sourceUrl: SRC },
+      { encryptionKey: KEY_HEX },
+    );
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "encrypted" },
+      encryptKey: KEY_HEX,
+      encryptIV: fakeIV.toString("hex"),
+    });
+
+    expect(ours).toMatchInlineSnapshot(
+      `"/info/insecure/enc/q6urq6urq6urq6urq6urq4-9XgvB94hQA6a_ZKhfi9up_dxwHiQr0opHXWpb7IJH"`,
+    );
+    expect(ours).toBe(theirs);
+
+    vi.restoreAllMocks();
+  });
+
+  it("signed source URL", () => {
+    const ours = generateInfoUrl(
+      { sourceUrl: SRC },
+      { signingKey: SIGNING_KEY, signingSalt: SIGNING_SALT },
+    );
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "plain" },
+      key: SIGNING_KEY,
+      salt: SIGNING_SALT,
+    });
+
+    expect(ours).toMatchInlineSnapshot(
+      `"/info/3Ywl877on0hR0VVzVTInJnfjDHY5Gpj90sj28uw88U0/plain/https://example.com/photo.jpg"`,
+    );
+    expect(ours).toBe(theirs);
+  });
+
+  it("signed and encrypted source URL", () => {
+    const ours = generateInfoUrl(
+      { sourceUrl: SRC },
+      {
+        encryptionKey: KEY_HEX,
+        deterministicEncryption: true,
+        signingKey: SIGNING_KEY,
+        signingSalt: SIGNING_SALT,
+      },
+    );
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "encrypted" },
+      encryptKey: KEY_HEX,
+      encryptIV: imgproxyEncryptIV(SRC),
+      key: SIGNING_KEY,
+      salt: SIGNING_SALT,
+    });
+
+    expect(ours).toMatchInlineSnapshot(
+      `"/info/X0h7BVflNWOxU_OwVbHbMTgUff3ko55M_eI8r7yeELU/enc/NWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-"`,
     );
     expect(ours).toBe(theirs);
   });
