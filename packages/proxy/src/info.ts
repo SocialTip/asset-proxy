@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import express from "express";
 import exifReader from "exif-reader";
+import { XMLParser } from "fast-xml-parser";
 import nodeIptc from "node-iptc";
 import sharp from "sharp";
 import {
@@ -31,6 +32,7 @@ const MIME_TYPES: Record<string, string> = {
 interface InfoRequestOptions {
   exif?: boolean;
   iptc?: boolean;
+  xmp?: boolean;
 }
 
 interface InfoResponse {
@@ -48,6 +50,7 @@ interface InfoResponse {
   };
   exif?: Record<string, unknown>;
   iptc?: Record<string, string | string[]>;
+  xmp?: Record<string, Record<string, unknown>>;
 }
 
 function isVideoFormat(formatName: string): boolean {
@@ -118,6 +121,7 @@ async function probeMetadata(
   let orientation = 1;
   let exifData: Record<string, unknown> | undefined;
   let iptcData: Record<string, string | string[]> | undefined;
+  let xmpData: Record<string, Record<string, unknown>> | undefined;
   if (!isVideo) {
     try {
       const meta = await sharp(sourceBuffer).metadata();
@@ -130,8 +134,11 @@ async function probeMetadata(
         const parsed = nodeIptc(sourceBuffer);
         if (parsed) iptcData = parsed;
       }
+      if (infoOpts.xmp && meta.xmp) {
+        xmpData = parseXmp(meta.xmp);
+      }
     } catch {
-      // orientation/exif/iptc extraction is optional — ignore failures
+      // orientation/exif/iptc/xmp extraction is optional — ignore failures
     }
   }
   const swapDimensions = orientation >= 5 && orientation <= 8;
@@ -169,6 +176,9 @@ async function probeMetadata(
   }
   if (iptcData) {
     result.iptc = iptcData;
+  }
+  if (xmpData) {
+    result.xmp = xmpData;
   }
 
   return result;
@@ -247,7 +257,60 @@ function sanitiseExifValues(
   return result;
 }
 
-const INFO_OPTION_NAMES = new Set(["exif", "iptc"]);
+const xmpParser = new XMLParser({
+  ignoreAttributes: false,
+  removeNSPrefix: false,
+});
+
+function parseXmp(
+  buf: Buffer,
+): Record<string, Record<string, unknown>> | undefined {
+  const xml = Buffer.from(buf).toString("utf8");
+  const parsed = xmpParser.parse(xml);
+  const desc = parsed["x:xmpmeta"]?.["rdf:RDF"]?.["rdf:Description"];
+  if (!desc || typeof desc !== "object") return undefined;
+
+  const result: Record<string, Record<string, unknown>> = {};
+
+  for (const [key, value] of Object.entries(desc)) {
+    if (key.startsWith("@_")) continue;
+    const colonIdx = key.indexOf(":");
+    if (colonIdx === -1) continue;
+
+    const ns = key.slice(0, colonIdx);
+    const field = key.slice(colonIdx + 1);
+    if (!result[ns]) result[ns] = {};
+    result[ns][field] = flattenRdfValue(value);
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function flattenRdfValue(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== "object") return value;
+
+  const obj = value as Record<string, unknown>;
+  // rdf:Seq, rdf:Bag → array
+  const seq = obj["rdf:Seq"] ?? obj["rdf:Bag"];
+  if (seq && typeof seq === "object") {
+    const items = (seq as Record<string, unknown>)["rdf:li"];
+    if (Array.isArray(items)) return items.map(flattenRdfValue);
+    return [flattenRdfValue(items)];
+  }
+  // rdf:Alt → first value (language alternative)
+  const alt = obj["rdf:Alt"];
+  if (alt && typeof alt === "object") {
+    const li = (alt as Record<string, unknown>)["rdf:li"];
+    if (li && typeof li === "object" && "#text" in (li as object)) {
+      return (li as Record<string, unknown>)["#text"];
+    }
+    return li;
+  }
+  return value;
+}
+
+const INFO_OPTION_NAMES = new Set(["exif", "iptc", "xmp"]);
 
 function parseInfoOptions(path: string): {
   infoOpts: InfoRequestOptions;
@@ -265,6 +328,7 @@ function parseInfoOptions(path: string): {
       const enabled = value === "1" || value === "t" || value === "true";
       if (name === "exif") infoOpts.exif = enabled;
       if (name === "iptc") infoOpts.iptc = enabled;
+      if (name === "xmp") infoOpts.xmp = enabled;
     } else {
       kept.push(seg);
     }

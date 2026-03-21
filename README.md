@@ -574,6 +574,7 @@ Returns `application/json` with a `Cache-Control` header.
 | `video_meta`  | object | Video stream details (video only)                                              |
 | `exif`        | object | EXIF metadata grouped by IFD section (only when `exif` info option is enabled) |
 | `iptc`        | object | IPTC metadata (only when `iptc` info option is enabled)                        |
+| `xmp`         | object | XMP metadata organised by namespace (only when `xmp` info option is enabled)   |
 
 ### Info options
 
@@ -583,6 +584,7 @@ Info-specific options control which additional metadata is returned. They are pl
 | ------ | ----------- | --------------------- |
 | `exif` | `exif:1`    | Include EXIF metadata |
 | `iptc` | `iptc:1`    | Include IPTC metadata |
+| `xmp`  | `xmp:1`     | Include XMP metadata  |
 
 ### URL generator
 

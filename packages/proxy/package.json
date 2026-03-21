@@ -24,6 +24,7 @@
     "content-disposition": "^1.0.1",
     "exif-reader": "^2.0.3",
     "express": "^5.1.0",
+    "fast-xml-parser": "^5.5.8",
     "node-iptc": "^1.0.5",
     "winston": "^3.19.0",
     "zod": "^4.3.6"
