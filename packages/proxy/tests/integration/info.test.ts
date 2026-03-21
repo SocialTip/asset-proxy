@@ -115,6 +115,40 @@ describe("info endpoint", () => {
     });
   });
 
+  describe("iptc option", () => {
+    it("returns IPTC metadata when iptc option is enabled", async () => {
+      const res = await fetchInfo(JPEG_URL, "/iptc:1");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.iptc).toBeDefined();
+      expect(body.iptc).toMatchInlineSnapshot(`
+        {
+          "by_line": [
+            "Test Photographer",
+          ],
+          "caption": "A test image for IPTC metadata",
+          "city": "London",
+          "copyright_notice": "(c) 2026 Test",
+          "country_or_primary_location_name": "United Kingdom",
+          "keywords": [
+            "test",
+            "metadata",
+          ],
+          "object_name": "Test Image",
+        }
+      `);
+    });
+
+    it("omits IPTC metadata when iptc option is not set", async () => {
+      const res = await fetchInfo(JPEG_URL);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.iptc).toBeUndefined();
+    });
+  });
+
   describe("validation", () => {
     it("rejects disallowed origins when ALLOWED_ORIGINS is set", async () => {
       // The test service doesn't have ALLOWED_ORIGINS set, so this just

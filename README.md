@@ -573,6 +573,7 @@ Returns `application/json` with a `Cache-Control` header.
 | `duration`    | number | Duration in seconds (video only)                                               |
 | `video_meta`  | object | Video stream details (video only)                                              |
 | `exif`        | object | EXIF metadata grouped by IFD section (only when `exif` info option is enabled) |
+| `iptc`        | object | IPTC metadata (only when `iptc` info option is enabled)                        |
 
 ### Info options
 
@@ -581,6 +582,7 @@ Info-specific options control which additional metadata is returned. They are pl
 | Option | URL segment | Description           |
 | ------ | ----------- | --------------------- |
 | `exif` | `exif:1`    | Include EXIF metadata |
+| `iptc` | `iptc:1`    | Include IPTC metadata |
 
 ### URL generator
 
