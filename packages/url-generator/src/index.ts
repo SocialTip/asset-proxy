@@ -63,6 +63,8 @@ export function generateUrl(
 export interface InfoOptions {
   /** Include EXIF metadata in the response. */
   exif?: boolean;
+  /** Include IPTC metadata in the response. */
+  iptc?: boolean;
 }
 
 /** Generates an asset-proxy info URL path that returns JSON metadata about the source asset. */
@@ -83,6 +85,7 @@ function serializeInfoOptions(options?: InfoOptions): string[] {
   if (!options) return [];
   const segments: string[] = [];
   if (options.exif) segments.push("exif:t");
+  if (options.iptc) segments.push("iptc:t");
   return segments;
 }
 

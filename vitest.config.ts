@@ -43,6 +43,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["packages/*/src/**"],
+      exclude: ["**/*.astro"],
     },
   },
 });

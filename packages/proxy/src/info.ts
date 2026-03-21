@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import express from "express";
 import exifReader from "exif-reader";
+import nodeIptc from "node-iptc";
 import sharp from "sharp";
 import {
   HTTPError,
@@ -29,6 +30,7 @@ const MIME_TYPES: Record<string, string> = {
 
 interface InfoRequestOptions {
   exif?: boolean;
+  iptc?: boolean;
 }
 
 interface InfoResponse {
@@ -45,6 +47,7 @@ interface InfoResponse {
     framerate?: number;
   };
   exif?: Record<string, unknown>;
+  iptc?: Record<string, string | string[]>;
 }
 
 function isVideoFormat(formatName: string): boolean {
@@ -114,6 +117,7 @@ async function probeMetadata(
 
   let orientation = 1;
   let exifData: Record<string, unknown> | undefined;
+  let iptcData: Record<string, string | string[]> | undefined;
   if (!isVideo) {
     try {
       const meta = await sharp(sourceBuffer).metadata();
@@ -122,8 +126,12 @@ async function probeMetadata(
         const parsed = exifReader(meta.exif);
         exifData = sanitiseExif(parsed);
       }
+      if (infoOpts.iptc) {
+        const parsed = nodeIptc(sourceBuffer);
+        if (parsed) iptcData = parsed;
+      }
     } catch {
-      // orientation/exif extraction is optional — ignore failures
+      // orientation/exif/iptc extraction is optional — ignore failures
     }
   }
   const swapDimensions = orientation >= 5 && orientation <= 8;
@@ -158,6 +166,9 @@ async function probeMetadata(
 
   if (exifData) {
     result.exif = exifData;
+  }
+  if (iptcData) {
+    result.iptc = iptcData;
   }
 
   return result;
@@ -236,7 +247,7 @@ function sanitiseExifValues(
   return result;
 }
 
-const INFO_OPTION_NAMES = new Set(["exif"]);
+const INFO_OPTION_NAMES = new Set(["exif", "iptc"]);
 
 function parseInfoOptions(path: string): {
   infoOpts: InfoRequestOptions;
@@ -253,6 +264,7 @@ function parseInfoOptions(path: string): {
       const value = colonIdx === -1 ? "" : seg.slice(colonIdx + 1);
       const enabled = value === "1" || value === "t" || value === "true";
       if (name === "exif") infoOpts.exif = enabled;
+      if (name === "iptc") infoOpts.iptc = enabled;
     } else {
       kept.push(seg);
     }

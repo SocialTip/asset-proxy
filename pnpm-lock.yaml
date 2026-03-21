@@ -95,6 +95,9 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.2.1
+      node-iptc:
+        specifier: ^1.0.5
+        version: 1.0.5
       winston:
         specifier: ^3.19.0
         version: 3.19.0
@@ -5254,6 +5257,12 @@ packages:
       }
     engines: { node: ^12.20.0 || ^14.13.1 || >=16.0.0 }
 
+  node-iptc@1.0.5:
+    resolution:
+      {
+        integrity: sha512-+e9aVETp/X8iFX2qBw2GnABkq/jGs7dJdxGURZysOdn4ZdOdArPW2a3xQpSq6GX2CcgEzUklDfaC/cg4sLv35g==,
+      }
+
   node-mock-http@1.0.4:
     resolution:
       {
@@ -10242,6 +10251,8 @@ snapshots:
       data-uri-to-buffer: 4.0.1
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
+
+  node-iptc@1.0.5: {}
 
   node-mock-http@1.0.4: {}
 

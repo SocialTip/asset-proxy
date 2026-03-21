@@ -347,4 +347,18 @@ describe("imgproxy backward compatibility: info URL", () => {
     );
     expect(ours).toBe(theirs);
   });
+
+  it("with iptc option", () => {
+    const ours = generateInfoUrl({ sourceUrl: SRC }, undefined, { iptc: true });
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "plain" },
+      options: { iptc: 1 },
+    });
+
+    expect(ours).toMatchInlineSnapshot(
+      `"/info/insecure/iptc:t/plain/https://example.com/photo.jpg"`,
+    );
+    expect(ours).toBe(theirs);
+  });
 });
