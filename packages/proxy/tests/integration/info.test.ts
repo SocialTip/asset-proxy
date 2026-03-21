@@ -1,6 +1,7 @@
 import { SERVICE_URL } from "./setup.js";
 
 const IMAGE_URL = "http://file-server/test-image.png";
+const JPEG_URL = "http://file-server/test-image-with-metadata.jpg";
 const VIDEO_URL = "http://file-server/test-video.mp4";
 
 async function fetchInfo(sourceUrl: string, options = "") {
@@ -22,12 +23,27 @@ describe("info endpoint", () => {
         mime_type: "image/png",
         width: expect.any(Number),
         height: expect.any(Number),
+        orientation: 1,
       });
       expect(body.width).toBeGreaterThan(0);
       expect(body.height).toBeGreaterThan(0);
       expect(body.size).toBeGreaterThan(0);
       expect(body.duration).toBeUndefined();
       expect(body.video_meta).toBeUndefined();
+    });
+
+    it("returns EXIF orientation and adjusts dimensions for a rotated JPEG", async () => {
+      const res = await fetchInfo(JPEG_URL);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      // test-image-with-metadata.jpg is 200x150 pixels with EXIF orientation 6
+      // (90° CW), so reported dimensions are swapped
+      expect(body).toMatchObject({
+        orientation: 6,
+        width: 150,
+        height: 200,
+      });
     });
   });
 
@@ -42,6 +58,7 @@ describe("info endpoint", () => {
         mime_type: expect.any(String),
         width: expect.any(Number),
         height: expect.any(Number),
+        orientation: expect.any(Number),
         duration: expect.any(Number),
         video_meta: {
           codec: expect.any(String),

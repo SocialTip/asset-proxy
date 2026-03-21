@@ -1,14 +1,12 @@
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import express from "express";
+import sharp from "sharp";
 import {
   HTTPError,
   parseProcessingUrl,
   verifySignature,
 } from "@socialtip/asset-proxy-url-parser";
 import { env } from "./env.js";
-
-const execFileAsync = promisify(execFile);
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -33,6 +31,7 @@ interface InfoResponse {
   mime_type: string;
   width: number;
   height: number;
+  orientation: number;
   size?: number;
   duration?: number;
   video_meta?: {
@@ -58,15 +57,33 @@ function isVideoFormat(formatName: string): boolean {
 }
 
 async function probeMetadata(sourceUrl: string): Promise<InfoResponse> {
-  const { stdout } = await execFileAsync("ffprobe", [
-    "-v",
-    "error",
-    "-show_format",
-    "-show_streams",
-    "-of",
-    "json",
-    sourceUrl,
-  ]);
+  const sourceRes = await fetch(sourceUrl);
+  if (!sourceRes.ok) {
+    throw new HTTPError("Could not fetch source", {
+      code: "UNPROCESSABLE_ENTITY",
+    });
+  }
+  const sourceBuffer = Buffer.from(await sourceRes.arrayBuffer());
+
+  const { stdout } = await new Promise<{ stdout: string }>(
+    (resolve, reject) => {
+      const proc = execFile(
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-show_format",
+          "-show_streams",
+          "-of",
+          "json",
+          "-i",
+          "pipe:0",
+        ],
+        (err, stdout) => (err ? reject(err) : resolve({ stdout })),
+      );
+      proc.stdin!.end(sourceBuffer);
+    },
+  );
 
   const probe = JSON.parse(stdout);
   const stream = probe.streams?.find(
@@ -86,11 +103,23 @@ async function probeMetadata(sourceUrl: string): Promise<InfoResponse> {
   const mimeType =
     MIME_TYPES[format] ?? (isVideo ? "video/mp4" : `image/${format}`);
 
+  let orientation = 1;
+  if (!isVideo) {
+    try {
+      const meta = await sharp(sourceBuffer).metadata();
+      orientation = meta.orientation ?? 1;
+    } catch {
+      // orientation is optional — ignore failures
+    }
+  }
+  const swapDimensions = orientation >= 5 && orientation <= 8;
+
   const result: InfoResponse = {
     format,
     mime_type: mimeType,
-    width: stream.width,
-    height: stream.height,
+    width: swapDimensions ? stream.height : stream.width,
+    height: swapDimensions ? stream.width : stream.height,
+    orientation,
   };
 
   if (isVideo) {
@@ -111,18 +140,7 @@ async function probeMetadata(sourceUrl: string): Promise<InfoResponse> {
     }
   }
 
-  // Fetch Content-Length via HEAD request
-  try {
-    const headRes = await fetch(sourceUrl, { method: "HEAD" });
-    if (headRes.ok) {
-      const contentLength = headRes.headers.get("content-length");
-      if (contentLength) {
-        result.size = parseInt(contentLength, 10);
-      }
-    }
-  } catch {
-    // size is optional — ignore failures
-  }
+  result.size = sourceBuffer.length;
 
   return result;
 }
