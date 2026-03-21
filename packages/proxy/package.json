@@ -21,8 +21,8 @@
     "@opentelemetry/sdk-metrics": "^2.6.0",
     "@opentelemetry/sdk-node": "^0.213.0",
     "@socialtip/asset-proxy-url-parser": "workspace:*",
-    "@socialtip/asset-proxy-url-parser": "workspace:*",
     "content-disposition": "^1.0.1",
+    "exif-reader": "^2.0.3",
     "express": "^5.1.0",
     "winston": "^3.19.0",
     "zod": "^4.3.6"

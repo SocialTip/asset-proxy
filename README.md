@@ -516,7 +516,7 @@ The `/info/` endpoint returns JSON metadata about a source asset (image or video
 /info/<signature>/<options>/enc/<encrypted_source_url>
 ```
 
-The path after `/info` follows the same format as processing URLs — the same signature verification, encryption, and origin checks apply. Processing options in the URL are ignored; only the source URL and security options are used.
+The path after `/info` follows the same format as processing URLs — the same signature verification, encryption, and origin checks apply. Processing options in the URL are ignored; only the source URL, security options, and info-specific options are used.
 
 **Example:**
 
@@ -537,6 +537,7 @@ Returns `application/json` with a `Cache-Control` header.
   "mime_type": "image/png",
   "width": 1920,
   "height": 1080,
+  "orientation": 1,
   "size": 245760
 }
 ```
@@ -559,15 +560,27 @@ Returns `application/json` with a `Cache-Control` header.
 }
 ```
 
-| Field        | Type   | Description                                      |
-| ------------ | ------ | ------------------------------------------------ |
-| `format`     | string | Codec name (images) or container format (videos) |
-| `mime_type`  | string | MIME type of the source                          |
-| `width`      | number | Width in pixels                                  |
-| `height`     | number | Height in pixels                                 |
-| `size`       | number | File size in bytes (from `Content-Length` HEAD)  |
-| `duration`   | number | Duration in seconds (video only)                 |
-| `video_meta` | object | Video stream details (video only)                |
+| Field         | Type   | Description                                                                    |
+| ------------- | ------ | ------------------------------------------------------------------------------ |
+| Field         | Type   | Description                                                                    |
+| ------------- | ------ | ------------------------------------------------------------------------------ |
+| `format`      | string | Codec name (images) or container format (videos)                               |
+| `mime_type`   | string | MIME type of the source                                                        |
+| `width`       | number | Width in pixels (adjusted for EXIF orientation)                                |
+| `height`      | number | Height in pixels (adjusted for EXIF orientation)                               |
+| `orientation` | number | EXIF orientation value (1-8). Defaults to 1 when absent. Images only.          |
+| `size`        | number | File size in bytes                                                             |
+| `duration`    | number | Duration in seconds (video only)                                               |
+| `video_meta`  | object | Video stream details (video only)                                              |
+| `exif`        | object | EXIF metadata grouped by IFD section (only when `exif` info option is enabled) |
+
+### Info options
+
+Info-specific options control which additional metadata is returned. They are placed in the URL path alongside processing options.
+
+| Option | URL segment | Description           |
+| ------ | ----------- | --------------------- |
+| `exif` | `exif:1`    | Include EXIF metadata |
 
 ### URL generator
 
@@ -577,7 +590,14 @@ import { generateInfoUrl } from "@socialtip/asset-proxy-url-generator";
 const url = generateInfoUrl({
   sourceUrl: "https://example.com/photo.jpg",
 });
-// => /info/_/plain/https://example.com/photo.jpg
+// => /info/insecure/plain/https://example.com/photo.jpg
+
+const urlWithExif = generateInfoUrl(
+  { sourceUrl: "https://example.com/photo.jpg" },
+  undefined,
+  { exif: true },
+);
+// => /info/insecure/exif:t/plain/https://example.com/photo.jpg
 ```
 
 ## Health check

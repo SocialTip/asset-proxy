@@ -59,14 +59,31 @@ export function generateUrl(
   return `/${signature}${pathAfterSignature}`;
 }
 
+/** Options that control which additional metadata the info endpoint returns. */
+export interface InfoOptions {
+  /** Include EXIF metadata in the response. */
+  exif?: boolean;
+}
+
 /** Generates an asset-proxy info URL path that returns JSON metadata about the source asset. */
 export function generateInfoUrl(
   options: UrlGeneratorOptions,
   config?: UrlGeneratorConfig,
+  infoOptions?: InfoOptions,
 ): string {
   const processingUrl = generateUrl(options, config);
-  // Insert /info before the signature
-  return `/info${processingUrl}`;
+  const infoSegments = serializeInfoOptions(infoOptions);
+  const infoPath = infoSegments.length > 0 ? infoSegments.join("/") + "/" : "";
+  // Insert /info and info options before the signature
+  const [signature, ...rest] = processingUrl.slice(1).split("/");
+  return `/info/${signature}/${infoPath}${rest.join("/")}`;
+}
+
+function serializeInfoOptions(options?: InfoOptions): string[] {
+  if (!options) return [];
+  const segments: string[] = [];
+  if (options.exif) segments.push("exif:t");
+  return segments;
 }
 
 function bool(v: boolean): string {

@@ -71,6 +71,50 @@ describe("info endpoint", () => {
     });
   });
 
+  describe("exif option", () => {
+    it("returns EXIF metadata when exif option is enabled", async () => {
+      const res = await fetchInfo(JPEG_URL, "/exif:1");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.exif).toBeDefined();
+      expect(body.exif.Image).toMatchInlineSnapshot(`
+        {
+          "Artist": "Test Photographer",
+          "Copyright": "(c) 2026 Test Copyright",
+          "ImageDescription": "A test image with metadata",
+          "Make": "TestCamera",
+          "Model": "TestModel X100",
+          "Orientation": 6,
+          "ResolutionUnit": 1,
+          "XResolution": 1,
+          "YCbCrPositioning": 1,
+          "YResolution": 1,
+        }
+      `);
+      expect(body.exif.Photo).toMatchInlineSnapshot(`
+        {
+          "ColorSpace": 65535,
+          "ComponentsConfiguration": "01020300",
+          "ExifVersion": "0232",
+          "ExposureTime": 0.004,
+          "FNumber": 5.6,
+          "ISOSpeedRatings": 400,
+        }
+      `);
+      expect(body.exif.GPSInfo.GPSLatitudeRef).toBe("N");
+      expect(body.exif.GPSInfo.GPSLongitudeRef).toBe("W");
+    });
+
+    it("omits EXIF metadata when exif option is not set", async () => {
+      const res = await fetchInfo(JPEG_URL);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.exif).toBeUndefined();
+    });
+  });
+
   describe("validation", () => {
     it("rejects disallowed origins when ALLOWED_ORIGINS is set", async () => {
       // The test service doesn't have ALLOWED_ORIGINS set, so this just
