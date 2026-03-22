@@ -561,6 +561,12 @@ describe("info endpoint", () => {
       expect(res.status).toBe(422);
     });
 
+    it("rejects when source exceeds max resolution", async () => {
+      // test-image.png is 200x150 = 0.03MP; set limit to 0.0001MP
+      const res = await fetchInfo(IMAGE_URL, "/msr:0.0001");
+      expect(res.status).toBe(422);
+    });
+
     it("returns an error for an unreachable source", async () => {
       const res = await fetchInfo("http://file-server/nonexistent.png");
       expect(res.status).toBeGreaterThanOrEqual(400);

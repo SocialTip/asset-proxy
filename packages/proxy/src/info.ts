@@ -465,6 +465,17 @@ export async function handleInfoRequest(
 
   const metadata = await probeMetadata(sourceBuffer, parsed.infoOptions);
 
+  const maxResolution = parsed.maxSrcResolution ?? env.MAX_SRC_RESOLUTION;
+  if (maxResolution && metadata.width && metadata.height) {
+    const mp = (metadata.width * metadata.height) / 1_000_000;
+    if (mp > maxResolution) {
+      throw new HTTPError(
+        `Source resolution ${mp.toFixed(1)}MP exceeds limit of ${maxResolution}MP`,
+        { code: "UNPROCESSABLE_ENTITY" },
+      );
+    }
+  }
+
   res.set("Cache-Control", env.CACHE_CONTROL);
   res.json(metadata);
 }
