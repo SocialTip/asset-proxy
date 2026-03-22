@@ -12,6 +12,7 @@ import {
   type InfoOptions,
 } from "@socialtip/asset-proxy-url-parser";
 import { env } from "./env.js";
+import { logger } from "./logger.js";
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -54,6 +55,7 @@ interface InfoResponse {
   xmp?: Record<string, Record<string, unknown>>;
   palette?: Array<{ R: number; G: number; B: number; A: number }>;
   average?: { R: number; G: number; B: number };
+  dominant_colors?: Record<string, { R: number; G: number; B: number }>;
 }
 
 function isVideoFormat(formatName: string): boolean {
@@ -97,6 +99,85 @@ function sampleFormatFromPixFmt(
   if (/16|48|64/i.test(pixFmt)) return "ushort";
   if (/f32|float/i.test(pixFmt)) return "float";
   return "uchar";
+}
+
+type RGB = { R: number; G: number; B: number };
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h, s, l];
+}
+
+async function extractDominantColors(
+  buf: Buffer,
+): Promise<Record<string, RGB>> {
+  const quantised = await sharp(buf)
+    .removeAlpha()
+    .png({ palette: true, colours: 64, effort: 1 })
+    .toBuffer();
+  const { data, info } = await sharp(quantised)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  // Count pixel frequency per quantised colour
+  const freq = new Map<
+    string,
+    { r: number; g: number; b: number; s: number; l: number; count: number }
+  >();
+  for (let i = 0; i < data.length; i += info.channels) {
+    const key = `${data[i]},${data[i + 1]},${data[i + 2]}`;
+    const existing = freq.get(key);
+    if (existing) {
+      existing.count++;
+    } else {
+      const [, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+      freq.set(key, {
+        r: data[i],
+        g: data[i + 1],
+        b: data[i + 2],
+        s,
+        l,
+        count: 1,
+      });
+    }
+  }
+
+  const colours = [...freq.values()];
+
+  // Pick the most frequent colour matching a filter
+  const pick = (
+    filter: (c: (typeof colours)[0]) => boolean,
+  ): RGB | undefined => {
+    const match = colours.filter(filter).sort((a, b) => b.count - a.count)[0];
+    return match ? { R: match.r, G: match.g, B: match.b } : undefined;
+  };
+
+  const result: Record<string, RGB> = {};
+  const vibrant = pick((c) => c.s > 0.35 && c.l > 0.3 && c.l < 0.7);
+  if (vibrant) result.vibrant = vibrant;
+  const lightVibrant = pick((c) => c.s > 0.35 && c.l >= 0.7);
+  if (lightVibrant) result.light_vibrant = lightVibrant;
+  const darkVibrant = pick((c) => c.s > 0.35 && c.l <= 0.3);
+  if (darkVibrant) result.dark_vibrant = darkVibrant;
+  const muted = pick((c) => c.s <= 0.35 && c.l > 0.3 && c.l < 0.7);
+  if (muted) result.muted = muted;
+  const lightMuted = pick((c) => c.s <= 0.35 && c.l >= 0.7);
+  if (lightMuted) result.light_muted = lightMuted;
+  const darkMuted = pick((c) => c.s <= 0.35 && c.l <= 0.3);
+  if (darkMuted) result.dark_muted = darkMuted;
+  return result;
 }
 
 async function extractPalette(
@@ -178,6 +259,9 @@ async function probeMetadata(
   let iptcData: Record<string, string | string[]> | undefined;
   let xmpData: Record<string, Record<string, unknown>> | undefined;
   let averageData: { R: number; G: number; B: number } | undefined;
+  let dominantColorsData:
+    | Record<string, { R: number; G: number; B: number }>
+    | undefined;
   let paletteData:
     | Array<{ R: number; G: number; B: number; A: number }>
     | undefined;
@@ -196,8 +280,8 @@ async function probeMetadata(
       if (infoOpts.xmp && meta.xmp) {
         xmpData = parseXmp(meta.xmp);
       }
-    } catch {
-      // orientation/exif/iptc/xmp extraction is optional — ignore failures
+    } catch (cause) {
+      logger.error("Failed to extract image metadata", { cause });
     }
     if (infoOpts.average) {
       try {
@@ -210,15 +294,22 @@ async function probeMetadata(
           G: Math.round(stats.channels[1].mean),
           B: Math.round(stats.channels[2].mean),
         };
-      } catch {
-        // average extraction is optional — ignore failures
+      } catch (cause) {
+        logger.error("Failed to extract average colour", { cause });
+      }
+    }
+    if (infoOpts.dominantColors) {
+      try {
+        dominantColorsData = await extractDominantColors(sourceBuffer);
+      } catch (cause) {
+        logger.error("Failed to extract dominant colours", { cause });
       }
     }
     if (infoOpts.palette && infoOpts.palette >= 2) {
       try {
         paletteData = await extractPalette(sourceBuffer, infoOpts.palette);
-      } catch {
-        // palette extraction is optional — ignore failures
+      } catch (cause) {
+        logger.error("Failed to extract colour palette", { cause });
       }
     }
   }
@@ -277,6 +368,9 @@ async function probeMetadata(
   }
   if (averageData) {
     result.average = averageData;
+  }
+  if (dominantColorsData) {
+    result.dominant_colors = dominantColorsData;
   }
   if (paletteData) {
     result.palette = paletteData;

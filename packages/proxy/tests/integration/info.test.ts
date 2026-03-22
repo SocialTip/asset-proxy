@@ -1,6 +1,8 @@
 import { SERVICE_URL } from "./setup.js";
 
 const IMAGE_URL = "http://file-server/test-image.png";
+const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
+const CASTLE_URL = "http://file-server/test-image-castle.jpg";
 const JPEG_URL = "http://file-server/test-image-with-metadata.jpg";
 const VIDEO_URL = "http://file-server/test-video.mp4";
 
@@ -222,6 +224,76 @@ describe("info endpoint", () => {
     });
   });
 
+  describe("dominant_colors option", () => {
+    it("returns dominant colours when dc option is enabled", async () => {
+      const res = await fetchInfo(BUTTERFLY_URL, "/dc:1");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.dominant_colors).toMatchInlineSnapshot(`
+        {
+          "dark_muted": {
+            "B": 13,
+            "G": 12,
+            "R": 20,
+          },
+          "dark_vibrant": {
+            "B": 22,
+            "G": 122,
+            "R": 84,
+          },
+          "light_vibrant": {
+            "B": 188,
+            "G": 220,
+            "R": 237,
+          },
+          "vibrant": {
+            "B": 27,
+            "G": 140,
+            "R": 112,
+          },
+        }
+      `);
+    });
+
+    it("returns dominant colours for a low-saturation image", async () => {
+      const res = await fetchInfo(CASTLE_URL, "/dc:1");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.dominant_colors).toMatchInlineSnapshot(`
+        {
+          "dark_muted": {
+            "B": 21,
+            "G": 16,
+            "R": 15,
+          },
+          "light_vibrant": {
+            "B": 206,
+            "G": 232,
+            "R": 247,
+          },
+          "muted": {
+            "B": 97,
+            "G": 133,
+            "R": 177,
+          },
+          "vibrant": {
+            "B": 127,
+            "G": 164,
+            "R": 202,
+          },
+        }
+      `);
+    });
+
+    it("omits dominant_colors when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      const body = await res.json();
+      expect(body.dominant_colors).toBeUndefined();
+    });
+  });
+
   describe("palette option", () => {
     it("returns colour palette when p option is enabled", async () => {
       const res = await fetchInfo(IMAGE_URL, "/p:4");
@@ -253,6 +325,76 @@ describe("info endpoint", () => {
             "B": 40,
             "G": 221,
             "R": 241,
+          },
+        ]
+      `);
+    });
+
+    it("returns colour palette for a butterfly image", async () => {
+      const res = await fetchInfo(BUTTERFLY_URL, "/p:6");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.palette).toMatchInlineSnapshot(`
+        [
+          {
+            "A": 255,
+            "B": 35,
+            "G": 168,
+            "R": 162,
+          },
+          {
+            "A": 255,
+            "B": 25,
+            "G": 133,
+            "R": 102,
+          },
+          {
+            "A": 255,
+            "B": 14,
+            "G": 42,
+            "R": 44,
+          },
+          {
+            "A": 255,
+            "B": 61,
+            "G": 182,
+            "R": 227,
+          },
+        ]
+      `);
+    });
+
+    it("returns colour palette for a castle image", async () => {
+      const res = await fetchInfo(CASTLE_URL, "/p:6");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.palette).toMatchInlineSnapshot(`
+        [
+          {
+            "A": 255,
+            "B": 22,
+            "G": 17,
+            "R": 16,
+          },
+          {
+            "A": 255,
+            "B": 30,
+            "G": 28,
+            "R": 30,
+          },
+          {
+            "A": 255,
+            "B": 69,
+            "G": 87,
+            "R": 117,
+          },
+          {
+            "A": 255,
+            "B": 171,
+            "G": 203,
+            "R": 229,
           },
         ]
       `);

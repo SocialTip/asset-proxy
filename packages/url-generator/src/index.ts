@@ -99,6 +99,7 @@ function serializeInfoOptions(options?: InfoOptions): string[] {
     if (options.average.ignoreTransparent) seg += ":t";
     segments.push(seg);
   }
+  if (options.dominantColors) segments.push("dc:t");
   return segments;
 }
 
