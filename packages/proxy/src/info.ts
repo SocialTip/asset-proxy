@@ -15,11 +15,11 @@ import { logger } from "./logger.js";
 
 const execFileAsync = promisify(execFile);
 
-// EXIF data has a max size of 65535 bytes and the EXIF APP1 marker appears
-// within the first ~100 bytes of a JPEG. Fetching 65635 bytes (100 + 65535)
-// is sufficient for exiftool to extract all EXIF, IPTC, and XMP metadata
-// without downloading the full file.
-const METADATA_FETCH_SIZE = 65635;
+// Max bytes to stream to exiftool for metadata extraction. EXIF data is
+// limited to 64KB and the APP1 marker appears within the first ~100 bytes,
+// so 100KB is more than sufficient. Combined with exiftool's -fast flag,
+// this avoids downloading the full file.
+const METADATA_STREAM_LIMIT = 102400;
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -239,31 +239,43 @@ async function fetchSource(sourceUrl: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-async function fetchHeader(sourceUrl: string): Promise<Buffer> {
-  const res = await fetch(sourceUrl, {
-    headers: { Range: `bytes=0-${METADATA_FETCH_SIZE - 1}` },
-  });
-  if (!res.ok && res.status !== 206) {
-    throw new HTTPError("Could not fetch source header", {
-      code: "UNPROCESSABLE_ENTITY",
-    });
-  }
-  return Buffer.from(await res.arrayBuffer());
-}
-
 async function runExiftool(
-  headerBuf: Buffer,
+  source: Buffer | string,
   groups: string[],
 ): Promise<Record<string, unknown>> {
-  const args = ["-json", "-n", "-G1", ...groups, "-"];
-  const { stdout } = await new Promise<{ stdout: string }>(
-    (resolve, reject) => {
-      const proc = execFile("exiftool", args, (err, out) =>
-        err ? reject(err) : resolve({ stdout: out }),
-      );
-      proc.stdin!.end(headerBuf);
-    },
-  );
+  const args = ["-fast", "-json", "-n", "-G1", ...groups, "-"];
+  const proc = execFile("exiftool", args);
+
+  if (Buffer.isBuffer(source)) {
+    proc.stdin!.end(source.subarray(0, METADATA_STREAM_LIMIT));
+  } else {
+    const res = await fetch(source);
+    if (!res.ok || !res.body) {
+      proc.stdin!.end();
+      throw new HTTPError("Could not fetch source", {
+        code: "UNPROCESSABLE_ENTITY",
+      });
+    }
+    let written = 0;
+    for await (const chunk of res.body) {
+      const buf = Buffer.from(chunk);
+      const remaining = METADATA_STREAM_LIMIT - written;
+      if (remaining <= 0) break;
+      proc.stdin!.write(buf.subarray(0, remaining));
+      written += buf.length;
+      if (written >= METADATA_STREAM_LIMIT) break;
+    }
+    proc.stdin!.end();
+  }
+
+  const stdout = await new Promise<string>((resolve, reject) => {
+    let out = "";
+    proc.stdout!.on("data", (chunk: string | Buffer) => {
+      out += typeof chunk === "string" ? chunk : chunk.toString();
+    });
+    proc.on("close", () => resolve(out));
+    proc.on("error", reject);
+  });
   const parsed = JSON.parse(stdout);
   return Array.isArray(parsed) ? parsed[0] : parsed;
 }
@@ -342,41 +354,39 @@ async function probeMetadata(
 
   if (!isVideo) {
     try {
-      const headerBuf =
-        sourceBuffer?.subarray(0, METADATA_FETCH_SIZE) ??
-        (await fetchHeader(sourceUrl));
+      // Always run exiftool for orientation; optionally include EXIF/IPTC/XMP.
+      // Streams at most 100KB from the source (or buffer if already downloaded).
+      const groups: string[] = ["-Orientation"];
+      if (infoOpts.exif) groups.push("-EXIF:all");
+      if (infoOpts.iptc) groups.push("-IPTC:all");
+      if (infoOpts.xmp) groups.push("-XMP:all");
 
-      // Always run exiftool for orientation; optionally include EXIF/IPTC/XMP
-      {
-        const groups: string[] = ["-Orientation"];
-        if (infoOpts.exif) groups.push("-EXIF:all");
-        if (infoOpts.iptc) groups.push("-IPTC:all");
-        if (infoOpts.xmp) groups.push("-XMP:all");
+      const exiftoolResult = await runExiftool(
+        sourceBuffer ?? sourceUrl,
+        groups,
+      );
 
-        const exiftoolResult = await runExiftool(headerBuf, groups);
+      const rawOrientation = exiftoolResult["IFD0:Orientation"];
+      if (typeof rawOrientation === "number") orientation = rawOrientation;
 
-        const rawOrientation = exiftoolResult["IFD0:Orientation"];
-        if (typeof rawOrientation === "number") orientation = rawOrientation;
+      if (infoOpts.exif) {
+        const ifd0 = groupExiftoolOutput(exiftoolResult, "IFD0");
+        const exifIFD = groupExiftoolOutput(exiftoolResult, "ExifIFD");
+        const gps = groupExiftoolOutput(exiftoolResult, "GPS");
+        exifData = {};
+        if (Object.keys(ifd0).length) exifData.Image = ifd0;
+        if (Object.keys(exifIFD).length) exifData.Photo = exifIFD;
+        if (Object.keys(gps).length) exifData.GPSInfo = gps;
+      }
 
-        if (infoOpts.exif) {
-          const ifd0 = groupExiftoolOutput(exiftoolResult, "IFD0");
-          const exifIFD = groupExiftoolOutput(exiftoolResult, "ExifIFD");
-          const gps = groupExiftoolOutput(exiftoolResult, "GPS");
-          exifData = {};
-          if (Object.keys(ifd0).length) exifData.Image = ifd0;
-          if (Object.keys(exifIFD).length) exifData.Photo = exifIFD;
-          if (Object.keys(gps).length) exifData.GPSInfo = gps;
-        }
+      if (infoOpts.iptc) {
+        const iptc = groupExiftoolOutput(exiftoolResult, "IPTC");
+        if (Object.keys(iptc).length) iptcData = iptc;
+      }
 
-        if (infoOpts.iptc) {
-          const iptc = groupExiftoolOutput(exiftoolResult, "IPTC");
-          if (Object.keys(iptc).length) iptcData = iptc;
-        }
-
-        if (infoOpts.xmp) {
-          const xmp = groupExiftoolXmp(exiftoolResult);
-          if (Object.keys(xmp).length) xmpData = xmp;
-        }
+      if (infoOpts.xmp) {
+        const xmp = groupExiftoolXmp(exiftoolResult);
+        if (Object.keys(xmp).length) xmpData = xmp;
       }
     } catch (cause) {
       logger.error("Failed to extract image metadata", { cause });
