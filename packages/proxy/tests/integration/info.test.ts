@@ -543,6 +543,24 @@ describe("info endpoint", () => {
       expect(res.status).toBe(200);
     });
 
+    it("accepts a valid hashsum", async () => {
+      const res = await fetchInfo(
+        IMAGE_URL,
+        "/hs:sha256:efd163fab569d4beec64e268346b33c61e98024b226eae40c3de0e469951a4d6",
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it("rejects an invalid hashsum", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/hs:sha256:badhash");
+      expect(res.status).toBe(422);
+    });
+
+    it("rejects when source exceeds max file size", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/msfs:1");
+      expect(res.status).toBe(422);
+    });
+
     it("returns an error for an unreachable source", async () => {
       const res = await fetchInfo("http://file-server/nonexistent.png");
       expect(res.status).toBeGreaterThanOrEqual(400);

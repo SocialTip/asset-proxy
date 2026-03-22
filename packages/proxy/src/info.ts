@@ -8,8 +8,7 @@ import nodeIptc from "node-iptc";
 import sharp from "sharp";
 import {
   HTTPError,
-  parseInfoOptions,
-  parseProcessingUrl,
+  parseInfoUrl,
   verifySignature,
   type InfoOptions,
 } from "@socialtip/asset-proxy-url-parser";
@@ -208,18 +207,20 @@ async function extractPalette(
   return result;
 }
 
-async function probeMetadata(
-  sourceUrl: string,
-  infoOpts: InfoOptions = {},
-): Promise<InfoResponse> {
+async function fetchSource(sourceUrl: string): Promise<Buffer> {
   const sourceRes = await fetch(sourceUrl);
   if (!sourceRes.ok) {
     throw new HTTPError("Could not fetch source", {
       code: "UNPROCESSABLE_ENTITY",
     });
   }
-  const sourceBuffer = Buffer.from(await sourceRes.arrayBuffer());
+  return Buffer.from(await sourceRes.arrayBuffer());
+}
 
+async function probeMetadata(
+  sourceBuffer: Buffer,
+  infoOpts: InfoOptions = {},
+): Promise<InfoResponse> {
   const { stdout } = await new Promise<{ stdout: string }>(
     (resolve, reject) => {
       const proc = execFile(
@@ -426,18 +427,7 @@ export async function handleInfoRequest(
     signingSalt: env.SIGNING_SALT,
   });
 
-  const { infoOptions: infoOpts, cleanedPath } =
-    parseInfoOptions(pathAfterSignature);
-
-  // parseProcessingUrl expects at least one option segment before /plain/ or /enc/.
-  // When no options are present the path starts with /plain/ directly, so we
-  // prepend a no-op segment to satisfy the parser.
-  const parserPath =
-    cleanedPath.startsWith("/plain/") || cleanedPath.startsWith("/enc/")
-      ? `/_${cleanedPath}`
-      : cleanedPath;
-
-  const parsed = parseProcessingUrl(parserPath, {
+  const parsed = parseInfoUrl(pathAfterSignature, {
     encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY,
   });
 
@@ -451,7 +441,29 @@ export async function handleInfoRequest(
     ? await resolveGcsUrl(parsed.sourceUrl)
     : parsed.sourceUrl;
 
-  const metadata = await probeMetadata(sourceUrl, infoOpts);
+  const sourceBuffer = await fetchSource(sourceUrl);
+
+  if (parsed.hashsum) {
+    const digest = createHash(parsed.hashsum.type)
+      .update(sourceBuffer)
+      .digest("hex");
+    if (digest !== parsed.hashsum.hash) {
+      throw new HTTPError(
+        `Source hashsum mismatch: expected ${parsed.hashsum.hash}, got ${digest}`,
+        { code: "UNPROCESSABLE_ENTITY" },
+      );
+    }
+  }
+
+  const maxFileSize = parsed.maxSrcFileSize ?? env.MAX_SRC_FILE_SIZE;
+  if (maxFileSize && sourceBuffer.length > maxFileSize) {
+    throw new HTTPError(
+      `Source file size ${sourceBuffer.length} exceeds limit of ${maxFileSize} bytes`,
+      { code: "UNPROCESSABLE_ENTITY" },
+    );
+  }
+
+  const metadata = await probeMetadata(sourceBuffer, parsed.infoOptions);
 
   res.set("Cache-Control", env.CACHE_CONTROL);
   res.json(metadata);
