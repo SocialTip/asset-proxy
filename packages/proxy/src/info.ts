@@ -12,6 +12,7 @@ import {
   type InfoOptions,
 } from "@socialtip/asset-proxy-url-parser";
 import { env } from "./env.js";
+import { logger } from "./logger.js";
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -295,8 +296,8 @@ async function probeMetadata(
       if (infoOpts.xmp && meta.xmp) {
         xmpData = parseXmp(meta.xmp);
       }
-    } catch {
-      // orientation/exif/iptc/xmp extraction is optional — ignore failures
+    } catch (cause) {
+      logger.error("Failed to extract image metadata", { cause });
     }
     if (infoOpts.average) {
       try {
@@ -309,22 +310,22 @@ async function probeMetadata(
           G: Math.round(stats.channels[1].mean),
           B: Math.round(stats.channels[2].mean),
         };
-      } catch {
-        // average extraction is optional — ignore failures
+      } catch (cause) {
+        logger.error("Failed to extract average colour", { cause });
       }
     }
     if (infoOpts.dominantColors) {
       try {
         dominantColorsData = await extractDominantColors(sourceBuffer);
-      } catch {
-        // dominant colours extraction is optional — ignore failures
+      } catch (cause) {
+        logger.error("Failed to extract dominant colours", { cause });
       }
     }
     if (infoOpts.palette && infoOpts.palette >= 2) {
       try {
         paletteData = await extractPalette(sourceBuffer, infoOpts.palette);
-      } catch {
-        // palette extraction is optional — ignore failures
+      } catch (cause) {
+        logger.error("Failed to extract colour palette", { cause });
       }
     }
   }
