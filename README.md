@@ -560,22 +560,24 @@ Returns `application/json` with a `Cache-Control` header.
 }
 ```
 
-| Field         | Type   | Description                                                                    |
-| ------------- | ------ | ------------------------------------------------------------------------------ |
-| Field         | Type   | Description                                                                    |
-| ------------- | ------ | ------------------------------------------------------------------------------ |
-| `format`      | string | Codec name (images) or container format (videos)                               |
-| `mime_type`   | string | MIME type of the source                                                        |
-| `width`       | number | Width in pixels (adjusted for EXIF orientation)                                |
-| `height`      | number | Height in pixels (adjusted for EXIF orientation)                               |
-| `orientation` | number | EXIF orientation value (1-8). Defaults to 1 when absent. Images only.          |
-| `colorspace`  | string | Colour space (only when `cs` info option is enabled)                           |
-| `size`        | number | File size in bytes                                                             |
-| `duration`    | number | Duration in seconds (video only)                                               |
-| `video_meta`  | object | Video stream details (video only)                                              |
-| `exif`        | object | EXIF metadata grouped by IFD section (only when `exif` info option is enabled) |
-| `iptc`        | object | IPTC metadata (only when `iptc` info option is enabled)                        |
-| `xmp`         | object | XMP metadata organised by namespace (only when `xmp` info option is enabled)   |
+| Field           | Type   | Description                                                                    |
+| --------------- | ------ | ------------------------------------------------------------------------------ |
+| `format`        | string | Codec name (images) or container format (videos)                               |
+| `mime_type`     | string | MIME type of the source                                                        |
+| `width`         | number | Width in pixels (adjusted for EXIF orientation)                                |
+| `height`        | number | Height in pixels (adjusted for EXIF orientation)                               |
+| `orientation`   | number | EXIF orientation value (1-8). Defaults to 1 when absent. Images only.          |
+| `colorspace`    | string | Colour space (only when `cs` info option is enabled)                           |
+| `bands`         | number | Number of image bands/channels (only when `b` info option is enabled)          |
+| `sample_format` | string | Sample format: uchar, ushort, or float (only when `sf` info option is enabled) |
+| `pages_number`  | number | Page/frame count (only when `pn` info option is enabled)                       |
+| `alpha`         | object | Alpha channel info (only when `a` info option is enabled)                      |
+| `size`          | number | File size in bytes                                                             |
+| `duration`      | number | Duration in seconds (video only)                                               |
+| `video_meta`    | object | Video stream details (video only)                                              |
+| `exif`          | object | EXIF metadata grouped by IFD section (only when `exif` info option is enabled) |
+| `iptc`          | object | IPTC metadata (only when `iptc` info option is enabled)                        |
+| `xmp`           | object | XMP metadata organised by namespace (only when `xmp` info option is enabled)   |
 
 ### Info options
 
@@ -587,6 +589,10 @@ Info-specific options control which additional metadata is returned. They are pl
 | `iptc` | `iptc:1`    | Include IPTC metadata |
 | `xmp`  | `xmp:1`     | Include XMP metadata  |
 | `cs`   | `cs:1`      | Include colour space  |
+| `b`    | `b:1`       | Include bands count   |
+| `sf`   | `sf:1`      | Include sample format |
+| `pn`   | `pn:1`      | Include page count    |
+| `a`    | `a:1`       | Include alpha info    |
 
 ### URL generator
 
