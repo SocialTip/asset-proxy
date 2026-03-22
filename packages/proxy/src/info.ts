@@ -33,6 +33,7 @@ interface InfoRequestOptions {
   exif?: boolean;
   iptc?: boolean;
   xmp?: boolean;
+  colorspace?: boolean;
 }
 
 interface InfoResponse {
@@ -150,7 +151,8 @@ async function probeMetadata(
     width: swapDimensions ? stream.height : stream.width,
     height: swapDimensions ? stream.width : stream.height,
     orientation,
-    ...(stream.color_space && { colorspace: stream.color_space }),
+    ...(infoOpts.colorspace &&
+      stream.color_space && { colorspace: stream.color_space }),
   };
 
   if (isVideo) {
@@ -312,7 +314,7 @@ function flattenRdfValue(value: unknown): unknown {
   return value;
 }
 
-const INFO_OPTION_NAMES = new Set(["exif", "iptc", "xmp"]);
+const INFO_OPTION_NAMES = new Set(["exif", "iptc", "xmp", "colorspace", "cs"]);
 
 function parseInfoOptions(path: string): {
   infoOpts: InfoRequestOptions;
@@ -331,6 +333,7 @@ function parseInfoOptions(path: string): {
       if (name === "exif") infoOpts.exif = enabled;
       if (name === "iptc") infoOpts.iptc = enabled;
       if (name === "xmp") infoOpts.xmp = enabled;
+      if (name === "colorspace" || name === "cs") infoOpts.colorspace = enabled;
     } else {
       kept.push(seg);
     }
