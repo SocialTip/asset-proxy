@@ -28,6 +28,7 @@ describe("info endpoint", () => {
       expect(body.width).toBeGreaterThan(0);
       expect(body.height).toBeGreaterThan(0);
       expect(body.size).toBeGreaterThan(0);
+      expect(body.colorspace).toBeUndefined();
       expect(body.duration).toBeUndefined();
       expect(body.video_meta).toBeUndefined();
     });
@@ -178,6 +179,24 @@ describe("info endpoint", () => {
 
       const body = await res.json();
       expect(body.xmp).toBeUndefined();
+    });
+  });
+
+  describe("colorspace option", () => {
+    it("returns colorspace when cs option is enabled", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/cs:1");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.colorspace).toBe("gbr");
+    });
+
+    it("omits colorspace when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.colorspace).toBeUndefined();
     });
   });
 

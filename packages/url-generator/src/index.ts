@@ -67,6 +67,8 @@ export interface InfoOptions {
   iptc?: boolean;
   /** Include XMP metadata in the response. */
   xmp?: boolean;
+  /** Include colour space in the response. */
+  colorspace?: boolean;
 }
 
 /** Generates an asset-proxy info URL path that returns JSON metadata about the source asset. */
@@ -89,6 +91,7 @@ function serializeInfoOptions(options?: InfoOptions): string[] {
   if (options.exif) segments.push("exif:t");
   if (options.iptc) segments.push("iptc:t");
   if (options.xmp) segments.push("xmp:t");
+  if (options.colorspace) segments.push("cs:t");
   return segments;
 }
 

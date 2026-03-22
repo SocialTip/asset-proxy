@@ -569,6 +569,7 @@ Returns `application/json` with a `Cache-Control` header.
 | `width`       | number | Width in pixels (adjusted for EXIF orientation)                                |
 | `height`      | number | Height in pixels (adjusted for EXIF orientation)                               |
 | `orientation` | number | EXIF orientation value (1-8). Defaults to 1 when absent. Images only.          |
+| `colorspace`  | string | Colour space (only when `cs` info option is enabled)                           |
 | `size`        | number | File size in bytes                                                             |
 | `duration`    | number | Duration in seconds (video only)                                               |
 | `video_meta`  | object | Video stream details (video only)                                              |
@@ -585,6 +586,7 @@ Info-specific options control which additional metadata is returned. They are pl
 | `exif` | `exif:1`    | Include EXIF metadata |
 | `iptc` | `iptc:1`    | Include IPTC metadata |
 | `xmp`  | `xmp:1`     | Include XMP metadata  |
+| `cs`   | `cs:1`      | Include colour space  |
 
 ### URL generator
 
