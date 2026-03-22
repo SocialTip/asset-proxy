@@ -346,9 +346,8 @@ async function probeMetadata(
         sourceBuffer?.subarray(0, METADATA_FETCH_SIZE) ??
         (await fetchHeader(sourceUrl));
 
-      const needsExiftool =
-        infoOpts.exif || infoOpts.iptc || infoOpts.xmp || true; // always need orientation
-      if (needsExiftool) {
+      // Always run exiftool for orientation; optionally include EXIF/IPTC/XMP
+      {
         const groups: string[] = ["-Orientation"];
         if (infoOpts.exif) groups.push("-EXIF:all");
         if (infoOpts.iptc) groups.push("-IPTC:all");

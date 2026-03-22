@@ -5,6 +5,7 @@ import { SERVICE_URL } from "./setup.js";
 const IMAGE_URL = "http://file-server/test-image.png";
 const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
 const CASTLE_URL = "http://file-server/test-image-castle.jpg";
+const ANIMATED_URL = "http://file-server/test-image-animated.gif";
 const JPEG_URL = "http://file-server/test-image-with-metadata.jpg";
 const VIDEO_URL = "http://file-server/test-video.mp4";
 
@@ -536,6 +537,36 @@ describe("info endpoint", () => {
       const res = await fetchInfo(IMAGE_URL);
       const body = await res.json();
       expect(body.alpha).toBeUndefined();
+    });
+  });
+
+  describe("page option", () => {
+    it("returns average colour for frame 0 (red)", async () => {
+      const res = await fetchInfo(ANIMATED_URL, "/pg:0/avg:t");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.average).toMatchInlineSnapshot(`
+        {
+          "B": 0,
+          "G": 0,
+          "R": 255,
+        }
+      `);
+    });
+
+    it("returns average colour for frame 1 (blue)", async () => {
+      const res = await fetchInfo(ANIMATED_URL, "/pg:1/avg:t");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.average).toMatchInlineSnapshot(`
+        {
+          "B": 255,
+          "G": 0,
+          "R": 0,
+        }
+      `);
     });
   });
 
