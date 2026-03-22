@@ -583,16 +583,16 @@ Returns `application/json` with a `Cache-Control` header.
 
 Info-specific options control which additional metadata is returned. They are placed in the URL path alongside processing options.
 
-| Option | URL segment | Description           |
-| ------ | ----------- | --------------------- |
-| `exif` | `exif:1`    | Include EXIF metadata |
-| `iptc` | `iptc:1`    | Include IPTC metadata |
-| `xmp`  | `xmp:1`     | Include XMP metadata  |
-| `cs`   | `cs:1`      | Include colour space  |
-| `b`    | `b:1`       | Include bands count   |
-| `sf`   | `sf:1`      | Include sample format |
-| `pn`   | `pn:1`      | Include page count    |
-| `a`    | `a:1`       | Include alpha info    |
+| Option          | Shorthand | Description           |
+| --------------- | --------- | --------------------- |
+| `exif`          |           | Include EXIF metadata |
+| `iptc`          |           | Include IPTC metadata |
+| `xmp`           |           | Include XMP metadata  |
+| `colorspace`    | `cs`      | Include colour space  |
+| `bands`         | `b`       | Include bands count   |
+| `sample_format` | `sf`      | Include sample format |
+| `pages_number`  | `pn`      | Include page count    |
+| `alpha`         | `a`       | Include alpha info    |
 
 ### URL generator
 

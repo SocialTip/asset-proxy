@@ -3,9 +3,13 @@ import {
   sign,
   SHORTHANDS,
   type ParsedUrlInput,
+  type InfoOptions,
 } from "@socialtip/asset-proxy-url-parser";
 
-export type { ParsedUrlInput } from "@socialtip/asset-proxy-url-parser";
+export type {
+  ParsedUrlInput,
+  InfoOptions,
+} from "@socialtip/asset-proxy-url-parser";
 
 /** Options for generating a URL, derived from the asset-proxy parsed URL schema. All fields except `sourceUrl` are optional. */
 export type UrlGeneratorOptions = Partial<ParsedUrlInput> & {
@@ -59,33 +63,18 @@ export function generateUrl(
   return `/${signature}${pathAfterSignature}`;
 }
 
-/** Options that control which additional metadata the info endpoint returns. */
-export interface InfoOptions {
-  /** Include EXIF metadata in the response. */
-  exif?: boolean;
-  /** Include IPTC metadata in the response. */
-  iptc?: boolean;
-  /** Include XMP metadata in the response. */
-  xmp?: boolean;
-  /** Include colour space in the response. */
-  colorspace?: boolean;
-  /** Include number of image bands/channels in the response. */
-  bands?: boolean;
-  /** Include sample format (uchar, ushort, float) in the response. */
-  sampleFormat?: boolean;
-  /** Include page/frame count in the response. */
-  pagesNumber?: boolean;
-  /** Include alpha channel info in the response. */
-  alpha?: boolean;
+/** Options for generating an info URL. Only `sourceUrl` is required; security options (encryption, signing) come from the config. */
+export interface InfoUrlOptions {
+  sourceUrl: string;
 }
 
 /** Generates an asset-proxy info URL path that returns JSON metadata about the source asset. */
 export function generateInfoUrl(
-  options: UrlGeneratorOptions,
+  options: InfoUrlOptions,
   config?: UrlGeneratorConfig,
   infoOptions?: InfoOptions,
 ): string {
-  const processingUrl = generateUrl(options, config);
+  const processingUrl = generateUrl({ sourceUrl: options.sourceUrl }, config);
   const infoSegments = serializeInfoOptions(infoOptions);
   const infoPath = infoSegments.length > 0 ? infoSegments.join("/") + "/" : "";
   // Insert /info and info options before the signature
