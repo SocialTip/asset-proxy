@@ -562,8 +562,6 @@ Returns `application/json` with a `Cache-Control` header.
 
 | Field           | Type   | Description                                                                    |
 | --------------- | ------ | ------------------------------------------------------------------------------ |
-| Field           | Type   | Description                                                                    |
-| -------------   | ------ | ------------------------------------------------------------------------------ |
 | `format`        | string | Codec name (images) or container format (videos)                               |
 | `mime_type`     | string | MIME type of the source                                                        |
 | `width`         | number | Width in pixels (adjusted for EXIF orientation)                                |
