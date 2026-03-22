@@ -10,6 +10,7 @@ const INFO_SHORTHANDS: Record<string, string> = {
   sf: "sample_format",
   pn: "pages_number",
   a: "alpha",
+  p: "palette",
 };
 
 const rawInfoOptionsSchema = z.object({
@@ -21,6 +22,7 @@ const rawInfoOptionsSchema = z.object({
   sample_format: zBool.optional(),
   pages_number: zBool.optional(),
   alpha: zBool.optional(),
+  palette: z.coerce.number().int().min(0).max(256).optional(),
 });
 
 const infoOptionsSchema = rawInfoOptionsSchema.transform((data) => ({
@@ -32,6 +34,7 @@ const infoOptionsSchema = rawInfoOptionsSchema.transform((data) => ({
   sampleFormat: data.sample_format,
   pagesNumber: data.pages_number,
   alpha: data.alpha,
+  palette: data.palette,
 }));
 
 /** Parsed info endpoint options that control which additional metadata is returned. */
@@ -52,6 +55,8 @@ export interface InfoOptions {
   pagesNumber?: boolean;
   /** Include alpha channel information. */
   alpha?: boolean;
+  /** Return an RGBA colour palette with this many colours (2-256). 0 or undefined to disable. */
+  palette?: number;
 }
 
 /** Zod schema for runtime validation of parsed info options. The `InfoOptions` interface is the authoritative type definition; this schema validates against it at compile time via `satisfies`. */
@@ -64,6 +69,7 @@ export const parsedInfoOptionsSchema = z.object({
   sampleFormat: z.boolean().optional(),
   pagesNumber: z.boolean().optional(),
   alpha: z.boolean().optional(),
+  palette: z.number().optional(),
 }) satisfies z.ZodType<InfoOptions>;
 
 const INFO_OPTION_NAMES = new Set([

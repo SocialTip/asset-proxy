@@ -375,4 +375,20 @@ describe("imgproxy backward compatibility: info URL", () => {
     );
     expect(ours).toBe(theirs);
   });
+
+  it("with palette option", () => {
+    const ours = generateInfoUrl({ sourceUrl: SRC }, undefined, {
+      palette: 4,
+    });
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "plain" },
+      options: { palette: 4 },
+    });
+
+    expect(ours).toMatchInlineSnapshot(
+      `"/info/insecure/p:4/plain/https://example.com/photo.jpg"`,
+    );
+    expect(ours).toBe(theirs);
+  });
 });
