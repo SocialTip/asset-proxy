@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import express from "express";
 import { encode as blurhashEncode } from "blurhash";
 import exifReader from "exif-reader";
@@ -58,6 +59,7 @@ interface InfoResponse {
   average?: { R: number; G: number; B: number };
   dominant_colors?: Record<string, { R: number; G: number; B: number }>;
   blurhash?: string;
+  hashsums?: Record<string, string>;
 }
 
 function isVideoFormat(formatName: string): boolean {
@@ -377,6 +379,16 @@ async function probeMetadata(
   }
 
   result.size = sourceBuffer.length;
+
+  if (infoOpts.calcHashsums?.length) {
+    result.hashsums = [...new Set(infoOpts.calcHashsums)].reduce(
+      (prev, type) => ({
+        ...prev,
+        [type]: createHash(type).update(sourceBuffer).digest("hex"),
+      }),
+      {},
+    );
+  }
 
   if (exifData) {
     result.exif = exifData;

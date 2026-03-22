@@ -14,7 +14,10 @@ const INFO_SHORTHANDS: Record<string, string> = {
   avg: "average",
   dc: "dominant_colors",
   bh: "blurhash",
+  chs: "calc_hashsums",
 };
+
+const hashsumType = z.enum(["md5", "sha1", "sha256", "sha512"]);
 
 const rawInfoOptionsSchema = z.object({
   exif: zBool.optional(),
@@ -46,6 +49,12 @@ const rawInfoOptionsSchema = z.object({
       return { xComponents: x, yComponents: y };
     })
     .optional(),
+  calc_hashsums: z
+    .string()
+    .transform((v) =>
+      v.split(":").filter((t) => hashsumType.safeParse(t).success),
+    )
+    .optional(),
 });
 
 const infoOptionsSchema = rawInfoOptionsSchema.transform((data) => ({
@@ -61,6 +70,7 @@ const infoOptionsSchema = rawInfoOptionsSchema.transform((data) => ({
   average: data.average,
   dominantColors: data.dominant_colors,
   blurhash: data.blurhash,
+  calcHashsums: data.calc_hashsums,
 }));
 
 /** Parsed info endpoint options that control which additional metadata is returned. */
@@ -89,6 +99,8 @@ export interface InfoOptions {
   dominantColors?: boolean;
   /** Return a BlurHash string with the given x and y components. */
   blurhash?: { xComponents: number; yComponents: number };
+  /** Calculate and return hashsums of the source file. List of types: md5, sha1, sha256, sha512. */
+  calcHashsums?: Array<"md5" | "sha1" | "sha256" | "sha512">;
 }
 
 /** Zod schema for runtime validation of parsed info options. The `InfoOptions` interface is the authoritative type definition; this schema validates against it at compile time via `satisfies`. */
@@ -107,6 +119,7 @@ export const parsedInfoOptionsSchema = z.object({
   blurhash: z
     .object({ xComponents: z.number(), yComponents: z.number() })
     .optional(),
+  calcHashsums: z.array(hashsumType).optional(),
 }) satisfies z.ZodType<InfoOptions>;
 
 const INFO_OPTION_NAMES = new Set([

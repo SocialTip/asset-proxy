@@ -104,6 +104,8 @@ function serializeInfoOptions(options?: InfoOptions): string[] {
     segments.push(
       `bh:${options.blurhash.xComponents}:${options.blurhash.yComponents}`,
     );
+  if (options.calcHashsums?.length)
+    segments.push(`chs:${options.calcHashsums.join(":")}`);
   return segments;
 }
 

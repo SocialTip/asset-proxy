@@ -437,6 +437,38 @@ describe("info endpoint", () => {
     });
   });
 
+  describe("calc_hashsums option", () => {
+    it("returns hashsums when chs option is enabled", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/chs:md5:sha256");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.hashsums).toMatchInlineSnapshot(`
+        {
+          "md5": "754739ad10ce8989cf295e3dcd3c8ad6",
+          "sha256": "efd163fab569d4beec64e268346b33c61e98024b226eae40c3de0e469951a4d6",
+        }
+      `);
+
+      await expect(
+        fetchInfo(IMAGE_URL, "/chs:sha1:sha512:sha1")
+          .then((res) => res.json())
+          .then((res) => res.hashsums),
+      ).resolves.toMatchInlineSnapshot(`
+        {
+          "sha1": "31e94ea8de575a0a3f7f4335c3dad60b75d89d89",
+          "sha512": "0a9c0e679221b92eaae2dcc4aa4170291e6eebc22ccca646e86e2ada8257e728604001354458acfbe7dedfbfb438d8ffcc5e492c16263734318c5599c53738fd",
+        }
+      `);
+    });
+
+    it("omits hashsums when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      const body = await res.json();
+      expect(body.hashsums).toBeUndefined();
+    });
+  });
+
   describe("bands option", () => {
     it("returns bands when b option is enabled", async () => {
       const res = await fetchInfo(IMAGE_URL, "/b:1");
