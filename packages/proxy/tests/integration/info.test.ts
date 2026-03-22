@@ -228,23 +228,40 @@ describe("info endpoint", () => {
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.dominant_colors).toBeDefined();
-      const keys = Object.keys(body.dominant_colors).sort();
-      expect(keys).toEqual([
-        "dark_muted",
-        "dark_vibrant",
-        "light_muted",
-        "light_vibrant",
-        "muted",
-        "vibrant",
-      ]);
-      for (const colour of Object.values(body.dominant_colors)) {
-        expect(colour).toMatchObject({
-          R: expect.any(Number),
-          G: expect.any(Number),
-          B: expect.any(Number),
-        });
-      }
+      expect(body.dominant_colors).toMatchInlineSnapshot(`
+        {
+          "dark_muted": {
+            "B": 0,
+            "G": 0,
+            "R": 0,
+          },
+          "dark_vibrant": {
+            "B": 0,
+            "G": 0,
+            "R": 0,
+          },
+          "light_muted": {
+            "B": 0,
+            "G": 0,
+            "R": 0,
+          },
+          "light_vibrant": {
+            "B": 0,
+            "G": 0,
+            "R": 0,
+          },
+          "muted": {
+            "B": 0,
+            "G": 0,
+            "R": 0,
+          },
+          "vibrant": {
+            "B": 40,
+            "G": 221,
+            "R": 241,
+          },
+        }
+      `);
     });
 
     it("omits dominant_colors when option is not set", async () => {
