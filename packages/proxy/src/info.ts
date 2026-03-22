@@ -34,6 +34,10 @@ interface InfoRequestOptions {
   iptc?: boolean;
   xmp?: boolean;
   colorspace?: boolean;
+  bands?: boolean;
+  sampleFormat?: boolean;
+  pagesNumber?: boolean;
+  alpha?: boolean;
 }
 
 interface InfoResponse {
@@ -43,6 +47,10 @@ interface InfoResponse {
   height: number;
   orientation: number;
   colorspace?: string;
+  bands?: number;
+  sample_format?: string;
+  pages_number?: number;
+  alpha?: { alpha: boolean; transparent?: boolean };
   size?: number;
   duration?: number;
   video_meta?: {
@@ -68,6 +76,34 @@ function isVideoFormat(formatName: string): boolean {
     "avi",
   ]);
   return videoFormats.has(formatName);
+}
+
+function pixFmtHasAlpha(pixFmt: string): boolean {
+  return /rgba|argb|bgra|abgr|yuva|gbra|ya[0-9]|pal8/i.test(pixFmt);
+}
+
+function bandsFromPixFmt(pixFmt: string): number {
+  if (pixFmtHasAlpha(pixFmt)) {
+    if (/^(ya|gray.*a)/i.test(pixFmt)) return 2;
+    return 4;
+  }
+  if (/^(gray|y[0-9])/i.test(pixFmt)) return 1;
+  return 3;
+}
+
+function sampleFormatFromPixFmt(
+  pixFmt: string,
+  bitsPerRawSample?: string,
+): string {
+  const bits = parseInt(bitsPerRawSample ?? "", 10);
+  if (bits > 0) {
+    if (bits <= 8) return "uchar";
+    if (bits <= 16) return "ushort";
+    return "float";
+  }
+  if (/16|48|64/i.test(pixFmt)) return "ushort";
+  if (/f32|float/i.test(pixFmt)) return "float";
+  return "uchar";
 }
 
 async function probeMetadata(
@@ -145,6 +181,8 @@ async function probeMetadata(
   }
   const swapDimensions = orientation >= 5 && orientation <= 8;
 
+  const pixFmt: string = stream.pix_fmt ?? "";
+
   const result: InfoResponse = {
     format,
     mime_type: mimeType,
@@ -153,6 +191,16 @@ async function probeMetadata(
     orientation,
     ...(infoOpts.colorspace &&
       stream.color_space && { colorspace: stream.color_space }),
+    ...(infoOpts.bands && { bands: bandsFromPixFmt(pixFmt) }),
+    ...(infoOpts.sampleFormat && {
+      sample_format: sampleFormatFromPixFmt(pixFmt, stream.bits_per_raw_sample),
+    }),
+    ...(infoOpts.pagesNumber && {
+      pages_number: parseInt(stream.nb_frames, 10) || 1,
+    }),
+    ...(infoOpts.alpha && {
+      alpha: { alpha: pixFmtHasAlpha(pixFmt) },
+    }),
   };
 
   if (isVideo) {
@@ -314,7 +362,21 @@ function flattenRdfValue(value: unknown): unknown {
   return value;
 }
 
-const INFO_OPTION_NAMES = new Set(["exif", "iptc", "xmp", "colorspace", "cs"]);
+const INFO_OPTION_NAMES = new Set([
+  "exif",
+  "iptc",
+  "xmp",
+  "colorspace",
+  "cs",
+  "bands",
+  "b",
+  "sample_format",
+  "sf",
+  "pages_number",
+  "pn",
+  "alpha",
+  "a",
+]);
 
 function parseInfoOptions(path: string): {
   infoOpts: InfoRequestOptions;
@@ -334,6 +396,12 @@ function parseInfoOptions(path: string): {
       if (name === "iptc") infoOpts.iptc = enabled;
       if (name === "xmp") infoOpts.xmp = enabled;
       if (name === "colorspace" || name === "cs") infoOpts.colorspace = enabled;
+      if (name === "bands" || name === "b") infoOpts.bands = enabled;
+      if (name === "sample_format" || name === "sf")
+        infoOpts.sampleFormat = enabled;
+      if (name === "pages_number" || name === "pn")
+        infoOpts.pagesNumber = enabled;
+      if (name === "alpha" || name === "a") infoOpts.alpha = enabled;
     } else {
       kept.push(seg);
     }

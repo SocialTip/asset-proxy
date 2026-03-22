@@ -200,6 +200,71 @@ describe("info endpoint", () => {
     });
   });
 
+  describe("bands option", () => {
+    it("returns bands when b option is enabled", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/b:1");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.bands).toBe(3);
+    });
+
+    it("omits bands when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      const body = await res.json();
+      expect(body.bands).toBeUndefined();
+    });
+  });
+
+  describe("sample_format option", () => {
+    it("returns sample_format when sf option is enabled", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/sf:1");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.sample_format).toBe("uchar");
+    });
+
+    it("omits sample_format when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      const body = await res.json();
+      expect(body.sample_format).toBeUndefined();
+    });
+  });
+
+  describe("pages_number option", () => {
+    it("returns pages_number when pn option is enabled", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/pn:1");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.pages_number).toBe(1);
+    });
+
+    it("omits pages_number when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      const body = await res.json();
+      expect(body.pages_number).toBeUndefined();
+    });
+  });
+
+  describe("alpha option", () => {
+    it("returns alpha info when a option is enabled", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/a:1");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      // test-image.png is rgb24 — no alpha channel
+      expect(body.alpha).toEqual({ alpha: false });
+    });
+
+    it("omits alpha when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      const body = await res.json();
+      expect(body.alpha).toBeUndefined();
+    });
+  });
+
   describe("validation", () => {
     it("rejects disallowed origins when ALLOWED_ORIGINS is set", async () => {
       // The test service doesn't have ALLOWED_ORIGINS set, so this just

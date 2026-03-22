@@ -69,6 +69,14 @@ export interface InfoOptions {
   xmp?: boolean;
   /** Include colour space in the response. */
   colorspace?: boolean;
+  /** Include number of image bands/channels in the response. */
+  bands?: boolean;
+  /** Include sample format (uchar, ushort, float) in the response. */
+  sampleFormat?: boolean;
+  /** Include page/frame count in the response. */
+  pagesNumber?: boolean;
+  /** Include alpha channel info in the response. */
+  alpha?: boolean;
 }
 
 /** Generates an asset-proxy info URL path that returns JSON metadata about the source asset. */
@@ -92,6 +100,10 @@ function serializeInfoOptions(options?: InfoOptions): string[] {
   if (options.iptc) segments.push("iptc:t");
   if (options.xmp) segments.push("xmp:t");
   if (options.colorspace) segments.push("cs:t");
+  if (options.bands) segments.push("b:t");
+  if (options.sampleFormat) segments.push("sf:t");
+  if (options.pagesNumber) segments.push("pn:t");
+  if (options.alpha) segments.push("a:t");
   return segments;
 }
 
