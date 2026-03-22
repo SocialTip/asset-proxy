@@ -200,6 +200,33 @@ describe("info endpoint", () => {
     });
   });
 
+  describe("palette option", () => {
+    it("returns colour palette when p option is enabled", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/p:4");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.palette).toBeDefined();
+      expect(Array.isArray(body.palette)).toBe(true);
+      expect(body.palette.length).toBeGreaterThan(0);
+      expect(body.palette.length).toBeLessThanOrEqual(4);
+      for (const colour of body.palette) {
+        expect(colour).toMatchObject({
+          R: expect.any(Number),
+          G: expect.any(Number),
+          B: expect.any(Number),
+          A: 255,
+        });
+      }
+    });
+
+    it("omits palette when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      const body = await res.json();
+      expect(body.palette).toBeUndefined();
+    });
+  });
+
   describe("bands option", () => {
     it("returns bands when b option is enabled", async () => {
       const res = await fetchInfo(IMAGE_URL, "/b:1");

@@ -93,6 +93,7 @@ function serializeInfoOptions(options?: InfoOptions): string[] {
   if (options.sampleFormat) segments.push("sf:t");
   if (options.pagesNumber) segments.push("pn:t");
   if (options.alpha) segments.push("a:t");
+  if (options.palette) segments.push(`p:${options.palette}`);
   return segments;
 }
 

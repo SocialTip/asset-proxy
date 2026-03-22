@@ -52,6 +52,7 @@ interface InfoResponse {
   exif?: Record<string, unknown>;
   iptc?: Record<string, string | string[]>;
   xmp?: Record<string, Record<string, unknown>>;
+  palette?: Array<{ R: number; G: number; B: number; A: number }>;
 }
 
 function isVideoFormat(formatName: string): boolean {
@@ -95,6 +96,30 @@ function sampleFormatFromPixFmt(
   if (/16|48|64/i.test(pixFmt)) return "ushort";
   if (/f32|float/i.test(pixFmt)) return "float";
   return "uchar";
+}
+
+async function extractPalette(
+  buf: Buffer,
+  colours: number,
+): Promise<Array<{ R: number; G: number; B: number; A: number }>> {
+  const quantised = await sharp(buf)
+    .removeAlpha()
+    .png({ palette: true, colours, effort: 1 })
+    .toBuffer();
+  const { data, info } = await sharp(quantised)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const seen = new Set<string>();
+  const result: Array<{ R: number; G: number; B: number; A: number }> = [];
+  for (let i = 0; i < data.length; i += info.channels) {
+    const key = `${data[i]},${data[i + 1]},${data[i + 2]}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push({ R: data[i], G: data[i + 1], B: data[i + 2], A: 255 });
+    }
+  }
+  return result;
 }
 
 async function probeMetadata(
@@ -151,6 +176,9 @@ async function probeMetadata(
   let exifData: Record<string, unknown> | undefined;
   let iptcData: Record<string, string | string[]> | undefined;
   let xmpData: Record<string, Record<string, unknown>> | undefined;
+  let paletteData:
+    | Array<{ R: number; G: number; B: number; A: number }>
+    | undefined;
   if (!isVideo) {
     try {
       const meta = await sharp(sourceBuffer).metadata();
@@ -168,6 +196,13 @@ async function probeMetadata(
       }
     } catch {
       // orientation/exif/iptc/xmp extraction is optional — ignore failures
+    }
+    if (infoOpts.palette && infoOpts.palette >= 2) {
+      try {
+        paletteData = await extractPalette(sourceBuffer, infoOpts.palette);
+      } catch {
+        // palette extraction is optional — ignore failures
+      }
     }
   }
   const swapDimensions = orientation >= 5 && orientation <= 8;
@@ -222,6 +257,9 @@ async function probeMetadata(
   }
   if (xmpData) {
     result.xmp = xmpData;
+  }
+  if (paletteData) {
+    result.palette = paletteData;
   }
 
   return result;
