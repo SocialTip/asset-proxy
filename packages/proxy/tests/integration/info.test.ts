@@ -200,6 +200,27 @@ describe("info endpoint", () => {
     });
   });
 
+  describe("average option", () => {
+    it("returns average colour when avg option is enabled", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/avg:t");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.average).toBeDefined();
+      expect(body.average).toMatchObject({
+        R: expect.any(Number),
+        G: expect.any(Number),
+        B: expect.any(Number),
+      });
+    });
+
+    it("omits average when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      const body = await res.json();
+      expect(body.average).toBeUndefined();
+    });
+  });
+
   describe("palette option", () => {
     it("returns colour palette when p option is enabled", async () => {
       const res = await fetchInfo(IMAGE_URL, "/p:4");

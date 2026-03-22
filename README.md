@@ -579,22 +579,24 @@ Returns `application/json` with a `Cache-Control` header.
 | `iptc`          | object | IPTC metadata (only when `iptc` info option is enabled)                        |
 | `xmp`           | object | XMP metadata organised by namespace (only when `xmp` info option is enabled)   |
 | `palette`       | array  | RGBA colour palette (only when `p` info option is enabled)                     |
+| `average`       | object | Average RGB colour (only when `avg` info option is enabled)                    |
 
 ### Info options
 
 Info-specific options control which additional metadata is returned. They are placed in the URL path alongside processing options.
 
-| Option          | Shorthand | Description                                             |
-| --------------- | --------- | ------------------------------------------------------- |
-| `exif`          |           | Include EXIF metadata                                   |
-| `iptc`          |           | Include IPTC metadata                                   |
-| `xmp`           |           | Include XMP metadata                                    |
-| `colorspace`    | `cs`      | Include colour space                                    |
-| `bands`         | `b`       | Include bands count                                     |
-| `sample_format` | `sf`      | Include sample format                                   |
-| `pages_number`  | `pn`      | Include page count                                      |
-| `alpha`         | `a`       | Include alpha info                                      |
-| `palette`       | `p`       | Return RGBA colour palette (value = max colours, 2-256) |
+| Option          | Shorthand | Description                                                                   |
+| --------------- | --------- | ----------------------------------------------------------------------------- |
+| `exif`          |           | Include EXIF metadata                                                         |
+| `iptc`          |           | Include IPTC metadata                                                         |
+| `xmp`           |           | Include XMP metadata                                                          |
+| `colorspace`    | `cs`      | Include colour space                                                          |
+| `bands`         | `b`       | Include bands count                                                           |
+| `sample_format` | `sf`      | Include sample format                                                         |
+| `pages_number`  | `pn`      | Include page count                                                            |
+| `alpha`         | `a`       | Include alpha info                                                            |
+| `palette`       | `p`       | Return RGBA colour palette (value = max colours, 2-256)                       |
+| `average`       | `avg`     | Return average RGB colour (`avg:t` or `avg:t:t` to ignore transparent pixels) |
 
 ### URL generator
 
