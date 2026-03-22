@@ -582,6 +582,7 @@ Returns `application/json` with a `Cache-Control` header.
 | `average`         | object | Average RGB colour (only when `avg` info option is enabled)                    |
 | `dominant_colors` | object | Six dominant colour categories (only when `dc` info option is enabled)         |
 | `blurhash`        | string | BlurHash string (only when `bh` info option is enabled)                        |
+| `hashsums`        | object | Source file checksums (only when `chs` info option is enabled)                 |
 
 ### Info options
 
@@ -601,6 +602,7 @@ Info-specific options control which additional metadata is returned. They are pl
 | `average`         | `avg`     | Return average RGB colour (`avg:t` or `avg:t:t` to ignore transparent pixels) |
 | `dominant_colors` | `dc`      | Return six dominant colour categories                                         |
 | `blurhash`        | `bh`      | Return BlurHash string (value = `<x>:<y>` components)                         |
+| `calc_hashsums`   | `chs`     | Return file checksums (value = hash types: md5, sha1, sha256, sha512)         |
 
 ### URL generator
 
