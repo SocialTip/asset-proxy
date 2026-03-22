@@ -1,3 +1,5 @@
+import { decode } from "blurhash";
+import sharp from "sharp";
 import { SERVICE_URL } from "./setup.js";
 
 const IMAGE_URL = "http://file-server/test-image.png";
@@ -303,6 +305,16 @@ describe("info endpoint", () => {
       expect(body.blurhash).toMatchInlineSnapshot(
         `"LRHxh{=]X*%c~Q%0xFxsKxj0vkWE"`,
       );
+
+      const width = 32;
+      const height = 24;
+      const pixels = decode(body.blurhash, width, height);
+      const png = await sharp(Buffer.from(pixels.buffer), {
+        raw: { width, height, channels: 4 },
+      })
+        .png()
+        .toBuffer();
+      expect(png).toMatchImageSnapshot();
     });
 
     it("omits blurhash when option is not set", async () => {
