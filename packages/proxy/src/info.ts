@@ -54,6 +54,7 @@ interface InfoResponse {
   xmp?: Record<string, Record<string, unknown>>;
   palette?: Array<{ R: number; G: number; B: number; A: number }>;
   average?: { R: number; G: number; B: number };
+  dominant_colors?: Record<string, { R: number; G: number; B: number }>;
 }
 
 function isVideoFormat(formatName: string): boolean {
@@ -97,6 +98,101 @@ function sampleFormatFromPixFmt(
   if (/16|48|64/i.test(pixFmt)) return "ushort";
   if (/f32|float/i.test(pixFmt)) return "float";
   return "uchar";
+}
+
+type RGB = { R: number; G: number; B: number };
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h, s, l];
+}
+
+async function extractDominantColors(
+  buf: Buffer,
+): Promise<Record<string, RGB>> {
+  const quantised = await sharp(buf)
+    .removeAlpha()
+    .png({ palette: true, colours: 64, effort: 1 })
+    .toBuffer();
+  const { data, info } = await sharp(quantised)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const pixels: Array<{
+    r: number;
+    g: number;
+    b: number;
+    h: number;
+    s: number;
+    l: number;
+  }> = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < data.length; i += info.channels) {
+    const key = `${data[i]},${data[i + 1]},${data[i + 2]}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+      pixels.push({ r: data[i], g: data[i + 1], b: data[i + 2], h, s, l });
+    }
+  }
+
+  const pick = (
+    filter: (p: (typeof pixels)[0]) => boolean,
+    sortKey: (p: (typeof pixels)[0]) => number,
+  ): RGB | undefined => {
+    const matches = pixels
+      .filter(filter)
+      .sort((a, b) => sortKey(b) - sortKey(a));
+    return matches[0]
+      ? { R: matches[0].r, G: matches[0].g, B: matches[0].b }
+      : undefined;
+  };
+
+  const fallback: RGB = { R: 0, G: 0, B: 0 };
+  return {
+    vibrant:
+      pick(
+        (p) => p.s > 0.35 && p.l > 0.3 && p.l < 0.7,
+        (p) => p.s,
+      ) ?? fallback,
+    light_vibrant:
+      pick(
+        (p) => p.s > 0.35 && p.l >= 0.7,
+        (p) => p.s,
+      ) ?? fallback,
+    dark_vibrant:
+      pick(
+        (p) => p.s > 0.35 && p.l <= 0.3,
+        (p) => p.s,
+      ) ?? fallback,
+    muted:
+      pick(
+        (p) => p.s <= 0.35 && p.l > 0.3 && p.l < 0.7,
+        (p) => p.l,
+      ) ?? fallback,
+    light_muted:
+      pick(
+        (p) => p.s <= 0.35 && p.l >= 0.7,
+        (p) => p.l,
+      ) ?? fallback,
+    dark_muted:
+      pick(
+        (p) => p.s <= 0.35 && p.l <= 0.3,
+        (p) => 1 - p.l,
+      ) ?? fallback,
+  };
 }
 
 async function extractPalette(
@@ -178,6 +274,9 @@ async function probeMetadata(
   let iptcData: Record<string, string | string[]> | undefined;
   let xmpData: Record<string, Record<string, unknown>> | undefined;
   let averageData: { R: number; G: number; B: number } | undefined;
+  let dominantColorsData:
+    | Record<string, { R: number; G: number; B: number }>
+    | undefined;
   let paletteData:
     | Array<{ R: number; G: number; B: number; A: number }>
     | undefined;
@@ -212,6 +311,13 @@ async function probeMetadata(
         };
       } catch {
         // average extraction is optional — ignore failures
+      }
+    }
+    if (infoOpts.dominantColors) {
+      try {
+        dominantColorsData = await extractDominantColors(sourceBuffer);
+      } catch {
+        // dominant colours extraction is optional — ignore failures
       }
     }
     if (infoOpts.palette && infoOpts.palette >= 2) {
@@ -277,6 +383,9 @@ async function probeMetadata(
   }
   if (averageData) {
     result.average = averageData;
+  }
+  if (dominantColorsData) {
+    result.dominant_colors = dominantColorsData;
   }
   if (paletteData) {
     result.palette = paletteData;
