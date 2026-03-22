@@ -200,24 +200,62 @@ describe("info endpoint", () => {
     });
   });
 
+  describe("average option", () => {
+    it("returns average colour when avg option is enabled", async () => {
+      const res = await fetchInfo(IMAGE_URL, "/avg:t");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.average).toMatchInlineSnapshot(`
+        {
+          "B": 85,
+          "G": 130,
+          "R": 135,
+        }
+      `);
+    });
+
+    it("omits average when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      const body = await res.json();
+      expect(body.average).toBeUndefined();
+    });
+  });
+
   describe("palette option", () => {
     it("returns colour palette when p option is enabled", async () => {
       const res = await fetchInfo(IMAGE_URL, "/p:4");
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.palette).toBeDefined();
-      expect(Array.isArray(body.palette)).toBe(true);
-      expect(body.palette.length).toBeGreaterThan(0);
-      expect(body.palette.length).toBeLessThanOrEqual(4);
-      for (const colour of body.palette) {
-        expect(colour).toMatchObject({
-          R: expect.any(Number),
-          G: expect.any(Number),
-          B: expect.any(Number),
-          A: 255,
-        });
-      }
+      expect(body.palette).toMatchInlineSnapshot(`
+        [
+          {
+            "A": 255,
+            "B": 40,
+            "G": 40,
+            "R": 221,
+          },
+          {
+            "A": 255,
+            "B": 40,
+            "G": 181,
+            "R": 40,
+          },
+          {
+            "A": 255,
+            "B": 221,
+            "G": 80,
+            "R": 40,
+          },
+          {
+            "A": 255,
+            "B": 40,
+            "G": 221,
+            "R": 241,
+          },
+        ]
+      `);
     });
 
     it("omits palette when option is not set", async () => {

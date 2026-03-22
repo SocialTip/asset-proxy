@@ -53,6 +53,7 @@ interface InfoResponse {
   iptc?: Record<string, string | string[]>;
   xmp?: Record<string, Record<string, unknown>>;
   palette?: Array<{ R: number; G: number; B: number; A: number }>;
+  average?: { R: number; G: number; B: number };
 }
 
 function isVideoFormat(formatName: string): boolean {
@@ -176,6 +177,7 @@ async function probeMetadata(
   let exifData: Record<string, unknown> | undefined;
   let iptcData: Record<string, string | string[]> | undefined;
   let xmpData: Record<string, Record<string, unknown>> | undefined;
+  let averageData: { R: number; G: number; B: number } | undefined;
   let paletteData:
     | Array<{ R: number; G: number; B: number; A: number }>
     | undefined;
@@ -196,6 +198,21 @@ async function probeMetadata(
       }
     } catch {
       // orientation/exif/iptc/xmp extraction is optional — ignore failures
+    }
+    if (infoOpts.average) {
+      try {
+        const img = infoOpts.average.ignoreTransparent
+          ? sharp(sourceBuffer).removeAlpha()
+          : sharp(sourceBuffer);
+        const stats = await img.stats();
+        averageData = {
+          R: Math.round(stats.channels[0].mean),
+          G: Math.round(stats.channels[1].mean),
+          B: Math.round(stats.channels[2].mean),
+        };
+      } catch {
+        // average extraction is optional — ignore failures
+      }
     }
     if (infoOpts.palette && infoOpts.palette >= 2) {
       try {
@@ -257,6 +274,9 @@ async function probeMetadata(
   }
   if (xmpData) {
     result.xmp = xmpData;
+  }
+  if (averageData) {
+    result.average = averageData;
   }
   if (paletteData) {
     result.palette = paletteData;

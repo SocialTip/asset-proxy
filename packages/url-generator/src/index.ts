@@ -94,6 +94,11 @@ function serializeInfoOptions(options?: InfoOptions): string[] {
   if (options.pagesNumber) segments.push("pn:t");
   if (options.alpha) segments.push("a:t");
   if (options.palette) segments.push(`p:${options.palette}`);
+  if (options.average) {
+    let seg = "avg:t";
+    if (options.average.ignoreTransparent) seg += ":t";
+    segments.push(seg);
+  }
   return segments;
 }
 
