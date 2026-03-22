@@ -149,6 +149,38 @@ describe("info endpoint", () => {
     });
   });
 
+  describe("xmp option", () => {
+    it("returns XMP metadata when xmp option is enabled", async () => {
+      const res = await fetchInfo(JPEG_URL, "/xmp:1");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.xmp).toBeDefined();
+      expect(body.xmp.dc).toMatchInlineSnapshot(`
+        {
+          "creator": [
+            "Test Photographer",
+          ],
+          "description": "A test image",
+          "rights": "(c) 2026 Test",
+          "subject": [
+            "test",
+            "metadata",
+          ],
+          "title": "Test Image",
+        }
+      `);
+    });
+
+    it("omits XMP metadata when xmp option is not set", async () => {
+      const res = await fetchInfo(JPEG_URL);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.xmp).toBeUndefined();
+    });
+  });
+
   describe("validation", () => {
     it("rejects disallowed origins when ALLOWED_ORIGINS is set", async () => {
       // The test service doesn't have ALLOWED_ORIGINS set, so this just

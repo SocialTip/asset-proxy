@@ -65,6 +65,8 @@ export interface InfoOptions {
   exif?: boolean;
   /** Include IPTC metadata in the response. */
   iptc?: boolean;
+  /** Include XMP metadata in the response. */
+  xmp?: boolean;
 }
 
 /** Generates an asset-proxy info URL path that returns JSON metadata about the source asset. */
@@ -86,6 +88,7 @@ function serializeInfoOptions(options?: InfoOptions): string[] {
   const segments: string[] = [];
   if (options.exif) segments.push("exif:t");
   if (options.iptc) segments.push("iptc:t");
+  if (options.xmp) segments.push("xmp:t");
   return segments;
 }
 
