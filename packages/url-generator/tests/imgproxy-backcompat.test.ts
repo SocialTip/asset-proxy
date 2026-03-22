@@ -423,4 +423,20 @@ describe("imgproxy backward compatibility: info URL", () => {
     );
     expect(ours).toBe(theirs);
   });
+
+  it("with blurhash option", () => {
+    const ours = generateInfoUrl({ sourceUrl: SRC }, undefined, {
+      blurhash: { xComponents: 4, yComponents: 3 },
+    });
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "plain" },
+      options: { blurhash: { x_components: 4, y_components: 3 } },
+    });
+
+    expect(ours).toMatchInlineSnapshot(
+      `"/info/insecure/bh:4:3/plain/https://example.com/photo.jpg"`,
+    );
+    expect(ours).toBe(theirs);
+  });
 });

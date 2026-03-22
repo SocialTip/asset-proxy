@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import express from "express";
+import { encode as blurhashEncode } from "blurhash";
 import exifReader from "exif-reader";
 import { XMLParser } from "fast-xml-parser";
 import nodeIptc from "node-iptc";
@@ -56,6 +57,7 @@ interface InfoResponse {
   palette?: Array<{ R: number; G: number; B: number; A: number }>;
   average?: { R: number; G: number; B: number };
   dominant_colors?: Record<string, { R: number; G: number; B: number }>;
+  blurhash?: string;
 }
 
 function isVideoFormat(formatName: string): boolean {
@@ -259,6 +261,7 @@ async function probeMetadata(
   let iptcData: Record<string, string | string[]> | undefined;
   let xmpData: Record<string, Record<string, unknown>> | undefined;
   let averageData: { R: number; G: number; B: number } | undefined;
+  let blurhashData: string | undefined;
   let dominantColorsData:
     | Record<string, { R: number; G: number; B: number }>
     | undefined;
@@ -310,6 +313,24 @@ async function probeMetadata(
         paletteData = await extractPalette(sourceBuffer, infoOpts.palette);
       } catch (cause) {
         logger.error("Failed to extract colour palette", { cause });
+      }
+    }
+    if (infoOpts.blurhash) {
+      try {
+        const { data, info } = await sharp(sourceBuffer)
+          .resize(32, 32, { fit: "inside" })
+          .ensureAlpha()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        blurhashData = blurhashEncode(
+          new Uint8ClampedArray(data),
+          info.width,
+          info.height,
+          infoOpts.blurhash.xComponents,
+          infoOpts.blurhash.yComponents,
+        );
+      } catch (cause) {
+        logger.error("Failed to encode blurhash", { cause });
       }
     }
   }
@@ -371,6 +392,9 @@ async function probeMetadata(
   }
   if (dominantColorsData) {
     result.dominant_colors = dominantColorsData;
+  }
+  if (blurhashData) {
+    result.blurhash = blurhashData;
   }
   if (paletteData) {
     result.palette = paletteData;

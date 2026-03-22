@@ -86,6 +86,9 @@ importers:
       "@socialtip/asset-proxy-url-parser":
         specifier: workspace:*
         version: link:../url-parser
+      blurhash:
+        specifier: ^2.0.5
+        version: 2.0.5
       content-disposition:
         specifier: ^1.0.1
         version: 1.0.1
@@ -3058,6 +3061,12 @@ packages:
     resolution:
       {
         integrity: sha512-Ko0uX15oIUS7wJ3Rb30Fs6SkVbLmPBAKdlm7q9+ak9bbIeFf0MwuBsQV6z7+X768/cHsfg+WlysDWJcmthjsjQ==,
+      }
+
+  blurhash@2.0.5:
+    resolution:
+      {
+        integrity: sha512-cRygWd7kGBQO3VEhPiTgq4Wc43ctsM+o46urrmPOiuAe+07fzlSB9OJVdpgDL0jPqXUVQ9ht7aq7kxOeJHRK+w==,
       }
 
   body-parser@2.2.2:
@@ -8746,6 +8755,8 @@ snapshots:
   base64-js@1.5.1: {}
 
   bignumber.js@9.3.1: {}
+
+  blurhash@2.0.5: {}
 
   body-parser@2.2.2:
     dependencies:

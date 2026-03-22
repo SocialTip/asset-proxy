@@ -100,6 +100,10 @@ function serializeInfoOptions(options?: InfoOptions): string[] {
     segments.push(seg);
   }
   if (options.dominantColors) segments.push("dc:t");
+  if (options.blurhash)
+    segments.push(
+      `bh:${options.blurhash.xComponents}:${options.blurhash.yComponents}`,
+    );
   return segments;
 }
 

@@ -21,6 +21,7 @@
     "@opentelemetry/sdk-metrics": "^2.6.0",
     "@opentelemetry/sdk-node": "^0.213.0",
     "@socialtip/asset-proxy-url-parser": "workspace:*",
+    "blurhash": "^2.0.5",
     "content-disposition": "^1.0.1",
     "exif-reader": "^2.0.3",
     "express": "^5.1.0",
