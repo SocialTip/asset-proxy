@@ -6,8 +6,10 @@ import nodeIptc from "node-iptc";
 import sharp from "sharp";
 import {
   HTTPError,
+  parseInfoOptions,
   parseProcessingUrl,
   verifySignature,
+  type InfoOptions,
 } from "@socialtip/asset-proxy-url-parser";
 import { env } from "./env.js";
 
@@ -28,17 +30,6 @@ const MIME_TYPES: Record<string, string> = {
   mkv: "video/x-matroska",
   flv: "video/x-flv",
 };
-
-interface InfoRequestOptions {
-  exif?: boolean;
-  iptc?: boolean;
-  xmp?: boolean;
-  colorspace?: boolean;
-  bands?: boolean;
-  sampleFormat?: boolean;
-  pagesNumber?: boolean;
-  alpha?: boolean;
-}
 
 interface InfoResponse {
   format: string;
@@ -108,7 +99,7 @@ function sampleFormatFromPixFmt(
 
 async function probeMetadata(
   sourceUrl: string,
-  infoOpts: InfoRequestOptions = {},
+  infoOpts: InfoOptions = {},
 ): Promise<InfoResponse> {
   const sourceRes = await fetch(sourceUrl);
   if (!sourceRes.ok) {
@@ -247,7 +238,8 @@ export async function handleInfoRequest(
     signingSalt: env.SIGNING_SALT,
   });
 
-  const { infoOpts, cleanedPath } = parseInfoOptions(pathAfterSignature);
+  const { infoOptions: infoOpts, cleanedPath } =
+    parseInfoOptions(pathAfterSignature);
 
   // parseProcessingUrl expects at least one option segment before /plain/ or /enc/.
   // When no options are present the path starts with /plain/ directly, so we
@@ -360,54 +352,6 @@ function flattenRdfValue(value: unknown): unknown {
     return li;
   }
   return value;
-}
-
-const INFO_OPTION_NAMES = new Set([
-  "exif",
-  "iptc",
-  "xmp",
-  "colorspace",
-  "cs",
-  "bands",
-  "b",
-  "sample_format",
-  "sf",
-  "pages_number",
-  "pn",
-  "alpha",
-  "a",
-]);
-
-function parseInfoOptions(path: string): {
-  infoOpts: InfoRequestOptions;
-  cleanedPath: string;
-} {
-  const segments = path.split("/").filter(Boolean);
-  const infoOpts: InfoRequestOptions = {};
-  const kept: string[] = [];
-
-  for (const seg of segments) {
-    const colonIdx = seg.indexOf(":");
-    const name = colonIdx === -1 ? seg : seg.slice(0, colonIdx);
-    if (INFO_OPTION_NAMES.has(name)) {
-      const value = colonIdx === -1 ? "" : seg.slice(colonIdx + 1);
-      const enabled = value === "1" || value === "t" || value === "true";
-      if (name === "exif") infoOpts.exif = enabled;
-      if (name === "iptc") infoOpts.iptc = enabled;
-      if (name === "xmp") infoOpts.xmp = enabled;
-      if (name === "colorspace" || name === "cs") infoOpts.colorspace = enabled;
-      if (name === "bands" || name === "b") infoOpts.bands = enabled;
-      if (name === "sample_format" || name === "sf")
-        infoOpts.sampleFormat = enabled;
-      if (name === "pages_number" || name === "pn")
-        infoOpts.pagesNumber = enabled;
-      if (name === "alpha" || name === "a") infoOpts.alpha = enabled;
-    } else {
-      kept.push(seg);
-    }
-  }
-
-  return { infoOpts, cleanedPath: "/" + kept.join("/") };
 }
 
 // Re-import helpers from main module would create a circular dependency,
