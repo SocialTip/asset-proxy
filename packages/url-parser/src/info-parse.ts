@@ -17,6 +17,7 @@ const INFO_SHORTHANDS: Record<string, string> = {
   dc: "dominant_colors",
   bh: "blurhash",
   chs: "calc_hashsums",
+  pg: "page",
 };
 
 const hashsumType = z.enum(["md5", "sha1", "sha256", "sha512"]);
@@ -57,6 +58,7 @@ const rawInfoOptionsSchema = z.object({
       v.split(":").filter((t) => hashsumType.safeParse(t).success),
     )
     .optional(),
+  page: z.coerce.number().int().min(0).optional(),
 });
 
 const infoOptionsSchema = rawInfoOptionsSchema.transform((data) => ({
@@ -73,6 +75,7 @@ const infoOptionsSchema = rawInfoOptionsSchema.transform((data) => ({
   dominantColors: data.dominant_colors,
   blurhash: data.blurhash,
   calcHashsums: data.calc_hashsums,
+  page: data.page,
 }));
 
 /** Parsed info endpoint options that control which additional metadata is returned. */
@@ -103,6 +106,8 @@ export interface InfoOptions {
   blurhash?: { xComponents: number; yComponents: number };
   /** Calculate and return hashsums of the source file. List of types: md5, sha1, sha256, sha512. */
   calcHashsums?: Array<"md5" | "sha1" | "sha256" | "sha512">;
+  /** Which page to analyse for multi-page images (0-indexed). */
+  page?: number;
 }
 
 /** Zod schema for runtime validation of parsed info options. The `InfoOptions` interface is the authoritative type definition; this schema validates against it at compile time via `satisfies`. */
@@ -122,12 +127,14 @@ export const parsedInfoOptionsSchema = z.object({
     .object({ xComponents: z.number(), yComponents: z.number() })
     .optional(),
   calcHashsums: z.array(hashsumType).optional(),
+  page: z.number().optional(),
 }) satisfies z.ZodType<InfoOptions>;
 
 const CONTROL_SHORTHANDS: Record<string, string> = {
   exp: "expires",
   hs: "hashsum",
   msfs: "max_src_file_size",
+  msr: "max_src_resolution",
   cb: "cache_buster",
 };
 
@@ -144,13 +151,52 @@ const ALL_OPTION_NAMES = new Set([
   "xmp",
 ]);
 
+const rawControlOptionsSchema = z.object({
+  expires: z.coerce.number().int().optional(),
+  hashsum: z
+    .string()
+    .transform((v) => {
+      const idx = v.indexOf(":");
+      if (idx === -1) return undefined;
+      return { type: v.slice(0, idx), hash: v.slice(idx + 1) };
+    })
+    .optional(),
+  max_src_file_size: z.coerce.number().int().positive().optional(),
+  max_src_resolution: z.coerce.number().positive().optional(),
+  cache_buster: z.string().optional(),
+});
+
+const controlOptionsSchema = rawControlOptionsSchema.transform((data) => ({
+  expires: data.expires,
+  hashsum: data.hashsum,
+  maxSrcFileSize: data.max_src_file_size,
+  maxSrcResolution: data.max_src_resolution,
+}));
+
+/** Control options parsed from an info URL (security, limits). */
+export interface ControlOptions {
+  /** Unix timestamp after which the URL returns 404. */
+  expires?: number;
+  /** Expected checksum of the source file. */
+  hashsum?: { type: string; hash: string };
+  /** Max source file size in bytes. */
+  maxSrcFileSize?: number;
+  /** Max source resolution in megapixels. */
+  maxSrcResolution?: number;
+}
+
+/** Zod schema for runtime validation of parsed control options. The `ControlOptions` interface is the authoritative type definition; this schema validates against it at compile time via `satisfies`. */
+export const parsedControlOptionsSchema = z.object({
+  expires: z.number().optional(),
+  hashsum: z.object({ type: z.string(), hash: z.string() }).optional(),
+  maxSrcFileSize: z.number().optional(),
+  maxSrcResolution: z.number().optional(),
+}) satisfies z.ZodType<ControlOptions>;
+
 /** Parsed result from an info URL. */
-export interface ParsedInfoUrl {
+export interface ParsedInfoUrl extends ControlOptions {
   sourceUrl: string;
   infoOptions: InfoOptions;
-  expires?: number;
-  hashsum?: { type: string; hash: string };
-  maxSrcFileSize?: number;
 }
 
 export interface InfoParseOptions {
@@ -199,6 +245,7 @@ export function parseInfoUrl(
     sourceUrl = decryptSourceUrl(sourceUrl, options.encryptionKey);
   }
 
+  const controlCanonicals = new Set(Object.values(CONTROL_SHORTHANDS));
   const infoRaw: Record<string, string> = {};
   const controlRaw: Record<string, string> = {};
 
@@ -210,10 +257,7 @@ export function parseInfoUrl(
 
     if (!ALL_OPTION_NAMES.has(name)) continue;
 
-    if (
-      canonical in CONTROL_SHORTHANDS ||
-      Object.values(CONTROL_SHORTHANDS).includes(canonical)
-    ) {
+    if (controlCanonicals.has(canonical)) {
       controlRaw[canonical] = value;
     } else {
       infoRaw[canonical] = value;
@@ -223,24 +267,9 @@ export function parseInfoUrl(
   const infoOptions = parsedInfoOptionsSchema.parse(
     infoOptionsSchema.parse(infoRaw),
   );
+  const control = parsedControlOptionsSchema.parse(
+    controlOptionsSchema.parse(controlRaw),
+  );
 
-  const result: ParsedInfoUrl = { sourceUrl, infoOptions };
-
-  if (controlRaw.expires) {
-    result.expires = parseInt(controlRaw.expires, 10);
-  }
-  if (controlRaw.hashsum) {
-    const idx = controlRaw.hashsum.indexOf(":");
-    if (idx !== -1) {
-      result.hashsum = {
-        type: controlRaw.hashsum.slice(0, idx),
-        hash: controlRaw.hashsum.slice(idx + 1),
-      };
-    }
-  }
-  if (controlRaw.max_src_file_size) {
-    result.maxSrcFileSize = parseInt(controlRaw.max_src_file_size, 10);
-  }
-
-  return result;
+  return { sourceUrl, infoOptions, ...control };
 }

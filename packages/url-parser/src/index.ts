@@ -2,6 +2,7 @@ export { HTTPError, ERROR_CODES } from "./error.js";
 export {
   parseInfoUrl,
   type InfoOptions,
+  type ControlOptions,
   type ParsedInfoUrl,
   type InfoParseOptions,
 } from "./info-parse.js";

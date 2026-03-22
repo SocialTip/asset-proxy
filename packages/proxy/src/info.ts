@@ -1,10 +1,8 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { promisify } from "node:util";
 import express from "express";
 import { encode as blurhashEncode } from "blurhash";
-import exifReader from "exif-reader";
-import { XMLParser } from "fast-xml-parser";
-import nodeIptc from "node-iptc";
 import sharp from "sharp";
 import {
   HTTPError,
@@ -14,6 +12,14 @@ import {
 } from "@socialtip/asset-proxy-url-parser";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
+
+const execFileAsync = promisify(execFile);
+
+// Max bytes to stream to exiftool for metadata extraction. EXIF data is
+// limited to 64KB and the APP1 marker appears within the first ~100 bytes,
+// so 100KB is more than sufficient. Combined with exiftool's -fast flag,
+// this avoids downloading the full file.
+const METADATA_STREAM_LIMIT = 102400;
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -52,8 +58,8 @@ interface InfoResponse {
     framerate?: number;
   };
   exif?: Record<string, unknown>;
-  iptc?: Record<string, string | string[]>;
-  xmp?: Record<string, Record<string, unknown>>;
+  iptc?: Record<string, unknown>;
+  xmp?: Record<string, unknown>;
   palette?: Array<{ R: number; G: number; B: number; A: number }>;
   average?: { R: number; G: number; B: number };
   dominant_colors?: Record<string, { R: number; G: number; B: number }>;
@@ -74,6 +80,21 @@ function isVideoFormat(formatName: string): boolean {
     "avi",
   ]);
   return videoFormats.has(formatName);
+}
+
+interface LazyBuffer {
+  (): Promise<Buffer>;
+  pending(): Promise<Buffer> | undefined;
+}
+
+function createLazyBuffer(sourceUrl: string): LazyBuffer {
+  let promise: Promise<Buffer> | undefined;
+  const fn = (() => {
+    promise ??= fetchSource(sourceUrl);
+    return promise;
+  }) as LazyBuffer;
+  fn.pending = () => promise;
+  return fn;
 }
 
 function pixFmtHasAlpha(pixFmt: string): boolean {
@@ -125,8 +146,9 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
 
 async function extractDominantColors(
   buf: Buffer,
+  opts: Record<string, unknown> = {},
 ): Promise<Record<string, RGB>> {
-  const quantised = await sharp(buf)
+  const quantised = await sharp(buf, opts)
     .removeAlpha()
     .png({ palette: true, colours: 64, effort: 1 })
     .toBuffer();
@@ -134,7 +156,6 @@ async function extractDominantColors(
     .raw()
     .toBuffer({ resolveWithObject: true });
 
-  // Count pixel frequency per quantised colour
   const freq = new Map<
     string,
     { r: number; g: number; b: number; s: number; l: number; count: number }
@@ -159,7 +180,6 @@ async function extractDominantColors(
 
   const colours = [...freq.values()];
 
-  // Pick the most frequent colour matching a filter
   const pick = (
     filter: (c: (typeof colours)[0]) => boolean,
   ): RGB | undefined => {
@@ -186,8 +206,9 @@ async function extractDominantColors(
 async function extractPalette(
   buf: Buffer,
   colours: number,
+  opts: Record<string, unknown> = {},
 ): Promise<Array<{ R: number; G: number; B: number; A: number }>> {
-  const quantised = await sharp(buf)
+  const quantised = await sharp(buf, opts)
     .removeAlpha()
     .png({ palette: true, colours, effort: 1 })
     .toBuffer();
@@ -208,40 +229,110 @@ async function extractPalette(
 }
 
 async function fetchSource(sourceUrl: string): Promise<Buffer> {
-  const sourceRes = await fetch(sourceUrl);
-  if (!sourceRes.ok) {
+  const res = await fetch(sourceUrl);
+  if (!res.ok) {
     throw new HTTPError("Could not fetch source", {
       code: "UNPROCESSABLE_ENTITY",
     });
   }
-  return Buffer.from(await sourceRes.arrayBuffer());
+  return Buffer.from(await res.arrayBuffer());
+}
+
+async function runExiftool(
+  source: Buffer | Promise<Buffer> | string,
+  groups: string[],
+): Promise<Record<string, unknown>> {
+  const args = ["-fast", "-json", "-n", "-G1", ...groups, "-"];
+  const proc = execFile("exiftool", args);
+
+  if (Buffer.isBuffer(source)) {
+    proc.stdin!.end(source.subarray(0, METADATA_STREAM_LIMIT));
+  } else if (typeof source !== "string") {
+    const buf = await source;
+    proc.stdin!.end(buf.subarray(0, METADATA_STREAM_LIMIT));
+  } else {
+    const controller = new AbortController();
+    const res = await fetch(source, { signal: controller.signal });
+    if (!res.ok || !res.body) {
+      proc.stdin!.end();
+      throw new HTTPError("Could not fetch source", {
+        code: "UNPROCESSABLE_ENTITY",
+      });
+    }
+    let written = 0;
+    for await (const chunk of res.body) {
+      const buf = Buffer.from(chunk);
+      const remaining = METADATA_STREAM_LIMIT - written;
+      if (remaining <= 0) break;
+      proc.stdin!.write(buf.subarray(0, remaining));
+      written += buf.length;
+      if (written >= METADATA_STREAM_LIMIT) break;
+    }
+    controller.abort();
+    proc.stdin!.end();
+  }
+
+  const stdout = await new Promise<string>((resolve, reject) => {
+    let out = "";
+    proc.stdout!.on("data", (chunk: string | Buffer) => {
+      out += typeof chunk === "string" ? chunk : chunk.toString();
+    });
+    proc.on("close", () => resolve(out));
+    proc.on("error", reject);
+  });
+  const parsed = JSON.parse(stdout);
+  return Array.isArray(parsed) ? parsed[0] : parsed;
+}
+
+function groupExiftoolOutput(
+  raw: Record<string, unknown>,
+  prefix: string,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const pfx = prefix + ":";
+  for (const [key, value] of Object.entries(raw)) {
+    if (key.startsWith(pfx)) {
+      result[key.slice(pfx.length)] = value;
+    }
+  }
+  return result;
+}
+
+function groupExiftoolXmp(
+  raw: Record<string, unknown>,
+): Record<string, Record<string, unknown>> {
+  const result: Record<string, Record<string, unknown>> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!key.startsWith("XMP-")) continue;
+    const rest = key.slice(4);
+    const colonIdx = rest.indexOf(":");
+    if (colonIdx === -1) continue;
+    const ns = rest.slice(0, colonIdx);
+    const field = rest.slice(colonIdx + 1);
+    if (!result[ns]) result[ns] = {};
+    result[ns][field] = value;
+  }
+  return result;
 }
 
 async function probeMetadata(
-  sourceBuffer: Buffer,
-  infoOpts: InfoOptions = {},
+  sourceUrl: string,
+  infoOpts: InfoOptions,
+  getBuffer: LazyBuffer,
 ): Promise<InfoResponse> {
-  const { stdout } = await new Promise<{ stdout: string }>(
-    (resolve, reject) => {
-      const proc = execFile(
-        "ffprobe",
-        [
-          "-v",
-          "error",
-          "-show_format",
-          "-show_streams",
-          "-of",
-          "json",
-          "-i",
-          "pipe:0",
-        ],
-        (err, stdout) => (err ? reject(err) : resolve({ stdout })),
-      );
-      proc.stdin!.end(sourceBuffer);
-    },
-  );
+  // ffprobe reads directly from URL — no download needed
+  const { stdout } = await execFileAsync("ffprobe", [
+    "-v",
+    "error",
+    "-show_format",
+    "-show_streams",
+    "-of",
+    "json",
+    sourceUrl,
+  ]);
 
-  const probe = JSON.parse(stdout);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const probe: any = JSON.parse(stdout);
   const stream = probe.streams?.find(
     (s: Record<string, unknown>) => s.codec_type === "video",
   );
@@ -259,94 +350,15 @@ async function probeMetadata(
   const mimeType =
     MIME_TYPES[format] ?? (isVideo ? "video/mp4" : `image/${format}`);
 
-  let orientation = 1;
-  let exifData: Record<string, unknown> | undefined;
-  let iptcData: Record<string, string | string[]> | undefined;
-  let xmpData: Record<string, Record<string, unknown>> | undefined;
-  let averageData: { R: number; G: number; B: number } | undefined;
-  let blurhashData: string | undefined;
-  let dominantColorsData:
-    | Record<string, { R: number; G: number; B: number }>
-    | undefined;
-  let paletteData:
-    | Array<{ R: number; G: number; B: number; A: number }>
-    | undefined;
-  if (!isVideo) {
-    try {
-      const meta = await sharp(sourceBuffer).metadata();
-      orientation = meta.orientation ?? 1;
-      if (infoOpts.exif && meta.exif) {
-        const parsed = exifReader(meta.exif);
-        exifData = sanitiseExif(parsed);
-      }
-      if (infoOpts.iptc) {
-        const parsed = nodeIptc(sourceBuffer);
-        if (parsed) iptcData = parsed;
-      }
-      if (infoOpts.xmp && meta.xmp) {
-        xmpData = parseXmp(meta.xmp);
-      }
-    } catch (cause) {
-      logger.error("Failed to extract image metadata", { cause });
-    }
-    if (infoOpts.average) {
-      try {
-        const img = infoOpts.average.ignoreTransparent
-          ? sharp(sourceBuffer).removeAlpha()
-          : sharp(sourceBuffer);
-        const stats = await img.stats();
-        averageData = {
-          R: Math.round(stats.channels[0].mean),
-          G: Math.round(stats.channels[1].mean),
-          B: Math.round(stats.channels[2].mean),
-        };
-      } catch (cause) {
-        logger.error("Failed to extract average colour", { cause });
-      }
-    }
-    if (infoOpts.dominantColors) {
-      try {
-        dominantColorsData = await extractDominantColors(sourceBuffer);
-      } catch (cause) {
-        logger.error("Failed to extract dominant colours", { cause });
-      }
-    }
-    if (infoOpts.palette && infoOpts.palette >= 2) {
-      try {
-        paletteData = await extractPalette(sourceBuffer, infoOpts.palette);
-      } catch (cause) {
-        logger.error("Failed to extract colour palette", { cause });
-      }
-    }
-    if (infoOpts.blurhash) {
-      try {
-        const { data, info } = await sharp(sourceBuffer)
-          .resize(32, 32, { fit: "inside" })
-          .ensureAlpha()
-          .raw()
-          .toBuffer({ resolveWithObject: true });
-        blurhashData = blurhashEncode(
-          new Uint8ClampedArray(data),
-          info.width,
-          info.height,
-          infoOpts.blurhash.xComponents,
-          infoOpts.blurhash.yComponents,
-        );
-      } catch (cause) {
-        logger.error("Failed to encode blurhash", { cause });
-      }
-    }
-  }
-  const swapDimensions = orientation >= 5 && orientation <= 8;
-
   const pixFmt: string = stream.pix_fmt ?? "";
+  const sharpOpts = infoOpts.page !== undefined ? { page: infoOpts.page } : {};
 
   const result: InfoResponse = {
     format,
     mime_type: mimeType,
-    width: swapDimensions ? stream.height : stream.width,
-    height: swapDimensions ? stream.width : stream.height,
-    orientation,
+    width: stream.width,
+    height: stream.height,
+    orientation: 1,
     ...(infoOpts.colorspace &&
       stream.color_space && { colorspace: stream.color_space }),
     ...(infoOpts.bands && { bands: bandsFromPixFmt(pixFmt) }),
@@ -379,38 +391,128 @@ async function probeMetadata(
     }
   }
 
-  result.size = sourceBuffer.length;
+  // Size: from buffer if available, otherwise from ffprobe format.size
+  const probeSize = parseInt(probe.format?.size, 10);
+  if (probeSize > 0) result.size = probeSize;
+
+  // Slow features — each calls getBuffer() on demand, triggering a
+  // single download on first use (no download if none are requested).
+  if (!isVideo) {
+    if (infoOpts.average) {
+      try {
+        const buf = await getBuffer();
+        const img = infoOpts.average.ignoreTransparent
+          ? sharp(buf, sharpOpts).removeAlpha()
+          : sharp(buf, sharpOpts);
+        const stats = await img.stats();
+        result.average = {
+          R: Math.round(stats.channels[0].mean),
+          G: Math.round(stats.channels[1].mean),
+          B: Math.round(stats.channels[2].mean),
+        };
+      } catch (cause) {
+        logger.error("Failed to extract average colour", { cause });
+      }
+    }
+    if (infoOpts.dominantColors) {
+      try {
+        result.dominant_colors = await extractDominantColors(
+          await getBuffer(),
+          sharpOpts,
+        );
+      } catch (cause) {
+        logger.error("Failed to extract dominant colours", { cause });
+      }
+    }
+    if (infoOpts.palette && infoOpts.palette >= 2) {
+      try {
+        result.palette = await extractPalette(
+          await getBuffer(),
+          infoOpts.palette,
+          sharpOpts,
+        );
+      } catch (cause) {
+        logger.error("Failed to extract colour palette", { cause });
+      }
+    }
+    if (infoOpts.blurhash) {
+      try {
+        const buf = await getBuffer();
+        const { data, info } = await sharp(buf, sharpOpts)
+          .resize(32, 32, { fit: "inside" })
+          .ensureAlpha()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        result.blurhash = blurhashEncode(
+          new Uint8ClampedArray(data),
+          info.width,
+          info.height,
+          infoOpts.blurhash.xComponents,
+          infoOpts.blurhash.yComponents,
+        );
+      } catch (cause) {
+        logger.error("Failed to encode blurhash", { cause });
+      }
+    }
+  }
 
   if (infoOpts.calcHashsums?.length) {
+    const buf = await getBuffer();
     result.hashsums = [...new Set(infoOpts.calcHashsums)].reduce(
       (prev, type) => ({
         ...prev,
-        [type]: createHash(type).update(sourceBuffer).digest("hex"),
+        [type]: createHash(type).update(buf).digest("hex"),
       }),
       {},
     );
   }
 
-  if (exifData) {
-    result.exif = exifData;
-  }
-  if (iptcData) {
-    result.iptc = iptcData;
-  }
-  if (xmpData) {
-    result.xmp = xmpData;
-  }
-  if (averageData) {
-    result.average = averageData;
-  }
-  if (dominantColorsData) {
-    result.dominant_colors = dominantColorsData;
-  }
-  if (blurhashData) {
-    result.blurhash = blurhashData;
-  }
-  if (paletteData) {
-    result.palette = paletteData;
+  // Run exiftool for orientation (always) and optional EXIF/IPTC/XMP.
+  // If a slow feature already triggered a full download, reuse that buffer
+  // instead of making a second request.
+  if (!isVideo) {
+    try {
+      const groups: string[] = ["-Orientation"];
+      if (infoOpts.exif) groups.push("-EXIF:all");
+      if (infoOpts.iptc) groups.push("-IPTC:all");
+      if (infoOpts.xmp) groups.push("-XMP:all");
+
+      const exiftoolSource = getBuffer.pending() ?? sourceUrl;
+      const exiftoolResult = await runExiftool(exiftoolSource, groups);
+
+      const rawOrientation = exiftoolResult["IFD0:Orientation"];
+      if (typeof rawOrientation === "number") {
+        result.orientation = rawOrientation;
+        if (rawOrientation >= 5 && rawOrientation <= 8) {
+          const w = result.width;
+          result.width = result.height;
+          result.height = w;
+        }
+      }
+
+      if (infoOpts.exif) {
+        const ifd0 = groupExiftoolOutput(exiftoolResult, "IFD0");
+        const exifIFD = groupExiftoolOutput(exiftoolResult, "ExifIFD");
+        const gps = groupExiftoolOutput(exiftoolResult, "GPS");
+        const exifData: Record<string, unknown> = {};
+        if (Object.keys(ifd0).length) exifData.Image = ifd0;
+        if (Object.keys(exifIFD).length) exifData.Photo = exifIFD;
+        if (Object.keys(gps).length) exifData.GPSInfo = gps;
+        result.exif = exifData;
+      }
+
+      if (infoOpts.iptc) {
+        const iptc = groupExiftoolOutput(exiftoolResult, "IPTC");
+        if (Object.keys(iptc).length) result.iptc = iptc;
+      }
+
+      if (infoOpts.xmp) {
+        const xmp = groupExiftoolXmp(exiftoolResult);
+        if (Object.keys(xmp).length) result.xmp = xmp;
+      }
+    } catch (cause) {
+      logger.error("Failed to extract image metadata", { cause });
+    }
   }
 
   return result;
@@ -441,12 +543,11 @@ export async function handleInfoRequest(
     ? await resolveGcsUrl(parsed.sourceUrl)
     : parsed.sourceUrl;
 
-  const sourceBuffer = await fetchSource(sourceUrl);
+  const getBuffer = createLazyBuffer(sourceUrl);
 
   if (parsed.hashsum) {
-    const digest = createHash(parsed.hashsum.type)
-      .update(sourceBuffer)
-      .digest("hex");
+    const buf = await getBuffer();
+    const digest = createHash(parsed.hashsum.type).update(buf).digest("hex");
     if (digest !== parsed.hashsum.hash) {
       throw new HTTPError(
         `Source hashsum mismatch: expected ${parsed.hashsum.hash}, got ${digest}`,
@@ -456,106 +557,37 @@ export async function handleInfoRequest(
   }
 
   const maxFileSize = parsed.maxSrcFileSize ?? env.MAX_SRC_FILE_SIZE;
-  if (maxFileSize && sourceBuffer.length > maxFileSize) {
-    throw new HTTPError(
-      `Source file size ${sourceBuffer.length} exceeds limit of ${maxFileSize} bytes`,
-      { code: "UNPROCESSABLE_ENTITY" },
-    );
+  if (maxFileSize) {
+    const headRes = await fetch(sourceUrl, { method: "HEAD" });
+    const size = parseInt(headRes.headers.get("content-length") ?? "0", 10);
+    if (size > maxFileSize) {
+      throw new HTTPError(
+        `Source file size ${size} exceeds limit of ${maxFileSize} bytes`,
+        { code: "UNPROCESSABLE_ENTITY" },
+      );
+    }
   }
 
-  const metadata = await probeMetadata(sourceBuffer, parsed.infoOptions);
+  const metadata = await probeMetadata(
+    sourceUrl,
+    parsed.infoOptions,
+    getBuffer,
+  );
+
+  const maxResolution = parsed.maxSrcResolution ?? env.MAX_SRC_RESOLUTION;
+  if (maxResolution && metadata.width && metadata.height) {
+    const mp = (metadata.width * metadata.height) / 1_000_000;
+    if (mp > maxResolution) {
+      throw new HTTPError(
+        `Source resolution ${mp.toFixed(1)}MP exceeds limit of ${maxResolution}MP`,
+        { code: "UNPROCESSABLE_ENTITY" },
+      );
+    }
+  }
 
   res.set("Cache-Control", env.CACHE_CONTROL);
   res.json(metadata);
 }
-
-const EXIF_INTERNAL_KEYS = new Set(["bigEndian", "ExifTag", "GPSTag"]);
-
-function sanitiseExif(
-  parsed: Record<string, unknown>,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [section, values] of Object.entries(parsed)) {
-    if (typeof values !== "object" || values === null) continue;
-    if (EXIF_INTERNAL_KEYS.has(section)) continue;
-    result[section] = sanitiseExifValues(values as Record<string, unknown>);
-  }
-  return result;
-}
-
-function sanitiseExifValues(
-  obj: Record<string, unknown>,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (EXIF_INTERNAL_KEYS.has(key)) continue;
-    if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
-      const buf = Buffer.from(value);
-      // Use ASCII if all bytes are printable, otherwise hex
-      const isPrintable = buf.every((b) => b >= 0x20 && b <= 0x7e);
-      result[key] = isPrintable ? buf.toString("ascii") : buf.toString("hex");
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-}
-
-const xmpParser = new XMLParser({
-  ignoreAttributes: false,
-  removeNSPrefix: false,
-});
-
-function parseXmp(
-  buf: Buffer,
-): Record<string, Record<string, unknown>> | undefined {
-  const xml = Buffer.from(buf).toString("utf8");
-  const parsed = xmpParser.parse(xml);
-  const desc = parsed["x:xmpmeta"]?.["rdf:RDF"]?.["rdf:Description"];
-  if (!desc || typeof desc !== "object") return undefined;
-
-  const result: Record<string, Record<string, unknown>> = {};
-
-  for (const [key, value] of Object.entries(desc)) {
-    if (key.startsWith("@_")) continue;
-    const colonIdx = key.indexOf(":");
-    if (colonIdx === -1) continue;
-
-    const ns = key.slice(0, colonIdx);
-    const field = key.slice(colonIdx + 1);
-    if (!result[ns]) result[ns] = {};
-    result[ns][field] = flattenRdfValue(value);
-  }
-
-  return Object.keys(result).length > 0 ? result : undefined;
-}
-
-function flattenRdfValue(value: unknown): unknown {
-  if (value === null || value === undefined) return value;
-  if (typeof value !== "object") return value;
-
-  const obj = value as Record<string, unknown>;
-  // rdf:Seq, rdf:Bag → array
-  const seq = obj["rdf:Seq"] ?? obj["rdf:Bag"];
-  if (seq && typeof seq === "object") {
-    const items = (seq as Record<string, unknown>)["rdf:li"];
-    if (Array.isArray(items)) return items.map(flattenRdfValue);
-    return [flattenRdfValue(items)];
-  }
-  // rdf:Alt → first value (language alternative)
-  const alt = obj["rdf:Alt"];
-  if (alt && typeof alt === "object") {
-    const li = (alt as Record<string, unknown>)["rdf:li"];
-    if (li && typeof li === "object" && "#text" in (li as object)) {
-      return (li as Record<string, unknown>)["#text"];
-    }
-    return li;
-  }
-  return value;
-}
-
-// Re-import helpers from main module would create a circular dependency,
-// so we duplicate the small helpers here.
 
 function assertOriginAllowed(sourceUrl: string): void {
   const { ALLOWED_ORIGINS } = env;

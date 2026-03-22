@@ -5,6 +5,7 @@ import { SERVICE_URL } from "./setup.js";
 const IMAGE_URL = "http://file-server/test-image.png";
 const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
 const CASTLE_URL = "http://file-server/test-image-castle.jpg";
+const ANIMATED_URL = "http://file-server/test-image-animated.gif";
 const JPEG_URL = "http://file-server/test-image-with-metadata.jpg";
 const VIDEO_URL = "http://file-server/test-video.mp4";
 
@@ -58,21 +59,22 @@ describe("info endpoint", () => {
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body).toMatchObject({
-        format: expect.any(String),
-        mime_type: expect.any(String),
-        width: expect.any(Number),
-        height: expect.any(Number),
-        orientation: expect.any(Number),
-        duration: expect.any(Number),
-        video_meta: {
-          codec: expect.any(String),
-        },
-      });
-      expect(body.width).toBeGreaterThan(0);
-      expect(body.height).toBeGreaterThan(0);
-      expect(body.duration).toBeGreaterThan(0);
-      expect(body.size).toBeGreaterThan(0);
+      expect(body).toMatchInlineSnapshot(`
+        {
+          "duration": 0.9,
+          "format": "mov",
+          "height": 852,
+          "mime_type": "video/quicktime",
+          "orientation": 1,
+          "size": 137586,
+          "video_meta": {
+            "bitrate": 1213324,
+            "codec": "h264",
+            "framerate": 30,
+          },
+          "width": 480,
+        }
+      `);
     });
   });
 
@@ -82,33 +84,37 @@ describe("info endpoint", () => {
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.exif).toBeDefined();
-      expect(body.exif.Image).toMatchInlineSnapshot(`
+      expect(body.exif).toMatchInlineSnapshot(`
         {
-          "Artist": "Test Photographer",
-          "Copyright": "(c) 2026 Test Copyright",
-          "ImageDescription": "A test image with metadata",
-          "Make": "TestCamera",
-          "Model": "TestModel X100",
-          "Orientation": 6,
-          "ResolutionUnit": 1,
-          "XResolution": 1,
-          "YCbCrPositioning": 1,
-          "YResolution": 1,
+          "GPSInfo": {
+            "GPSLatitude": 51.5074,
+            "GPSLatitudeRef": "N",
+            "GPSLongitude": 0.1278,
+            "GPSLongitudeRef": "W",
+            "GPSVersionID": "2 3 0 0",
+          },
+          "Image": {
+            "Artist": "Test Photographer",
+            "Copyright": "(c) 2026 Test Copyright",
+            "ImageDescription": "A test image with metadata",
+            "Make": "TestCamera",
+            "Model": "TestModel X100",
+            "Orientation": 6,
+            "ResolutionUnit": 1,
+            "XResolution": 1,
+            "YCbCrPositioning": 1,
+            "YResolution": 1,
+          },
+          "Photo": {
+            "ColorSpace": 65535,
+            "ComponentsConfiguration": "1 2 3 0",
+            "ExifVersion": "0232",
+            "ExposureTime": 0.004,
+            "FNumber": 5.6,
+            "ISO": 400,
+          },
         }
       `);
-      expect(body.exif.Photo).toMatchInlineSnapshot(`
-        {
-          "ColorSpace": 65535,
-          "ComponentsConfiguration": "01020300",
-          "ExifVersion": "0232",
-          "ExposureTime": 0.004,
-          "FNumber": 5.6,
-          "ISOSpeedRatings": 400,
-        }
-      `);
-      expect(body.exif.GPSInfo.GPSLatitudeRef).toBe("N");
-      expect(body.exif.GPSInfo.GPSLongitudeRef).toBe("W");
     });
 
     it("omits EXIF metadata when exif option is not set", async () => {
@@ -126,21 +132,19 @@ describe("info endpoint", () => {
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.iptc).toBeDefined();
       expect(body.iptc).toMatchInlineSnapshot(`
         {
-          "by_line": [
-            "Test Photographer",
-          ],
-          "caption": "A test image for IPTC metadata",
-          "city": "London",
-          "copyright_notice": "(c) 2026 Test",
-          "country_or_primary_location_name": "United Kingdom",
-          "keywords": [
+          "ApplicationRecordVersion": 4,
+          "By-line": "Test Photographer",
+          "Caption-Abstract": "A test image for IPTC metadata",
+          "City": "London",
+          "CopyrightNotice": "(c) 2026 Test",
+          "Country-PrimaryLocationName": "United Kingdom",
+          "Keywords": [
             "test",
             "metadata",
           ],
-          "object_name": "Test Image",
+          "ObjectName": "Test Image",
         }
       `);
     });
@@ -160,19 +164,21 @@ describe("info endpoint", () => {
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.xmp).toBeDefined();
-      expect(body.xmp.dc).toMatchInlineSnapshot(`
+      expect(body.xmp).toMatchInlineSnapshot(`
         {
-          "creator": [
-            "Test Photographer",
-          ],
-          "description": "A test image",
-          "rights": "(c) 2026 Test",
-          "subject": [
-            "test",
-            "metadata",
-          ],
-          "title": "Test Image",
+          "dc": {
+            "Creator": "Test Photographer",
+            "Description": "A test image",
+            "Rights": "(c) 2026 Test",
+            "Subject": [
+              "test",
+              "metadata",
+            ],
+            "Title": "Test Image",
+          },
+          "x": {
+            "XMPToolkit": "Image::ExifTool 13.50",
+          },
         }
       `);
     });
@@ -534,13 +540,43 @@ describe("info endpoint", () => {
     });
   });
 
-  describe("validation", () => {
-    it("rejects disallowed origins when ALLOWED_ORIGINS is set", async () => {
-      // The test service doesn't have ALLOWED_ORIGINS set, so this just
-      // verifies the endpoint works with any origin. Origin restriction
-      // is tested implicitly by the shared assertOriginAllowed logic.
-      const res = await fetchInfo(IMAGE_URL);
+  describe("page option", () => {
+    it("returns average colour for frame 0 (red)", async () => {
+      const res = await fetchInfo(ANIMATED_URL, "/pg:0/avg:t");
       expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.average).toMatchInlineSnapshot(`
+        {
+          "B": 0,
+          "G": 0,
+          "R": 255,
+        }
+      `);
+    });
+
+    it("returns average colour for frame 1 (blue)", async () => {
+      const res = await fetchInfo(ANIMATED_URL, "/pg:1/avg:t");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.average).toMatchInlineSnapshot(`
+        {
+          "B": 255,
+          "G": 0,
+          "R": 0,
+        }
+      `);
+    });
+  });
+
+  describe("validation", () => {
+    it("rejects disallowed origins", async () => {
+      const res = await fetchInfo("http://evil.example.com/photo.jpg");
+      expect(res.status).toBe(403);
+      expect(await res.text()).toMatchInlineSnapshot(
+        `"Origin not allowed: http://evil.example.com"`,
+      );
     });
 
     it("accepts a valid hashsum", async () => {
@@ -554,16 +590,36 @@ describe("info endpoint", () => {
     it("rejects an invalid hashsum", async () => {
       const res = await fetchInfo(IMAGE_URL, "/hs:sha256:badhash");
       expect(res.status).toBe(422);
+      expect(await res.text()).toMatchInlineSnapshot(
+        `"Source hashsum mismatch: expected badhash, got efd163fab569d4beec64e268346b33c61e98024b226eae40c3de0e469951a4d6"`,
+      );
     });
 
     it("rejects when source exceeds max file size", async () => {
       const res = await fetchInfo(IMAGE_URL, "/msfs:1");
       expect(res.status).toBe(422);
+      expect(await res.text()).toMatchInlineSnapshot(
+        `"Source file size 881 exceeds limit of 1 bytes"`,
+      );
+    });
+
+    it("rejects when source exceeds max resolution", async () => {
+      // test-image.png is 200x150 = 0.03MP; set limit to 0.0001MP
+      const res = await fetchInfo(IMAGE_URL, "/msr:0.0001");
+      expect(res.status).toBe(422);
+      expect(await res.text()).toMatchInlineSnapshot(
+        `"Source resolution 0.0MP exceeds limit of 0.0001MP"`,
+      );
     });
 
     it("returns an error for an unreachable source", async () => {
       const res = await fetchInfo("http://file-server/nonexistent.png");
       expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(await res.text()).toMatchInlineSnapshot(`
+        "Command failed: ffprobe -v error -show_format -show_streams -of json http://file-server/nonexistent.png
+        http://file-server/nonexistent.png: Server returned 404 Not Found
+        "
+      `);
     });
   });
 });

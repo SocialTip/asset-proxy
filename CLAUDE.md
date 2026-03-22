@@ -14,5 +14,5 @@
 
 ## PR etiquette
 
-- Prefer not to amend commits, especially if a PR is alraedy open. Prefer to add a new commit instead.
+- Prefer not to amend commits which are already pushed to a repo. Prefer to amend commits when not yet pushed AND the change is a fix to the existing commit.
 - Always ask the user before pushing.
