@@ -249,7 +249,8 @@ async function runExiftool(
   if (Buffer.isBuffer(source)) {
     proc.stdin!.end(source.subarray(0, METADATA_STREAM_LIMIT));
   } else {
-    const res = await fetch(source);
+    const controller = new AbortController();
+    const res = await fetch(source, { signal: controller.signal });
     if (!res.ok || !res.body) {
       proc.stdin!.end();
       throw new HTTPError("Could not fetch source", {
@@ -265,6 +266,7 @@ async function runExiftool(
       written += buf.length;
       if (written >= METADATA_STREAM_LIMIT) break;
     }
+    controller.abort();
     proc.stdin!.end();
   }
 
