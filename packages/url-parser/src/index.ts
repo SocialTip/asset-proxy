@@ -1,5 +1,10 @@
 export { HTTPError, ERROR_CODES } from "./error.js";
-export { parseInfoOptions, type InfoOptions } from "./info-parse.js";
+export {
+  parseInfoUrl,
+  type InfoOptions,
+  type ParsedInfoUrl,
+  type InfoParseOptions,
+} from "./info-parse.js";
 export {
   decryptSourceUrl,
   encryptSourceUrl,

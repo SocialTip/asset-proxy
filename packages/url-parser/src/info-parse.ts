@@ -1,4 +1,6 @@
 import { z } from "zod/v4";
+import { decryptSourceUrl } from "./crypto.js";
+import { HTTPError } from "./error.js";
 
 const zBool = z
   .string()
@@ -122,37 +124,123 @@ export const parsedInfoOptionsSchema = z.object({
   calcHashsums: z.array(hashsumType).optional(),
 }) satisfies z.ZodType<InfoOptions>;
 
-const INFO_OPTION_NAMES = new Set([
-  ...Object.keys(INFO_SHORTHANDS),
-  ...Object.values(INFO_SHORTHANDS),
+const CONTROL_SHORTHANDS: Record<string, string> = {
+  exp: "expires",
+  hs: "hashsum",
+  msfs: "max_src_file_size",
+  cb: "cache_buster",
+};
+
+const ALL_SHORTHANDS: Record<string, string> = {
+  ...INFO_SHORTHANDS,
+  ...CONTROL_SHORTHANDS,
+};
+
+const ALL_OPTION_NAMES = new Set([
+  ...Object.keys(ALL_SHORTHANDS),
+  ...Object.values(ALL_SHORTHANDS),
   "exif",
   "iptc",
   "xmp",
 ]);
 
-/** Extracts info-specific options from a URL path, returning the parsed options and the path with info segments removed. */
-export function parseInfoOptions(path: string): {
+/** Parsed result from an info URL. */
+export interface ParsedInfoUrl {
+  sourceUrl: string;
   infoOptions: InfoOptions;
-  cleanedPath: string;
-} {
-  const segments = path.split("/").filter(Boolean);
-  const infoRaw: Record<string, string> = {};
-  const kept: string[] = [];
+  expires?: number;
+  hashsum?: { type: string; hash: string };
+  maxSrcFileSize?: number;
+}
 
-  for (const seg of segments) {
+export interface InfoParseOptions {
+  encryptionKey?: Buffer;
+}
+
+/** Parses an info URL path (after signature has been stripped). Extracts the source URL, info options, and control options (expires, hashsum, source limits). */
+export function parseInfoUrl(
+  path: string,
+  options?: InfoParseOptions,
+): ParsedInfoUrl {
+  const withoutPrefix = path.replace(/^\//, "");
+
+  let optionsPart: string;
+  let sourceUrl: string;
+  let encrypted = false;
+
+  const plainIdx = withoutPrefix.indexOf("plain/");
+  const encIdx = withoutPrefix.indexOf("enc/");
+
+  if (plainIdx !== -1 && (encIdx === -1 || plainIdx <= encIdx)) {
+    optionsPart = withoutPrefix.slice(0, plainIdx).replace(/\/$/, "");
+    sourceUrl = withoutPrefix.slice(plainIdx + "plain/".length);
+  } else if (encIdx !== -1) {
+    optionsPart = withoutPrefix.slice(0, encIdx).replace(/\/$/, "");
+    sourceUrl = withoutPrefix.slice(encIdx + "enc/".length);
+    encrypted = true;
+  } else {
+    throw new HTTPError(
+      "Unsupported URL format: expected /plain/ or /enc/ source URL",
+      { code: "BAD_REQUEST" },
+    );
+  }
+
+  if (!sourceUrl) {
+    throw new HTTPError("Missing source URL", { code: "BAD_REQUEST" });
+  }
+
+  if (encrypted) {
+    if (!options?.encryptionKey) {
+      throw new HTTPError(
+        "Encrypted source URLs are not supported: no encryption key provided",
+        { code: "BAD_REQUEST" },
+      );
+    }
+    sourceUrl = decryptSourceUrl(sourceUrl, options.encryptionKey);
+  }
+
+  const infoRaw: Record<string, string> = {};
+  const controlRaw: Record<string, string> = {};
+
+  for (const seg of optionsPart.split("/").filter(Boolean)) {
     const colonIdx = seg.indexOf(":");
     const name = colonIdx === -1 ? seg : seg.slice(0, colonIdx);
-    const canonical = INFO_SHORTHANDS[name] ?? name;
+    const value = colonIdx === -1 ? "" : seg.slice(colonIdx + 1);
+    const canonical = ALL_SHORTHANDS[name] ?? name;
 
-    if (INFO_OPTION_NAMES.has(name)) {
-      infoRaw[canonical] = colonIdx === -1 ? "" : seg.slice(colonIdx + 1);
+    if (!ALL_OPTION_NAMES.has(name)) continue;
+
+    if (
+      canonical in CONTROL_SHORTHANDS ||
+      Object.values(CONTROL_SHORTHANDS).includes(canonical)
+    ) {
+      controlRaw[canonical] = value;
     } else {
-      kept.push(seg);
+      infoRaw[canonical] = value;
     }
   }
 
   const infoOptions = parsedInfoOptionsSchema.parse(
     infoOptionsSchema.parse(infoRaw),
   );
-  return { infoOptions, cleanedPath: "/" + kept.join("/") };
+
+  const result: ParsedInfoUrl = { sourceUrl, infoOptions };
+
+  if (controlRaw.expires) {
+    result.expires = parseInt(controlRaw.expires, 10);
+  }
+  if (controlRaw.hashsum) {
+    const idx = controlRaw.hashsum.indexOf(":");
+    if (idx !== -1) {
+      result.hashsum = {
+        type: controlRaw.hashsum.slice(0, idx),
+        hash: controlRaw.hashsum.slice(idx + 1),
+      };
+    }
+  }
+  if (controlRaw.max_src_file_size) {
+    result.maxSrcFileSize = parseInt(controlRaw.max_src_file_size, 10);
+  }
+
+  return result;
 }
