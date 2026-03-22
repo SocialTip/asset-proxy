@@ -106,6 +106,7 @@ function serializeInfoOptions(options?: InfoOptions): string[] {
     );
   if (options.calcHashsums?.length)
     segments.push(`chs:${options.calcHashsums.join(":")}`);
+  if (options.page !== undefined) segments.push(`pg:${options.page}`);
   return segments;
 }
 

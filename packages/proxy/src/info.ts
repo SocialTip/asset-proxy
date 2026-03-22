@@ -125,8 +125,9 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
 
 async function extractDominantColors(
   buf: Buffer,
+  opts: Record<string, unknown> = {},
 ): Promise<Record<string, RGB>> {
-  const quantised = await sharp(buf)
+  const quantised = await sharp(buf, opts)
     .removeAlpha()
     .png({ palette: true, colours: 64, effort: 1 })
     .toBuffer();
@@ -186,8 +187,9 @@ async function extractDominantColors(
 async function extractPalette(
   buf: Buffer,
   colours: number,
+  opts: Record<string, unknown> = {},
 ): Promise<Array<{ R: number; G: number; B: number; A: number }>> {
-  const quantised = await sharp(buf)
+  const quantised = await sharp(buf, opts)
     .removeAlpha()
     .png({ palette: true, colours, effort: 1 })
     .toBuffer();
@@ -259,6 +261,7 @@ async function probeMetadata(
   const mimeType =
     MIME_TYPES[format] ?? (isVideo ? "video/mp4" : `image/${format}`);
 
+  const sharpOpts = infoOpts.page !== undefined ? { page: infoOpts.page } : {};
   let orientation = 1;
   let exifData: Record<string, unknown> | undefined;
   let iptcData: Record<string, string | string[]> | undefined;
@@ -273,7 +276,7 @@ async function probeMetadata(
     | undefined;
   if (!isVideo) {
     try {
-      const meta = await sharp(sourceBuffer).metadata();
+      const meta = await sharp(sourceBuffer, sharpOpts).metadata();
       orientation = meta.orientation ?? 1;
       if (infoOpts.exif && meta.exif) {
         const parsed = exifReader(meta.exif);
@@ -292,8 +295,8 @@ async function probeMetadata(
     if (infoOpts.average) {
       try {
         const img = infoOpts.average.ignoreTransparent
-          ? sharp(sourceBuffer).removeAlpha()
-          : sharp(sourceBuffer);
+          ? sharp(sourceBuffer, sharpOpts).removeAlpha()
+          : sharp(sourceBuffer, sharpOpts);
         const stats = await img.stats();
         averageData = {
           R: Math.round(stats.channels[0].mean),
@@ -306,21 +309,28 @@ async function probeMetadata(
     }
     if (infoOpts.dominantColors) {
       try {
-        dominantColorsData = await extractDominantColors(sourceBuffer);
+        dominantColorsData = await extractDominantColors(
+          sourceBuffer,
+          sharpOpts,
+        );
       } catch (cause) {
         logger.error("Failed to extract dominant colours", { cause });
       }
     }
     if (infoOpts.palette && infoOpts.palette >= 2) {
       try {
-        paletteData = await extractPalette(sourceBuffer, infoOpts.palette);
+        paletteData = await extractPalette(
+          sourceBuffer,
+          infoOpts.palette,
+          sharpOpts,
+        );
       } catch (cause) {
         logger.error("Failed to extract colour palette", { cause });
       }
     }
     if (infoOpts.blurhash) {
       try {
-        const { data, info } = await sharp(sourceBuffer)
+        const { data, info } = await sharp(sourceBuffer, sharpOpts)
           .resize(32, 32, { fit: "inside" })
           .ensureAlpha()
           .raw()

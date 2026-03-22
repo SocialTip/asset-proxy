@@ -554,22 +554,34 @@ describe("info endpoint", () => {
     it("rejects an invalid hashsum", async () => {
       const res = await fetchInfo(IMAGE_URL, "/hs:sha256:badhash");
       expect(res.status).toBe(422);
+      expect(await res.text()).toMatchInlineSnapshot(
+        `"Source hashsum mismatch: expected badhash, got efd163fab569d4beec64e268346b33c61e98024b226eae40c3de0e469951a4d6"`,
+      );
     });
 
     it("rejects when source exceeds max file size", async () => {
       const res = await fetchInfo(IMAGE_URL, "/msfs:1");
       expect(res.status).toBe(422);
+      expect(await res.text()).toMatchInlineSnapshot(
+        `"Source file size 881 exceeds limit of 1 bytes"`,
+      );
     });
 
     it("rejects when source exceeds max resolution", async () => {
       // test-image.png is 200x150 = 0.03MP; set limit to 0.0001MP
       const res = await fetchInfo(IMAGE_URL, "/msr:0.0001");
       expect(res.status).toBe(422);
+      expect(await res.text()).toMatchInlineSnapshot(
+        `"Source resolution 0.0MP exceeds limit of 0.0001MP"`,
+      );
     });
 
     it("returns an error for an unreachable source", async () => {
       const res = await fetchInfo("http://file-server/nonexistent.png");
       expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(await res.text()).toMatchInlineSnapshot(
+        `"Could not fetch source"`,
+      );
     });
   });
 });
