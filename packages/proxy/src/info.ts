@@ -82,20 +82,19 @@ function isVideoFormat(formatName: string): boolean {
   return videoFormats.has(formatName);
 }
 
-function needsFullDownload(infoOpts: InfoOptions, hashsum: boolean): boolean {
-  return !!(
-    hashsum ||
-    infoOpts.colorspace ||
-    infoOpts.bands ||
-    infoOpts.sampleFormat ||
-    infoOpts.pagesNumber ||
-    infoOpts.alpha ||
-    infoOpts.palette ||
-    infoOpts.average ||
-    infoOpts.dominantColors ||
-    infoOpts.blurhash ||
-    infoOpts.calcHashsums?.length
-  );
+interface LazyBuffer {
+  (): Promise<Buffer>;
+  pending(): Promise<Buffer> | undefined;
+}
+
+function createLazyBuffer(sourceUrl: string): LazyBuffer {
+  let promise: Promise<Buffer> | undefined;
+  const fn = (() => {
+    promise ??= fetchSource(sourceUrl);
+    return promise;
+  }) as LazyBuffer;
+  fn.pending = () => promise;
+  return fn;
 }
 
 function pixFmtHasAlpha(pixFmt: string): boolean {
@@ -240,7 +239,7 @@ async function fetchSource(sourceUrl: string): Promise<Buffer> {
 }
 
 async function runExiftool(
-  source: Buffer | string,
+  source: Buffer | Promise<Buffer> | string,
   groups: string[],
 ): Promise<Record<string, unknown>> {
   const args = ["-fast", "-json", "-n", "-G1", ...groups, "-"];
@@ -248,6 +247,9 @@ async function runExiftool(
 
   if (Buffer.isBuffer(source)) {
     proc.stdin!.end(source.subarray(0, METADATA_STREAM_LIMIT));
+  } else if (typeof source !== "string") {
+    const buf = await source;
+    proc.stdin!.end(buf.subarray(0, METADATA_STREAM_LIMIT));
   } else {
     const controller = new AbortController();
     const res = await fetch(source, { signal: controller.signal });
@@ -316,7 +318,7 @@ function groupExiftoolXmp(
 async function probeMetadata(
   sourceUrl: string,
   infoOpts: InfoOptions = {},
-  sourceBuffer?: Buffer,
+  getBuffer: LazyBuffer = () => fetchSource(sourceUrl),
 ): Promise<InfoResponse> {
   // ffprobe reads directly from URL — no download needed
   const { stdout } = await execFileAsync("ffprobe", [
@@ -348,63 +350,15 @@ async function probeMetadata(
   const mimeType =
     MIME_TYPES[format] ?? (isVideo ? "video/mp4" : `image/${format}`);
 
-  // Fetch first 64KB for exiftool (orientation, EXIF, IPTC, XMP) — no full download
-  let orientation = 1;
-  let exifData: Record<string, unknown> | undefined;
-  let iptcData: Record<string, unknown> | undefined;
-  let xmpData: Record<string, Record<string, unknown>> | undefined;
-
-  if (!isVideo) {
-    try {
-      // Always run exiftool for orientation; optionally include EXIF/IPTC/XMP.
-      // Streams at most 100KB from the source (or buffer if already downloaded).
-      const groups: string[] = ["-Orientation"];
-      if (infoOpts.exif) groups.push("-EXIF:all");
-      if (infoOpts.iptc) groups.push("-IPTC:all");
-      if (infoOpts.xmp) groups.push("-XMP:all");
-
-      const exiftoolResult = await runExiftool(
-        sourceBuffer ?? sourceUrl,
-        groups,
-      );
-
-      const rawOrientation = exiftoolResult["IFD0:Orientation"];
-      if (typeof rawOrientation === "number") orientation = rawOrientation;
-
-      if (infoOpts.exif) {
-        const ifd0 = groupExiftoolOutput(exiftoolResult, "IFD0");
-        const exifIFD = groupExiftoolOutput(exiftoolResult, "ExifIFD");
-        const gps = groupExiftoolOutput(exiftoolResult, "GPS");
-        exifData = {};
-        if (Object.keys(ifd0).length) exifData.Image = ifd0;
-        if (Object.keys(exifIFD).length) exifData.Photo = exifIFD;
-        if (Object.keys(gps).length) exifData.GPSInfo = gps;
-      }
-
-      if (infoOpts.iptc) {
-        const iptc = groupExiftoolOutput(exiftoolResult, "IPTC");
-        if (Object.keys(iptc).length) iptcData = iptc;
-      }
-
-      if (infoOpts.xmp) {
-        const xmp = groupExiftoolXmp(exiftoolResult);
-        if (Object.keys(xmp).length) xmpData = xmp;
-      }
-    } catch (cause) {
-      logger.error("Failed to extract image metadata", { cause });
-    }
-  }
-
-  const swapDimensions = orientation >= 5 && orientation <= 8;
   const pixFmt: string = stream.pix_fmt ?? "";
   const sharpOpts = infoOpts.page !== undefined ? { page: infoOpts.page } : {};
 
   const result: InfoResponse = {
     format,
     mime_type: mimeType,
-    width: swapDimensions ? stream.height : stream.width,
-    height: swapDimensions ? stream.width : stream.height,
-    orientation,
+    width: stream.width,
+    height: stream.height,
+    orientation: 1,
     ...(infoOpts.colorspace &&
       stream.color_space && { colorspace: stream.color_space }),
     ...(infoOpts.bands && { bands: bandsFromPixFmt(pixFmt) }),
@@ -438,20 +392,18 @@ async function probeMetadata(
   }
 
   // Size: from buffer if available, otherwise from ffprobe format.size
-  if (sourceBuffer) {
-    result.size = sourceBuffer.length;
-  } else {
-    const probeSize = parseInt(probe.format?.size, 10);
-    if (probeSize > 0) result.size = probeSize;
-  }
+  const probeSize = parseInt(probe.format?.size, 10);
+  if (probeSize > 0) result.size = probeSize;
 
-  // Slow features requiring full buffer (only run when sourceBuffer is provided)
-  if (sourceBuffer && !isVideo) {
+  // Slow features — each calls getBuffer() on demand, triggering a
+  // single download on first use (no download if none are requested).
+  if (!isVideo) {
     if (infoOpts.average) {
       try {
+        const buf = await getBuffer();
         const img = infoOpts.average.ignoreTransparent
-          ? sharp(sourceBuffer, sharpOpts).removeAlpha()
-          : sharp(sourceBuffer, sharpOpts);
+          ? sharp(buf, sharpOpts).removeAlpha()
+          : sharp(buf, sharpOpts);
         const stats = await img.stats();
         result.average = {
           R: Math.round(stats.channels[0].mean),
@@ -465,7 +417,7 @@ async function probeMetadata(
     if (infoOpts.dominantColors) {
       try {
         result.dominant_colors = await extractDominantColors(
-          sourceBuffer,
+          await getBuffer(),
           sharpOpts,
         );
       } catch (cause) {
@@ -475,7 +427,7 @@ async function probeMetadata(
     if (infoOpts.palette && infoOpts.palette >= 2) {
       try {
         result.palette = await extractPalette(
-          sourceBuffer,
+          await getBuffer(),
           infoOpts.palette,
           sharpOpts,
         );
@@ -485,7 +437,8 @@ async function probeMetadata(
     }
     if (infoOpts.blurhash) {
       try {
-        const { data, info } = await sharp(sourceBuffer, sharpOpts)
+        const buf = await getBuffer();
+        const { data, info } = await sharp(buf, sharpOpts)
           .resize(32, 32, { fit: "inside" })
           .ensureAlpha()
           .raw()
@@ -503,19 +456,64 @@ async function probeMetadata(
     }
   }
 
-  if (sourceBuffer && infoOpts.calcHashsums?.length) {
+  if (infoOpts.calcHashsums?.length) {
+    const buf = await getBuffer();
     result.hashsums = [...new Set(infoOpts.calcHashsums)].reduce(
       (prev, type) => ({
         ...prev,
-        [type]: createHash(type).update(sourceBuffer).digest("hex"),
+        [type]: createHash(type).update(buf).digest("hex"),
       }),
       {},
     );
   }
 
-  if (exifData) result.exif = exifData;
-  if (iptcData) result.iptc = iptcData;
-  if (xmpData) result.xmp = xmpData;
+  // Run exiftool for orientation (always) and optional EXIF/IPTC/XMP.
+  // If a slow feature already triggered a full download, reuse that buffer
+  // instead of making a second request.
+  if (!isVideo) {
+    try {
+      const groups: string[] = ["-Orientation"];
+      if (infoOpts.exif) groups.push("-EXIF:all");
+      if (infoOpts.iptc) groups.push("-IPTC:all");
+      if (infoOpts.xmp) groups.push("-XMP:all");
+
+      const exiftoolSource = getBuffer.pending() ?? sourceUrl;
+      const exiftoolResult = await runExiftool(exiftoolSource, groups);
+
+      const rawOrientation = exiftoolResult["IFD0:Orientation"];
+      if (typeof rawOrientation === "number") {
+        result.orientation = rawOrientation;
+        if (rawOrientation >= 5 && rawOrientation <= 8) {
+          const w = result.width;
+          result.width = result.height;
+          result.height = w;
+        }
+      }
+
+      if (infoOpts.exif) {
+        const ifd0 = groupExiftoolOutput(exiftoolResult, "IFD0");
+        const exifIFD = groupExiftoolOutput(exiftoolResult, "ExifIFD");
+        const gps = groupExiftoolOutput(exiftoolResult, "GPS");
+        const exifData: Record<string, unknown> = {};
+        if (Object.keys(ifd0).length) exifData.Image = ifd0;
+        if (Object.keys(exifIFD).length) exifData.Photo = exifIFD;
+        if (Object.keys(gps).length) exifData.GPSInfo = gps;
+        result.exif = exifData;
+      }
+
+      if (infoOpts.iptc) {
+        const iptc = groupExiftoolOutput(exiftoolResult, "IPTC");
+        if (Object.keys(iptc).length) result.iptc = iptc;
+      }
+
+      if (infoOpts.xmp) {
+        const xmp = groupExiftoolXmp(exiftoolResult);
+        if (Object.keys(xmp).length) result.xmp = xmp;
+      }
+    } catch (cause) {
+      logger.error("Failed to extract image metadata", { cause });
+    }
+  }
 
   return result;
 }
@@ -545,13 +543,11 @@ export async function handleInfoRequest(
     ? await resolveGcsUrl(parsed.sourceUrl)
     : parsed.sourceUrl;
 
-  const fullDownload = needsFullDownload(parsed.infoOptions, !!parsed.hashsum);
-  const sourceBuffer = fullDownload ? await fetchSource(sourceUrl) : undefined;
+  const getBuffer = createLazyBuffer(sourceUrl);
 
-  if (parsed.hashsum && sourceBuffer) {
-    const digest = createHash(parsed.hashsum.type)
-      .update(sourceBuffer)
-      .digest("hex");
+  if (parsed.hashsum) {
+    const buf = await getBuffer();
+    const digest = createHash(parsed.hashsum.type).update(buf).digest("hex");
     if (digest !== parsed.hashsum.hash) {
       throw new HTTPError(
         `Source hashsum mismatch: expected ${parsed.hashsum.hash}, got ${digest}`,
@@ -562,14 +558,8 @@ export async function handleInfoRequest(
 
   const maxFileSize = parsed.maxSrcFileSize ?? env.MAX_SRC_FILE_SIZE;
   if (maxFileSize) {
-    const size =
-      sourceBuffer?.length ??
-      parseInt(
-        (await fetch(sourceUrl, { method: "HEAD" })).headers.get(
-          "content-length",
-        ) ?? "0",
-        10,
-      );
+    const headRes = await fetch(sourceUrl, { method: "HEAD" });
+    const size = parseInt(headRes.headers.get("content-length") ?? "0", 10);
     if (size > maxFileSize) {
       throw new HTTPError(
         `Source file size ${size} exceeds limit of ${maxFileSize} bytes`,
@@ -581,7 +571,7 @@ export async function handleInfoRequest(
   const metadata = await probeMetadata(
     sourceUrl,
     parsed.infoOptions,
-    sourceBuffer,
+    getBuffer,
   );
 
   const maxResolution = parsed.maxSrcResolution ?? env.MAX_SRC_RESOLUTION;
