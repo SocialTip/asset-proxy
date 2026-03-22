@@ -131,68 +131,47 @@ async function extractDominantColors(
     .raw()
     .toBuffer({ resolveWithObject: true });
 
-  const pixels: Array<{
-    r: number;
-    g: number;
-    b: number;
-    h: number;
-    s: number;
-    l: number;
-  }> = [];
-  const seen = new Set<string>();
+  // Count pixel frequency per quantised colour
+  const freq = new Map<
+    string,
+    { r: number; g: number; b: number; s: number; l: number; count: number }
+  >();
   for (let i = 0; i < data.length; i += info.channels) {
     const key = `${data[i]},${data[i + 1]},${data[i + 2]}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
-      pixels.push({ r: data[i], g: data[i + 1], b: data[i + 2], h, s, l });
+    const existing = freq.get(key);
+    if (existing) {
+      existing.count++;
+    } else {
+      const [, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+      freq.set(key, {
+        r: data[i],
+        g: data[i + 1],
+        b: data[i + 2],
+        s,
+        l,
+        count: 1,
+      });
     }
   }
 
+  const colours = [...freq.values()];
+
+  // Pick the most frequent colour matching a filter
   const pick = (
-    filter: (p: (typeof pixels)[0]) => boolean,
-    sortKey: (p: (typeof pixels)[0]) => number,
+    filter: (c: (typeof colours)[0]) => boolean,
   ): RGB | undefined => {
-    const matches = pixels
-      .filter(filter)
-      .sort((a, b) => sortKey(b) - sortKey(a));
-    return matches[0]
-      ? { R: matches[0].r, G: matches[0].g, B: matches[0].b }
-      : undefined;
+    const match = colours.filter(filter).sort((a, b) => b.count - a.count)[0];
+    return match ? { R: match.r, G: match.g, B: match.b } : undefined;
   };
 
   const fallback: RGB = { R: 0, G: 0, B: 0 };
   return {
-    vibrant:
-      pick(
-        (p) => p.s > 0.35 && p.l > 0.3 && p.l < 0.7,
-        (p) => p.s,
-      ) ?? fallback,
-    light_vibrant:
-      pick(
-        (p) => p.s > 0.35 && p.l >= 0.7,
-        (p) => p.s,
-      ) ?? fallback,
-    dark_vibrant:
-      pick(
-        (p) => p.s > 0.35 && p.l <= 0.3,
-        (p) => p.s,
-      ) ?? fallback,
-    muted:
-      pick(
-        (p) => p.s <= 0.35 && p.l > 0.3 && p.l < 0.7,
-        (p) => p.l,
-      ) ?? fallback,
-    light_muted:
-      pick(
-        (p) => p.s <= 0.35 && p.l >= 0.7,
-        (p) => p.l,
-      ) ?? fallback,
-    dark_muted:
-      pick(
-        (p) => p.s <= 0.35 && p.l <= 0.3,
-        (p) => 1 - p.l,
-      ) ?? fallback,
+    vibrant: pick((c) => c.s > 0.35 && c.l > 0.3 && c.l < 0.7) ?? fallback,
+    light_vibrant: pick((c) => c.s > 0.35 && c.l >= 0.7) ?? fallback,
+    dark_vibrant: pick((c) => c.s > 0.35 && c.l <= 0.3) ?? fallback,
+    muted: pick((c) => c.s <= 0.35 && c.l > 0.3 && c.l < 0.7) ?? fallback,
+    light_muted: pick((c) => c.s <= 0.35 && c.l >= 0.7) ?? fallback,
+    dark_muted: pick((c) => c.s <= 0.35 && c.l <= 0.3) ?? fallback,
   };
 }
 

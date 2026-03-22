@@ -1,6 +1,7 @@
 import { SERVICE_URL } from "./setup.js";
 
 const IMAGE_URL = "http://file-server/test-image.png";
+const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
 const JPEG_URL = "http://file-server/test-image-with-metadata.jpg";
 const VIDEO_URL = "http://file-server/test-video.mp4";
 
@@ -224,21 +225,21 @@ describe("info endpoint", () => {
 
   describe("dominant_colors option", () => {
     it("returns dominant colours when dc option is enabled", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/dc:1");
+      const res = await fetchInfo(BUTTERFLY_URL, "/dc:1");
       expect(res.status).toBe(200);
 
       const body = await res.json();
       expect(body.dominant_colors).toMatchInlineSnapshot(`
         {
           "dark_muted": {
-            "B": 0,
-            "G": 0,
-            "R": 0,
+            "B": 13,
+            "G": 12,
+            "R": 20,
           },
           "dark_vibrant": {
-            "B": 0,
-            "G": 0,
-            "R": 0,
+            "B": 22,
+            "G": 122,
+            "R": 84,
           },
           "light_muted": {
             "B": 0,
@@ -246,9 +247,9 @@ describe("info endpoint", () => {
             "R": 0,
           },
           "light_vibrant": {
-            "B": 0,
-            "G": 0,
-            "R": 0,
+            "B": 188,
+            "G": 220,
+            "R": 237,
           },
           "muted": {
             "B": 0,
@@ -256,9 +257,9 @@ describe("info endpoint", () => {
             "R": 0,
           },
           "vibrant": {
-            "B": 40,
-            "G": 221,
-            "R": 241,
+            "B": 27,
+            "G": 140,
+            "R": 112,
           },
         }
       `);
