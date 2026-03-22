@@ -164,15 +164,20 @@ async function extractDominantColors(
     return match ? { R: match.r, G: match.g, B: match.b } : undefined;
   };
 
-  const fallback: RGB = { R: 0, G: 0, B: 0 };
-  return {
-    vibrant: pick((c) => c.s > 0.35 && c.l > 0.3 && c.l < 0.7) ?? fallback,
-    light_vibrant: pick((c) => c.s > 0.35 && c.l >= 0.7) ?? fallback,
-    dark_vibrant: pick((c) => c.s > 0.35 && c.l <= 0.3) ?? fallback,
-    muted: pick((c) => c.s <= 0.35 && c.l > 0.3 && c.l < 0.7) ?? fallback,
-    light_muted: pick((c) => c.s <= 0.35 && c.l >= 0.7) ?? fallback,
-    dark_muted: pick((c) => c.s <= 0.35 && c.l <= 0.3) ?? fallback,
-  };
+  const result: Record<string, RGB> = {};
+  const vibrant = pick((c) => c.s > 0.35 && c.l > 0.3 && c.l < 0.7);
+  if (vibrant) result.vibrant = vibrant;
+  const lightVibrant = pick((c) => c.s > 0.35 && c.l >= 0.7);
+  if (lightVibrant) result.light_vibrant = lightVibrant;
+  const darkVibrant = pick((c) => c.s > 0.35 && c.l <= 0.3);
+  if (darkVibrant) result.dark_vibrant = darkVibrant;
+  const muted = pick((c) => c.s <= 0.35 && c.l > 0.3 && c.l < 0.7);
+  if (muted) result.muted = muted;
+  const lightMuted = pick((c) => c.s <= 0.35 && c.l >= 0.7);
+  if (lightMuted) result.light_muted = lightMuted;
+  const darkMuted = pick((c) => c.s <= 0.35 && c.l <= 0.3);
+  if (darkMuted) result.dark_muted = darkMuted;
+  return result;
 }
 
 async function extractPalette(
