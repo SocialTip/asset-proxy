@@ -294,6 +294,24 @@ describe("info endpoint", () => {
     });
   });
 
+  describe("blurhash option", () => {
+    it("returns blurhash when bh option is enabled", async () => {
+      const res = await fetchInfo(BUTTERFLY_URL, "/bh:4:3");
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.blurhash).toMatchInlineSnapshot(
+        `"LRHxh{=]X*%c~Q%0xFxsKxj0vkWE"`,
+      );
+    });
+
+    it("omits blurhash when option is not set", async () => {
+      const res = await fetchInfo(IMAGE_URL);
+      const body = await res.json();
+      expect(body.blurhash).toBeUndefined();
+    });
+  });
+
   describe("palette option", () => {
     it("returns colour palette when p option is enabled", async () => {
       const res = await fetchInfo(IMAGE_URL, "/p:4");

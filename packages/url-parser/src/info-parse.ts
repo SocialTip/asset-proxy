@@ -13,6 +13,7 @@ const INFO_SHORTHANDS: Record<string, string> = {
   p: "palette",
   avg: "average",
   dc: "dominant_colors",
+  bh: "blurhash",
 };
 
 const rawInfoOptionsSchema = z.object({
@@ -37,6 +38,14 @@ const rawInfoOptionsSchema = z.object({
     })
     .optional(),
   dominant_colors: zBool.optional(),
+  blurhash: z
+    .string()
+    .transform((v) => {
+      const [x, y] = v.split(":").map(Number);
+      if (!x || !y) return undefined;
+      return { xComponents: x, yComponents: y };
+    })
+    .optional(),
 });
 
 const infoOptionsSchema = rawInfoOptionsSchema.transform((data) => ({
@@ -51,6 +60,7 @@ const infoOptionsSchema = rawInfoOptionsSchema.transform((data) => ({
   palette: data.palette,
   average: data.average,
   dominantColors: data.dominant_colors,
+  blurhash: data.blurhash,
 }));
 
 /** Parsed info endpoint options that control which additional metadata is returned. */
@@ -77,6 +87,8 @@ export interface InfoOptions {
   average?: { ignoreTransparent: boolean };
   /** Return six dominant colour categories (vibrant, muted, light/dark variants). */
   dominantColors?: boolean;
+  /** Return a BlurHash string with the given x and y components. */
+  blurhash?: { xComponents: number; yComponents: number };
 }
 
 /** Zod schema for runtime validation of parsed info options. The `InfoOptions` interface is the authoritative type definition; this schema validates against it at compile time via `satisfies`. */
@@ -92,6 +104,9 @@ export const parsedInfoOptionsSchema = z.object({
   palette: z.number().optional(),
   average: z.object({ ignoreTransparent: z.boolean() }).optional(),
   dominantColors: z.boolean().optional(),
+  blurhash: z
+    .object({ xComponents: z.number(), yComponents: z.number() })
+    .optional(),
 }) satisfies z.ZodType<InfoOptions>;
 
 const INFO_OPTION_NAMES = new Set([

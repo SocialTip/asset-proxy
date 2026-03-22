@@ -581,6 +581,7 @@ Returns `application/json` with a `Cache-Control` header.
 | `palette`         | array  | RGBA colour palette (only when `p` info option is enabled)                     |
 | `average`         | object | Average RGB colour (only when `avg` info option is enabled)                    |
 | `dominant_colors` | object | Six dominant colour categories (only when `dc` info option is enabled)         |
+| `blurhash`        | string | BlurHash string (only when `bh` info option is enabled)                        |
 
 ### Info options
 
@@ -599,6 +600,7 @@ Info-specific options control which additional metadata is returned. They are pl
 | `palette`         | `p`       | Return RGBA colour palette (value = max colours, 2-256)                       |
 | `average`         | `avg`     | Return average RGB colour (`avg:t` or `avg:t:t` to ignore transparent pixels) |
 | `dominant_colors` | `dc`      | Return six dominant colour categories                                         |
+| `blurhash`        | `bh`      | Return BlurHash string (value = `<x>:<y>` components)                         |
 
 ### URL generator
 
