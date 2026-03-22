@@ -206,12 +206,13 @@ describe("info endpoint", () => {
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.average).toBeDefined();
-      expect(body.average).toMatchObject({
-        R: expect.any(Number),
-        G: expect.any(Number),
-        B: expect.any(Number),
-      });
+      expect(body.average).toMatchInlineSnapshot(`
+        {
+          "B": 85,
+          "G": 130,
+          "R": 135,
+        }
+      `);
     });
 
     it("omits average when option is not set", async () => {
@@ -227,18 +228,34 @@ describe("info endpoint", () => {
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.palette).toBeDefined();
-      expect(Array.isArray(body.palette)).toBe(true);
-      expect(body.palette.length).toBeGreaterThan(0);
-      expect(body.palette.length).toBeLessThanOrEqual(4);
-      for (const colour of body.palette) {
-        expect(colour).toMatchObject({
-          R: expect.any(Number),
-          G: expect.any(Number),
-          B: expect.any(Number),
-          A: 255,
-        });
-      }
+      expect(body.palette).toMatchInlineSnapshot(`
+        [
+          {
+            "A": 255,
+            "B": 40,
+            "G": 40,
+            "R": 221,
+          },
+          {
+            "A": 255,
+            "B": 40,
+            "G": 181,
+            "R": 40,
+          },
+          {
+            "A": 255,
+            "B": 221,
+            "G": 80,
+            "R": 40,
+          },
+          {
+            "A": 255,
+            "B": 40,
+            "G": 221,
+            "R": 241,
+          },
+        ]
+      `);
     });
 
     it("omits palette when option is not set", async () => {
