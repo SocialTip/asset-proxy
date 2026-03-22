@@ -317,8 +317,8 @@ function groupExiftoolXmp(
 
 async function probeMetadata(
   sourceUrl: string,
-  infoOpts: InfoOptions = {},
-  getBuffer: LazyBuffer = () => fetchSource(sourceUrl),
+  infoOpts: InfoOptions,
+  getBuffer: LazyBuffer,
 ): Promise<InfoResponse> {
   // ffprobe reads directly from URL — no download needed
   const { stdout } = await execFileAsync("ffprobe", [
