@@ -24,6 +24,7 @@ describe("info endpoint", () => {
         width: expect.any(Number),
         height: expect.any(Number),
         orientation: 1,
+        colorspace: expect.any(String),
       });
       expect(body.width).toBeGreaterThan(0);
       expect(body.height).toBeGreaterThan(0);
@@ -59,6 +60,7 @@ describe("info endpoint", () => {
         width: expect.any(Number),
         height: expect.any(Number),
         orientation: expect.any(Number),
+        colorspace: expect.any(String),
         duration: expect.any(Number),
         video_meta: {
           codec: expect.any(String),

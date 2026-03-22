@@ -569,6 +569,7 @@ Returns `application/json` with a `Cache-Control` header.
 | `width`       | number | Width in pixels (adjusted for EXIF orientation)                                |
 | `height`      | number | Height in pixels (adjusted for EXIF orientation)                               |
 | `orientation` | number | EXIF orientation value (1-8). Defaults to 1 when absent. Images only.          |
+| `colorspace`  | string | Colour space (e.g. `gbr`, `bt709`, `srgb`)                                     |
 | `size`        | number | File size in bytes                                                             |
 | `duration`    | number | Duration in seconds (video only)                                               |
 | `video_meta`  | object | Video stream details (video only)                                              |

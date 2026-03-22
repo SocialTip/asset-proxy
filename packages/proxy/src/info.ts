@@ -41,6 +41,7 @@ interface InfoResponse {
   width: number;
   height: number;
   orientation: number;
+  colorspace?: string;
   size?: number;
   duration?: number;
   video_meta?: {
@@ -149,6 +150,7 @@ async function probeMetadata(
     width: swapDimensions ? stream.height : stream.width,
     height: swapDimensions ? stream.width : stream.height,
     orientation,
+    ...(stream.color_space && { colorspace: stream.color_space }),
   };
 
   if (isVideo) {
