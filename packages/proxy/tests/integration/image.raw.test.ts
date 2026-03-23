@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
+import { generateUrl } from "@socialtip/asset-proxy-url-generator";
+import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 import { SOURCE_URL } from "./helpers.js";
-import { SERVICE_URL } from "./setup.js";
+import { SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 const fixturesDir = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -11,9 +13,8 @@ const fixturesDir = resolve(
 
 describe("raw passthrough", () => {
   it("returns the original image unmodified when raw:1 is set", async () => {
-    const res = await fetch(
-      `${SERVICE_URL}/insecure/raw:1/plain/${SOURCE_URL}`,
-    );
+    const parsed = parseProcessingUrl(`/insecure/raw:1/plain/${SOURCE_URL}`);
+    const res = await fetch(`${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
 

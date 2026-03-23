@@ -102,6 +102,9 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      "@socialtip/asset-proxy-url-generator":
+        specifier: workspace:*
+        version: link:../url-generator
       "@types/content-disposition":
         specifier: ^0.5.9
         version: 0.5.9

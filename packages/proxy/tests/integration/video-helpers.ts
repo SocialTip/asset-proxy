@@ -2,7 +2,9 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SERVICE_URL } from "./setup.js";
+import { generateUrl } from "@socialtip/asset-proxy-url-generator";
+import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
+import { SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 export const VIDEO_SOURCE_URL = "http://file-server/test-video.mp4";
 
@@ -42,7 +44,10 @@ export function extractFrame(videoPath: string): Buffer {
 export async function fetchVideo(
   path: string,
 ): Promise<{ buffer: Buffer; videoPath: string }> {
-  const url = `${SERVICE_URL}/insecure${path}/plain/${VIDEO_SOURCE_URL}`;
+  const parsed = parseProcessingUrl(
+    `/insecure${path}/plain/${VIDEO_SOURCE_URL}`,
+  );
+  const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
   const res = await fetch(url);
   expect(res.status).toBe(200);
   const buffer = Buffer.from(await res.arrayBuffer());

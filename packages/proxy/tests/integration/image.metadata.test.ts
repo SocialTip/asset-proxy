@@ -3,7 +3,9 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import { SERVICE_URL } from "./setup.js";
+import { generateUrl } from "@socialtip/asset-proxy-url-generator";
+import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
+import { SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 async function toPng(buffer: Buffer): Promise<Buffer> {
   return sharp(buffer).png().toBuffer();
@@ -12,7 +14,8 @@ async function toPng(buffer: Buffer): Promise<Buffer> {
 const SOURCE_URL = "http://file-server/test-image-with-metadata.jpg";
 
 async function fetchToFile(path: string): Promise<string> {
-  const url = `${SERVICE_URL}/insecure${path}/plain/${SOURCE_URL}`;
+  const parsed = parseProcessingUrl(`/insecure${path}/plain/${SOURCE_URL}`);
+  const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
   const res = await fetch(url);
   expect(res.status).toBe(200);
   const buffer = Buffer.from(await res.arrayBuffer());
@@ -111,7 +114,10 @@ describe("dpi", () => {
 
 describe("enforce_thumbnail", () => {
   it("extracts AVIF thumbnail when available", async () => {
-    const url = `${SERVICE_URL}/insecure/eth:1/plain/http://file-server/test-image-with-thumbnail.avif@jpg`;
+    const parsed = parseProcessingUrl(
+      "/insecure/eth:1/plain/http://file-server/test-image-with-thumbnail.avif@jpg",
+    );
+    const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
     const res = await fetch(url);
     expect(res.status).toBe(200);
     const buffer = Buffer.from(await res.arrayBuffer());
@@ -123,7 +129,10 @@ describe("enforce_thumbnail", () => {
 
   it("extracts HEIC thumbnail when available", async () => {
     // Main image is 100x100, thumbnail is 40x40
-    const url = `${SERVICE_URL}/insecure/eth:1/plain/http://file-server/test-image-with-thumbnail.heic@jpg`;
+    const parsed = parseProcessingUrl(
+      "/insecure/eth:1/plain/http://file-server/test-image-with-thumbnail.heic@jpg",
+    );
+    const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
     const res = await fetch(url);
     expect(res.status).toBe(200);
     const buffer = Buffer.from(await res.arrayBuffer());

@@ -1,6 +1,11 @@
 import { decode } from "blurhash";
 import sharp from "sharp";
-import { SERVICE_URL } from "./setup.js";
+import {
+  generateInfoUrl,
+  type InfoOptions,
+} from "@socialtip/asset-proxy-url-generator";
+import { encryptSourceUrl, sign } from "@socialtip/asset-proxy-url-parser";
+import { SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 const IMAGE_URL = "http://file-server/test-image.png";
 const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
@@ -9,9 +14,27 @@ const ANIMATED_URL = "http://file-server/test-image-animated.gif";
 const JPEG_URL = "http://file-server/test-image-with-metadata.jpg";
 const VIDEO_URL = "http://file-server/test-video.mp4";
 
-async function fetchInfo(sourceUrl: string, options = "") {
-  const url = `${SERVICE_URL}/info/insecure${options}/plain/${sourceUrl}`;
-  return fetch(url);
+function fetchInfo(sourceUrl: string, infoOptions?: InfoOptions) {
+  const path = generateInfoUrl({ sourceUrl }, URL_CONFIG, infoOptions);
+  return fetch(`${SERVICE_URL}${path}`);
+}
+
+function fetchInfoWithControlOptions(
+  sourceUrl: string,
+  controlSegments: string,
+) {
+  const encUrl = encryptSourceUrl(
+    sourceUrl,
+    Buffer.from(URL_CONFIG.encryptionKey!, "hex"),
+    { deterministic: true },
+  );
+  const pathAfterSignature = `/${controlSegments}/enc/${encUrl}`;
+  const signature = sign(
+    pathAfterSignature,
+    Buffer.from(URL_CONFIG.signingKey!, "hex"),
+    Buffer.from(URL_CONFIG.signingSalt!, "hex"),
+  );
+  return fetch(`${SERVICE_URL}/info/${signature}${pathAfterSignature}`);
 }
 
 describe("info endpoint", () => {
@@ -80,7 +103,7 @@ describe("info endpoint", () => {
 
   describe("exif option", () => {
     it("returns EXIF metadata when exif option is enabled", async () => {
-      const res = await fetchInfo(JPEG_URL, "/exif:1");
+      const res = await fetchInfo(JPEG_URL, { exif: true });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -128,7 +151,7 @@ describe("info endpoint", () => {
 
   describe("iptc option", () => {
     it("returns IPTC metadata when iptc option is enabled", async () => {
-      const res = await fetchInfo(JPEG_URL, "/iptc:1");
+      const res = await fetchInfo(JPEG_URL, { iptc: true });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -160,7 +183,7 @@ describe("info endpoint", () => {
 
   describe("xmp option", () => {
     it("returns XMP metadata when xmp option is enabled", async () => {
-      const res = await fetchInfo(JPEG_URL, "/xmp:1");
+      const res = await fetchInfo(JPEG_URL, { xmp: true });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -194,7 +217,7 @@ describe("info endpoint", () => {
 
   describe("colorspace option", () => {
     it("returns colorspace when cs option is enabled", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/cs:1");
+      const res = await fetchInfo(IMAGE_URL, { colorspace: true });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -212,7 +235,9 @@ describe("info endpoint", () => {
 
   describe("average option", () => {
     it("returns average colour when avg option is enabled", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/avg:t");
+      const res = await fetchInfo(IMAGE_URL, {
+        average: { ignoreTransparent: false },
+      });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -234,7 +259,7 @@ describe("info endpoint", () => {
 
   describe("dominant_colors option", () => {
     it("returns dominant colours when dc option is enabled", async () => {
-      const res = await fetchInfo(BUTTERFLY_URL, "/dc:1");
+      const res = await fetchInfo(BUTTERFLY_URL, { dominantColors: true });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -265,7 +290,7 @@ describe("info endpoint", () => {
     });
 
     it("returns dominant colours for a low-saturation image", async () => {
-      const res = await fetchInfo(CASTLE_URL, "/dc:1");
+      const res = await fetchInfo(CASTLE_URL, { dominantColors: true });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -304,7 +329,9 @@ describe("info endpoint", () => {
 
   describe("blurhash option", () => {
     it("returns blurhash when bh option is enabled", async () => {
-      const res = await fetchInfo(BUTTERFLY_URL, "/bh:4:3");
+      const res = await fetchInfo(BUTTERFLY_URL, {
+        blurhash: { xComponents: 4, yComponents: 3 },
+      });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -332,7 +359,7 @@ describe("info endpoint", () => {
 
   describe("palette option", () => {
     it("returns colour palette when p option is enabled", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/p:4");
+      const res = await fetchInfo(IMAGE_URL, { palette: 4 });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -367,7 +394,7 @@ describe("info endpoint", () => {
     });
 
     it("returns colour palette for a butterfly image", async () => {
-      const res = await fetchInfo(BUTTERFLY_URL, "/p:6");
+      const res = await fetchInfo(BUTTERFLY_URL, { palette: 6 });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -402,7 +429,7 @@ describe("info endpoint", () => {
     });
 
     it("returns colour palette for a castle image", async () => {
-      const res = await fetchInfo(CASTLE_URL, "/p:6");
+      const res = await fetchInfo(CASTLE_URL, { palette: 6 });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -445,7 +472,9 @@ describe("info endpoint", () => {
 
   describe("calc_hashsums option", () => {
     it("returns hashsums when chs option is enabled", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/chs:md5:sha256");
+      const res = await fetchInfo(IMAGE_URL, {
+        calcHashsums: ["md5", "sha256"],
+      });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -457,7 +486,7 @@ describe("info endpoint", () => {
       `);
 
       await expect(
-        fetchInfo(IMAGE_URL, "/chs:sha1:sha512:sha1")
+        fetchInfo(IMAGE_URL, { calcHashsums: ["sha1", "sha512"] })
           .then((res) => res.json())
           .then((res) => res.hashsums),
       ).resolves.toMatchInlineSnapshot(`
@@ -477,7 +506,7 @@ describe("info endpoint", () => {
 
   describe("bands option", () => {
     it("returns bands when b option is enabled", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/b:1");
+      const res = await fetchInfo(IMAGE_URL, { bands: true });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -493,7 +522,7 @@ describe("info endpoint", () => {
 
   describe("sample_format option", () => {
     it("returns sample_format when sf option is enabled", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/sf:1");
+      const res = await fetchInfo(IMAGE_URL, { sampleFormat: true });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -509,7 +538,7 @@ describe("info endpoint", () => {
 
   describe("pages_number option", () => {
     it("returns pages_number when pn option is enabled", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/pn:1");
+      const res = await fetchInfo(IMAGE_URL, { pagesNumber: true });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -525,7 +554,7 @@ describe("info endpoint", () => {
 
   describe("alpha option", () => {
     it("returns alpha info when a option is enabled", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/a:1");
+      const res = await fetchInfo(IMAGE_URL, { alpha: true });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -542,7 +571,10 @@ describe("info endpoint", () => {
 
   describe("page option", () => {
     it("returns average colour for frame 0 (red)", async () => {
-      const res = await fetchInfo(ANIMATED_URL, "/pg:0/avg:t");
+      const res = await fetchInfo(ANIMATED_URL, {
+        page: 0,
+        average: { ignoreTransparent: false },
+      });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -556,7 +588,10 @@ describe("info endpoint", () => {
     });
 
     it("returns average colour for frame 1 (blue)", async () => {
-      const res = await fetchInfo(ANIMATED_URL, "/pg:1/avg:t");
+      const res = await fetchInfo(ANIMATED_URL, {
+        page: 1,
+        average: { ignoreTransparent: false },
+      });
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -580,15 +615,18 @@ describe("info endpoint", () => {
     });
 
     it("accepts a valid hashsum", async () => {
-      const res = await fetchInfo(
+      const res = await fetchInfoWithControlOptions(
         IMAGE_URL,
-        "/hs:sha256:efd163fab569d4beec64e268346b33c61e98024b226eae40c3de0e469951a4d6",
+        "hs:sha256:efd163fab569d4beec64e268346b33c61e98024b226eae40c3de0e469951a4d6",
       );
       expect(res.status).toBe(200);
     });
 
     it("rejects an invalid hashsum", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/hs:sha256:badhash");
+      const res = await fetchInfoWithControlOptions(
+        IMAGE_URL,
+        "hs:sha256:badhash",
+      );
       expect(res.status).toBe(422);
       expect(await res.text()).toMatchInlineSnapshot(
         `"Source hashsum mismatch: expected badhash, got efd163fab569d4beec64e268346b33c61e98024b226eae40c3de0e469951a4d6"`,
@@ -596,7 +634,7 @@ describe("info endpoint", () => {
     });
 
     it("rejects when source exceeds max file size", async () => {
-      const res = await fetchInfo(IMAGE_URL, "/msfs:1");
+      const res = await fetchInfoWithControlOptions(IMAGE_URL, "msfs:1");
       expect(res.status).toBe(422);
       expect(await res.text()).toMatchInlineSnapshot(
         `"Source file size 881 exceeds limit of 1 bytes"`,
@@ -605,7 +643,7 @@ describe("info endpoint", () => {
 
     it("rejects when source exceeds max resolution", async () => {
       // test-image.png is 200x150 = 0.03MP; set limit to 0.0001MP
-      const res = await fetchInfo(IMAGE_URL, "/msr:0.0001");
+      const res = await fetchInfoWithControlOptions(IMAGE_URL, "msr:0.0001");
       expect(res.status).toBe(422);
       expect(await res.text()).toMatchInlineSnapshot(
         `"Source resolution 0.0MP exceeds limit of 0.0001MP"`,
