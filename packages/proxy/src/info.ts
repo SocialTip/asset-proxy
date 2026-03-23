@@ -259,8 +259,17 @@ async function runExiftool(
         code: "UNPROCESSABLE_ENTITY",
       });
     }
+    // When the HTTP response is slower than exiftool (e.g. large remote files with small EXIF headers), exiftool can finish and exit while we are still streaming. Track exit state to stop writing, and swallow EPIPE on stdin in case of a race between the exit check and the next write.
+    let exited = false;
+    proc.on("exit", () => {
+      exited = true;
+    });
+    proc.stdin!.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code !== "EPIPE") throw err;
+    });
     let written = 0;
     for await (const chunk of res.body) {
+      if (exited) break;
       const buf = Buffer.from(chunk);
       const remaining = METADATA_STREAM_LIMIT - written;
       if (remaining <= 0) break;
@@ -269,7 +278,7 @@ async function runExiftool(
       if (written >= METADATA_STREAM_LIMIT) break;
     }
     controller.abort();
-    proc.stdin!.end();
+    if (!exited) proc.stdin!.end();
   }
 
   const stdout = await new Promise<string>((resolve, reject) => {
