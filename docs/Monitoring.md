@@ -1,6 +1,6 @@
 # Monitoring
 
-The proxy package ships with built-in [OpenTelemetry](https://opentelemetry.io/) instrumentation. The SDK is initialised in `packages/proxy/src/instrument.ts`, which is imported before any other module so that auto-instrumentation can patch HTTP and Express before they are loaded.
+The proxy package ships with built-in [OpenTelemetry](https://opentelemetry.io/) instrumentation. The SDK is initialised in `packages/proxy/src/instrument.ts`, which is loaded via Node's `--import` flag so that auto-instrumentation can patch HTTP and Express before they are loaded.
 
 ## What is collected
 
@@ -18,11 +18,11 @@ All configuration is done through the standard `OTEL_*` environment variables â€
 | ------------------------------------ | -------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `OTEL_SERVICE_NAME`                  | Logical service name attached to all telemetry                       | `asset-proxy`                                                         |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`        | Base OTLP endpoint (used when signal-specific endpoints are not set) | `http://localhost:4318`                                               |
-| `OTEL_EXPORTER_OTLP_HEADERS`         | Headers sent with all OTLP exports                                   | `x-sentry-auth:sentry sentry_key=abc123`                              |
+| `OTEL_EXPORTER_OTLP_HEADERS`         | Headers sent with all OTLP exports                                   | `x-sentry-auth=sentry sentry_key=abc123`                              |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Traces-specific OTLP endpoint                                        | `https://o123.ingest.us.sentry.io/api/456/integration/otlp/v1/traces` |
-| `OTEL_EXPORTER_OTLP_TRACES_HEADERS`  | Headers for trace exports (defaults to `OTEL_EXPORTER_OTLP_HEADERS`) | `x-sentry-auth:sentry sentry_key=abc123`                              |
+| `OTEL_EXPORTER_OTLP_TRACES_HEADERS`  | Headers for trace exports (defaults to `OTEL_EXPORTER_OTLP_HEADERS`) | `x-sentry-auth=sentry sentry_key=abc123`                              |
 | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`   | Logs-specific OTLP endpoint                                          | `https://o123.ingest.us.sentry.io/api/456/integration/otlp/v1/logs`   |
-| `OTEL_EXPORTER_OTLP_LOGS_HEADERS`    | Headers for log exports (defaults to `OTEL_EXPORTER_OTLP_HEADERS`)   | `x-sentry-auth:sentry sentry_key=abc123`                              |
+| `OTEL_EXPORTER_OTLP_LOGS_HEADERS`    | Headers for log exports (defaults to `OTEL_EXPORTER_OTLP_HEADERS`)   | `x-sentry-auth=sentry sentry_key=abc123`                              |
 | `OTEL_TRACES_SAMPLER`                | Sampling strategy                                                    | `parentbased_traceidratio`                                            |
 | `OTEL_TRACES_SAMPLER_ARG`            | Sampler argument (e.g. ratio)                                        | `0.1`                                                                 |
 | `OTEL_RESOURCE_ATTRIBUTES`           | Extra resource attributes                                            | `deployment.environment=production`                                   |
@@ -45,7 +45,7 @@ Sentry provides separate ingest endpoints for each signal type (traces, logs) bu
 ```env
 OTEL_SERVICE_NAME=asset-proxy
 OTEL_EXPORTER_OTLP_ENDPOINT=https://o<ORG_ID>.ingest.us.sentry.io/api/<PROJECT_ID>/integration/otlp
-OTEL_EXPORTER_OTLP_HEADERS=x-sentry-auth:sentry sentry_key=<SENTRY_KEY>
+OTEL_EXPORTER_OTLP_HEADERS=x-sentry-auth=sentry sentry_key=<SENTRY_KEY>
 
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://o<ORG_ID>.ingest.us.sentry.io/api/<PROJECT_ID>/integration/otlp/v1/traces
 OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://o<ORG_ID>.ingest.us.sentry.io/api/<PROJECT_ID>/integration/otlp/v1/logs

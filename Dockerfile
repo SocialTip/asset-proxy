@@ -82,4 +82,4 @@ HEALTHCHECK --interval=30s --timeout=5s \
 ARG BUILD_VERSION="<unset>"
 ENV BUILD_VERSION=${BUILD_VERSION}
 
-CMD ["node", "packages/proxy/dist/index.js"]
+CMD ["node", "--import", "./packages/proxy/dist/instrument.js", "packages/proxy/dist/index.js"]

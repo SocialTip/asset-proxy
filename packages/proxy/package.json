@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
-    "dev": "tsx --watch src/index.ts",
+    "start": "tsx --import ./src/instrument.ts src/index.ts",
+    "dev": "tsx --import ./src/instrument.ts --watch src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest"
@@ -20,6 +20,7 @@
     "@opentelemetry/sdk-logs": "^0.213.0",
     "@opentelemetry/sdk-metrics": "^2.6.0",
     "@opentelemetry/sdk-node": "^0.213.0",
+    "@opentelemetry/winston-transport": "^0.23.0",
     "@socialtip/asset-proxy-url-parser": "workspace:*",
     "blurhash": "^2.0.5",
     "content-disposition": "^1.0.1",

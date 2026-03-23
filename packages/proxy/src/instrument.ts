@@ -11,17 +11,17 @@ import {
 
 const sdk = new NodeSDK({
   traceExporter: new OTLPTraceExporter(),
-  metricReader: new PeriodicExportingMetricReader({
-    exporter: new OTLPMetricExporter(),
-  }),
+  metricReaders: [
+    new PeriodicExportingMetricReader({
+      exporter: new OTLPMetricExporter(),
+    }),
+  ],
   logRecordProcessors: [
     process.env.NODE_ENV === "production"
       ? new BatchLogRecordProcessor(new OTLPLogExporter())
       : new SimpleLogRecordProcessor(new OTLPLogExporter()),
   ],
-  instrumentations: [
-    getNodeAutoInstrumentations({}),
-  ],
+  instrumentations: [getNodeAutoInstrumentations({})],
 });
 
 sdk.start();
