@@ -245,6 +245,23 @@ async function runExiftool(
   const args = ["-fast", "-json", "-n", "-G1", ...groups, "-"];
   const proc = execFile("exiftool", args);
 
+  // Collect stdout and wait for close. Must be registered before writing to
+  // stdin — if exiftool exits quickly the close event would be missed.
+  const stdout = new Promise<string>((resolve, reject) => {
+    let out = "";
+    proc.stdout!.on("data", (chunk: string | Buffer) => {
+      out += typeof chunk === "string" ? chunk : chunk.toString();
+    });
+    proc.on("close", () => resolve(out));
+    proc.on("error", reject);
+  });
+
+  // Exiftool may exit after reading the metadata header but before we finish
+  // writing. Swallow the resulting EPIPE on stdin for all branches.
+  proc.stdin!.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code !== "EPIPE") throw err;
+  });
+
   if (Buffer.isBuffer(source)) {
     proc.stdin!.end(source.subarray(0, METADATA_STREAM_LIMIT));
   } else if (typeof source !== "string") {
@@ -259,13 +276,12 @@ async function runExiftool(
         code: "UNPROCESSABLE_ENTITY",
       });
     }
-    // When the HTTP response is slower than exiftool (e.g. large remote files with small EXIF headers), exiftool can finish and exit while we are still streaming. Track exit state to stop writing, and swallow EPIPE on stdin in case of a race between the exit check and the next write.
+    // When the HTTP response is slower than exiftool (e.g. large remote files
+    // with small EXIF headers), exiftool can finish and exit while we are still
+    // streaming. Track exit state to stop writing.
     let exited = false;
     proc.on("exit", () => {
       exited = true;
-    });
-    proc.stdin!.on("error", (err: NodeJS.ErrnoException) => {
-      if (err.code !== "EPIPE") throw err;
     });
     let written = 0;
     for await (const chunk of res.body) {
@@ -281,15 +297,7 @@ async function runExiftool(
     if (!exited) proc.stdin!.end();
   }
 
-  const stdout = await new Promise<string>((resolve, reject) => {
-    let out = "";
-    proc.stdout!.on("data", (chunk: string | Buffer) => {
-      out += typeof chunk === "string" ? chunk : chunk.toString();
-    });
-    proc.on("close", () => resolve(out));
-    proc.on("error", reject);
-  });
-  const parsed = JSON.parse(stdout);
+  const parsed = JSON.parse(await stdout);
   return Array.isArray(parsed) ? parsed[0] : parsed;
 }
 
