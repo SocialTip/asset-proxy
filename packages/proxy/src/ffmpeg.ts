@@ -1130,7 +1130,7 @@ function buildImageArgs(
         width: parsed.resize.width,
         height: parsed.resize.height,
         gpu: false,
-        enlarge: parsed.enlarge,
+        enlarge: parsed.enlarge ?? false,
       }),
     );
   }
@@ -1511,8 +1511,8 @@ function buildScaleFilter({
     }
   }
 
-  // When enlarge is explicitly disabled, clamp target dimensions so the
-  // image is never scaled beyond its original size.
+  // When enlarge is false, clamp target dimensions so the image is never
+  // scaled beyond its original size.
   const noEnlarge = enlarge === false;
   const clampW = noEnlarge && width > 0 ? `'min(${width}\\,iw)'` : String(w);
   const clampH = noEnlarge && height > 0 ? `'min(${height}\\,ih)'` : String(h);
