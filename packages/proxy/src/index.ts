@@ -16,6 +16,8 @@ import { env } from "./env.js";
 import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
 import { handleInfoRequest } from "./info.js";
 import { logger } from "./logger.js";
+import { trace } from "@opentelemetry/api";
+import { tracer, withSpan } from "./tracing.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -66,16 +68,22 @@ async function resolveGcsUrl(gsUrl: string): Promise<string> {
   const bucket = withoutScheme.slice(0, slashIdx);
   const objectPath = withoutScheme.slice(slashIdx + 1);
 
-  const [signedUrl] = await gcs
-    .bucket(bucket)
-    .file(objectPath)
-    .getSignedUrl({
-      version: "v4",
-      action: "read",
-      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
-    });
+  return withSpan(
+    "gcs.getSignedUrl",
+    { "gcs.bucket": bucket, "gcs.object": objectPath },
+    async () => {
+      const [signedUrl] = await gcs
+        .bucket(bucket)
+        .file(objectPath)
+        .getSignedUrl({
+          version: "v4",
+          action: "read",
+          expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+        });
 
-  return signedUrl;
+      return signedUrl;
+    },
+  );
 }
 
 function shouldSkipProcessing(
@@ -137,17 +145,19 @@ async function checkSourceLimits(
 
   if (maxResolution) {
     try {
-      const { stdout } = await execFileAsync("ffprobe", [
-        "-v",
-        "error",
-        "-select_streams",
-        "v:0",
-        "-show_entries",
-        "stream=width,height",
-        "-of",
-        "json",
-        sourceUrl,
-      ]);
+      const { stdout } = await withSpan("exec.ffprobe.resolution", {}, () =>
+        execFileAsync("ffprobe", [
+          "-v",
+          "error",
+          "-select_streams",
+          "v:0",
+          "-show_entries",
+          "stream=width,height",
+          "-of",
+          "json",
+          sourceUrl,
+        ]),
+      );
       const probe = JSON.parse(stdout);
       const stream = probe.streams?.[0];
       if (stream?.width && stream?.height) {
@@ -248,50 +258,73 @@ function setContentDisposition(
 }
 
 async function handleRequest(req: express.Request, res: express.Response) {
-  const pathAfterSignature = verifySignature(req.path, {
-    signingKey: env.SIGNING_KEY,
-    signingSalt: env.SIGNING_SALT,
-  });
-  const parsed = parseProcessingUrl(pathAfterSignature, {
-    encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY,
-  });
-
-  assertOriginAllowed(parsed.sourceUrl);
-
-  if (parsed.expires && Date.now() / 1000 > parsed.expires) {
-    throw new HTTPError("URL has expired", { code: "NOT_FOUND" });
-  }
-
-  // Resolve gs:// URLs to signed HTTP URLs
-  const sourceUrl = parsed.sourceUrl.startsWith("gs://")
-    ? await resolveGcsUrl(parsed.sourceUrl)
-    : parsed.sourceUrl;
-
-  if (parsed.hashsum) {
-    await verifyHashsum(sourceUrl, parsed.hashsum);
-  }
-
-  checkResultLimits(parsed);
-  checkAnimationLimits(parsed);
-  await checkSourceLimits(sourceUrl, parsed);
-
+  const span = tracer.startSpan("asset-proxy.request");
   try {
-    await processAndRespond(req, res, parsed, sourceUrl);
-  } catch (err) {
-    if (parsed.fallbackImageUrl && !res.headersSent) {
-      const fallbackUrl = Buffer.from(
-        parsed.fallbackImageUrl,
-        "base64url",
-      ).toString("utf-8");
-      logger.info("Falling back to fallback image", {
-        sourceUrl: parsed.sourceUrl,
-        fallbackUrl,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      res.redirect(302, fallbackUrl);
-      return;
+    const pathAfterSignature = verifySignature(req.path, {
+      signingKey: env.SIGNING_KEY,
+      signingSalt: env.SIGNING_SALT,
+    });
+    const parsed = parseProcessingUrl(pathAfterSignature, {
+      encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY,
+    });
+
+    span.setAttributes({
+      "asset_proxy.source_scheme": parsed.sourceUrl.startsWith("gs://")
+        ? "gs"
+        : "http",
+      "asset_proxy.output_format": parsed.outputFormat,
+      "asset_proxy.media_type": isImageUrl(parsed)
+        ? "image"
+        : isVideoUrl(parsed)
+          ? "video"
+          : "unknown",
+      ...(parsed.resize?.width && {
+        "asset_proxy.resize_width": parsed.resize.width,
+      }),
+      ...(parsed.resize?.height && {
+        "asset_proxy.resize_height": parsed.resize.height,
+      }),
+    });
+
+    assertOriginAllowed(parsed.sourceUrl);
+
+    if (parsed.expires && Date.now() / 1000 > parsed.expires) {
+      throw new HTTPError("URL has expired", { code: "NOT_FOUND" });
     }
-    throw err;
+
+    // Resolve gs:// URLs to signed HTTP URLs
+    const sourceUrl = parsed.sourceUrl.startsWith("gs://")
+      ? await resolveGcsUrl(parsed.sourceUrl)
+      : parsed.sourceUrl;
+
+    if (parsed.hashsum) {
+      await verifyHashsum(sourceUrl, parsed.hashsum);
+    }
+
+    checkResultLimits(parsed);
+    checkAnimationLimits(parsed);
+    await checkSourceLimits(sourceUrl, parsed);
+
+    try {
+      await processAndRespond(req, res, parsed, sourceUrl);
+    } catch (err) {
+      if (parsed.fallbackImageUrl && !res.headersSent) {
+        const fallbackUrl = Buffer.from(
+          parsed.fallbackImageUrl,
+          "base64url",
+        ).toString("utf-8");
+        logger.info("Falling back to fallback image", {
+          sourceUrl: parsed.sourceUrl,
+          fallbackUrl,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        res.redirect(302, fallbackUrl);
+        return;
+      }
+      throw err;
+    }
+  } finally {
+    span.end();
   }
 }
 
@@ -312,6 +345,7 @@ async function processAndRespond(
     if (contentType) res.set("Content-Type", contentType);
     res.set("Cache-Control", env.CACHE_CONTROL);
     setContentDisposition(res, parsed);
+    trace.getActiveSpan()?.addEvent("response.body.start");
     Readable.fromWeb(
       response.body as import("node:stream/web").ReadableStream,
     ).pipe(res);
@@ -327,6 +361,7 @@ async function processAndRespond(
       );
       res.set("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(res, parsed, result.outputFormat);
+      trace.getActiveSpan()?.addEvent("response.body.start");
       res.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
@@ -347,6 +382,7 @@ async function processAndRespond(
       );
       res.set("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(res, parsed, parsed.outputFormat);
+      trace.getActiveSpan()?.addEvent("response.body.start");
       result.pipe(res);
 
       await new Promise<void>((resolve, reject) => {
