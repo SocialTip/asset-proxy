@@ -58,4 +58,38 @@ describe("video thumbnails", () => {
     const meta = await sharp(buffer, { animated: true }).metadata();
     expect(meta.pages).toBeGreaterThan(1);
   });
+
+  it("vta fit preserves aspect ratio within box", async () => {
+    const url = `${SERVICE_URL}/insecure/vta:0.2:100:3:320:180/plain/${VIDEO_URL}@gif`;
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const meta = await sharp(buffer, { animated: true }).metadata();
+    // Source is portrait (576x1024), fitting into 320x180 should produce height=180 with width < 320
+    expect(meta.height! / (meta.pages ?? 1)).toBe(180);
+    expect(meta.width).toBeLessThan(320);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("vta fill crops to exact dimensions", async () => {
+    const url = `${SERVICE_URL}/insecure/vta:0.2:100:3:320:180:0:0:1/plain/${VIDEO_URL}@gif`;
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const meta = await sharp(buffer, { animated: true }).metadata();
+    expect(meta.width).toBe(320);
+    expect(meta.height! / (meta.pages ?? 1)).toBe(180);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("vta extendFrame pads to exact dimensions", async () => {
+    const url = `${SERVICE_URL}/insecure/vta:0.2:100:3:320:180:1/plain/${VIDEO_URL}@gif`;
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const meta = await sharp(buffer, { animated: true }).metadata();
+    expect(meta.width).toBe(320);
+    expect(meta.height! / (meta.pages ?? 1)).toBe(180);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
 });

@@ -11,6 +11,7 @@ services:
     volumes:
       - ./packages/proxy/src:/app/packages/proxy/src:ro
       - ./packages/url-parser/src:/app/packages/url-parser/src:ro
+      - ./packages/url-parser/dist:/app/packages/url-parser/dist:ro
       - ./packages/proxy/package.json:/app/packages/proxy/package.json:ro
       - ./packages/url-parser/package.json:/app/packages/url-parser/package.json:ro
       - ./package.json:/app/package.json:ro

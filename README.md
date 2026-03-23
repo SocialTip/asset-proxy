@@ -226,9 +226,9 @@ Extract a single frame from a video at the given second. Used when outputting an
 
 When extracting frames from video, use only keyframes. This is faster but less precise than seeking to an exact timestamp.
 
-#### Video Thumbnail Animation — `video_thumbnail_animation:<step>:<delay>:<frames>:<frame_width>:<frame_height>` (shorthand `vta`)
+#### Video Thumbnail Animation — `video_thumbnail_animation:<step>:<delay>:<frames>:<frame_width>:<frame_height>:<extend_frame>:<trim>:<fill>:<focus_x>:<focus_y>` (shorthand `vta`)
 
-Generate an animated gif or webp from video frames. Step is the interval in seconds between frames (0 = auto). Delay is the frame delay in ms (default 100). Frames limits the number of output frames. Frame width/height control output dimensions. Output format is determined by the `@gif` or `@webp` suffix. Example: `vta:0.5:100:10:200:150`.
+Generate an animated gif or webp from video frames. Step is the interval in seconds between frames (0 = auto). Delay is the frame delay in ms (default 100). Frames limits the number of output frames. Frame width/height control output dimensions (default behaviour fits within the box preserving aspect ratio). Set `fill` to 1 to crop-fill to exact dimensions instead. Set `extend_frame` to 1 to pad with black to exact dimensions. `focus_x` and `focus_y` (0–1, default 0.5) control the crop anchor when fill is active. Output format is determined by the `@gif` or `@webp` suffix. Example: `vta:0.5:100:10:200:150` (fit), `vta:0.5:100:10:200:150:0:0:1` (fill).
 
 #### DPI — `dpi:<value>`
 

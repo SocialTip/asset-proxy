@@ -466,7 +466,6 @@ async function extractThumbnail(
   return undefined;
 }
 
-/** Run exiftool on an image buffer to set/copy metadata. Only supports EXIF — XMP/IPTC are always stripped. */
 /** Binary search on quality targeting a DSSIM value using sharp + ffmpeg SSIM filter. */
 async function autoqualityDssim(
   original: Buffer,
@@ -562,8 +561,6 @@ async function computeDssim(a: Buffer, b: Buffer): Promise<number> {
   });
 }
 
-/** Binary search on quality using sharp to fit output under maxBytes. */
-/** Re-encode with format-specific options using sharp. */
 /** Generate an animated gif/webp from video frames using ffmpeg. */
 async function generateVideoAnimation(
   sourceUrl: string,
@@ -576,17 +573,30 @@ async function generateVideoAnimation(
 
   filters.push(`fps=${fps}`);
 
-  if (vta.frameWidth > 0 || vta.frameHeight > 0) {
-    const w = vta.frameWidth > 0 ? vta.frameWidth : -1;
-    const h = vta.frameHeight > 0 ? vta.frameHeight : -1;
-    filters.push(`scale=${w}:${h}:force_original_aspect_ratio=decrease`);
-  } else if (
-    parsed.resize &&
-    (parsed.resize.width > 0 || parsed.resize.height > 0)
-  ) {
-    const w = parsed.resize.width > 0 ? parsed.resize.width : -1;
-    const h = parsed.resize.height > 0 ? parsed.resize.height : -1;
-    filters.push(`scale=${w}:${h}:force_original_aspect_ratio=decrease`);
+  let targetW = vta.frameWidth > 0 ? vta.frameWidth : 0;
+  let targetH = vta.frameHeight > 0 ? vta.frameHeight : 0;
+  if (!targetW && !targetH && parsed.resize) {
+    targetW = parsed.resize.width > 0 ? parsed.resize.width : 0;
+    targetH = parsed.resize.height > 0 ? parsed.resize.height : 0;
+  }
+
+  if (targetW > 0 || targetH > 0) {
+    const w = targetW > 0 ? targetW : -1;
+    const h = targetH > 0 ? targetH : -1;
+
+    if (vta.fill && targetW > 0 && targetH > 0) {
+      filters.push(`scale=${w}:${h}:force_original_aspect_ratio=increase`);
+      const cropX = `(iw-${targetW})*${vta.focusX}`;
+      const cropY = `(ih-${targetH})*${vta.focusY}`;
+      filters.push(`crop=${targetW}:${targetH}:${cropX}:${cropY}`);
+    } else {
+      filters.push(`scale=${w}:${h}:force_original_aspect_ratio=decrease`);
+      if (vta.extendFrame && targetW > 0 && targetH > 0) {
+        filters.push(
+          `pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2:color=black`,
+        );
+      }
+    }
   }
 
   if (vta.frames > 0) {
