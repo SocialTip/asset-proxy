@@ -51,7 +51,7 @@ Controls the scaling algorithm. Supports CPU and GPU modes:
 
 **CPU algorithms** (for video thumbnails): `nearest`, `linear`, `cubic`, `lanczos2`, `lanczos3`. Example: `ra:lanczos3`.
 
-**GPU scalers** (video processing with GPU acceleration only): `gpu:scale_cuda`, `gpu:scale_npp`. When no resizing algorithm is specified, GPU video resize uses the cuvid decoder's built-in resize (`-resize`), which only supports `force` mode with both width and height specified. To use other resize modes (fit, fill, fill-down, auto) with GPU, specify an explicit GPU scaler. The `scale_npp` scaler also supports an interpolation algorithm suffix: `gpu:scale_npp:cubic`, `gpu:scale_npp:lanczos3`, etc. Available `scale_npp` interpolation algorithms: `nearest`, `linear`, `cubic`, `lanczos2`, `lanczos3`.
+**GPU scalers** (video processing with GPU acceleration only): `gpu:scale_cuda`, `gpu:scale_npp`. The `scale_npp` scaler also supports an interpolation algorithm suffix: `gpu:scale_npp:cubic`, `gpu:scale_npp:lanczos3`, etc. Available `scale_npp` interpolation algorithms: `nearest`, `linear`, `cubic`, `lanczos2`, `lanczos3`.
 
 ### Min Width / Min Height — `min_width:<w>` (`mw`) / `min_height:<h>` (`mh`)
 
@@ -177,9 +177,7 @@ Generate an animated gif or webp from video frames. Step is the interval in seco
 
 ## GPU acceleration
 
-Video processing supports optional NVIDIA GPU acceleration. Set `SKIP_GPU=1` to fall back to CPU encoding.
-
-When GPU acceleration is available, the cuvid decoder's built-in resize is used by default (supports `force` mode only with both width and height specified). For other resize modes (`fit`, `fill`, `fill-down`, `auto`), specify an explicit GPU scaler via the `resizing_algorithm` option — see [Resizing Algorithm](#resizing-algorithm--resizing_algorithmalgorithm-shorthand-ra).
+Video processing supports optional NVIDIA GPU acceleration. Set `SKIP_GPU=1` to fall back to CPU encoding. When GPU is available, specify a GPU scaler via the `resizing_algorithm` option to use GPU-accelerated resize — see [Resizing Algorithm](#resizing-algorithm--resizing_algorithmalgorithm-shorthand-ra).
 
 ## Not implemented
 
