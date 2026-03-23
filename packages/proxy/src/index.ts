@@ -16,7 +16,7 @@ import { env } from "./env.js";
 import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
 import { handleInfoRequest } from "./info.js";
 import { logger } from "./logger.js";
-import { tracer, withSpan } from "./tracing.js";
+import { recordException, tracer, withSpan } from "./tracing.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -322,6 +322,9 @@ async function handleRequest(req: express.Request, res: express.Response) {
       }
       throw err;
     }
+  } catch (err) {
+    recordException(span, err);
+    throw err;
   } finally {
     span.end();
   }

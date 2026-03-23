@@ -20,7 +20,7 @@ import {
   type VideoUrl,
 } from "@socialtip/asset-proxy-url-parser";
 import { logger } from "./logger.js";
-import { tracer } from "./tracing.js";
+import { recordException, tracer } from "./tracing.js";
 
 export const gpuReady: Promise<boolean> = env.SKIP_GPU
   ? Promise.resolve(false)
@@ -432,15 +432,19 @@ async function extractThumbnail(
         proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
         proc.on("close", async (code) => {
           exifSpan.setAttribute("process.exit_code", code ?? -1);
-          exifSpan.end();
           if (code !== 0 || chunks.length === 0) {
-            reject(new Error("No EXIF thumbnail"));
+            const err = new Error("No EXIF thumbnail");
+            recordException(exifSpan, err);
+            exifSpan.end();
+            reject(err);
             return;
           }
           await writeFile(exifThumb, Buffer.concat(chunks));
+          exifSpan.end();
           resolve();
         });
         proc.on("error", (err) => {
+          recordException(exifSpan, err);
           exifSpan.end();
           reject(err);
         });
@@ -461,14 +465,18 @@ async function extractThumbnail(
         const proc = spawn("heif-thumbnailer", heifArgs);
         proc.on("close", async (code) => {
           heifSpan.setAttribute("process.exit_code", code ?? -1);
-          heifSpan.end();
           if (code !== 0) {
-            reject(new Error("No HEIC thumbnail"));
+            const err = new Error("No HEIC thumbnail");
+            recordException(heifSpan, err);
+            heifSpan.end();
+            reject(err);
             return;
           }
+          heifSpan.end();
           resolve();
         });
         proc.on("error", (err) => {
+          recordException(heifSpan, err);
           heifSpan.end();
           reject(err);
         });
@@ -793,6 +801,9 @@ async function runExiftool(
     const result = await readFile(outPath);
     await rm(dir, { recursive: true, force: true });
     return result;
+  } catch (err) {
+    recordException(span, err);
+    throw err;
   } finally {
     span.end();
   }
@@ -812,6 +823,7 @@ function runFfmpeg(args: string[]): Readable {
   proc.on("close", (code) => {
     span.setAttribute("process.exit_code", code ?? -1);
     if (code !== 0) {
+      recordException(span, new Error(`ffmpeg exited with code ${code}`));
       logger.error("ffmpeg exited with non-zero code", {
         code,
         stderr: stderr.slice(-2000),
