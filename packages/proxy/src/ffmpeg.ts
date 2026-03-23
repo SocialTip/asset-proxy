@@ -20,6 +20,7 @@ import {
   type VideoUrl,
 } from "@socialtip/asset-proxy-url-parser";
 import { logger } from "./logger.js";
+import { tracer } from "./tracing.js";
 
 export const gpuReady: Promise<boolean> = env.SKIP_GPU
   ? Promise.resolve(false)
@@ -413,57 +414,80 @@ export async function processImage(
 async function extractThumbnail(
   sourcePath: string,
 ): Promise<string | undefined> {
-  const dir = mkdtempSync(join(tmpdir(), "asset-proxy-thumb-"));
-
-  // Try exiftool first (works for AVIF/JPEG EXIF thumbnails)
-  const exifThumb = join(dir, "thumbnail.jpg");
+  const span = tracer.startSpan("extractThumbnail");
   try {
-    const exiftoolExtractArgs = ["-b", "-ThumbnailImage", sourcePath];
-    logger.verbose("Running exiftool", { args: exiftoolExtractArgs.join(" ") });
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn("exiftool", exiftoolExtractArgs);
-      const chunks: Buffer[] = [];
-      proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
-      proc.on("close", async (code) => {
-        if (code !== 0 || chunks.length === 0) {
-          reject(new Error("No EXIF thumbnail"));
-          return;
-        }
-        await writeFile(exifThumb, Buffer.concat(chunks));
-        resolve();
-      });
-      proc.on("error", reject);
-    });
-    return exifThumb;
-  } catch {
-    // Fall through to heif-thumbnailer
-  }
+    const dir = mkdtempSync(join(tmpdir(), "asset-proxy-thumb-"));
 
-  // Try heif-thumbnailer (works for HEIC container thumbnails)
-  const heifThumb = join(dir, "thumbnail.png");
-  try {
-    const heifArgs = [sourcePath, heifThumb];
-    logger.verbose("Running heif-thumbnailer", { args: heifArgs.join(" ") });
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn("heif-thumbnailer", heifArgs);
-      proc.on("close", async (code) => {
-        if (code !== 0) {
-          reject(new Error("No HEIC thumbnail"));
-          return;
-        }
-        resolve();
+    // Try exiftool first (works for AVIF/JPEG EXIF thumbnails)
+    const exifThumb = join(dir, "thumbnail.jpg");
+    try {
+      const exiftoolExtractArgs = ["-b", "-ThumbnailImage", sourcePath];
+      logger.verbose("Running exiftool", {
+        args: exiftoolExtractArgs.join(" "),
       });
-      proc.on("error", reject);
-    });
-    // Verify the file was created and is non-empty
-    const stat = await readFile(heifThumb);
-    if (stat.length > 0) return heifThumb;
-  } catch {
-    // No thumbnail found
-  }
+      const exifSpan = tracer.startSpan("exec.exiftool.thumbnail");
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn("exiftool", exiftoolExtractArgs);
+        const chunks: Buffer[] = [];
+        proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+        proc.on("close", async (code) => {
+          exifSpan.setAttribute("process.exit_code", code ?? -1);
+          exifSpan.end();
+          if (code !== 0 || chunks.length === 0) {
+            reject(new Error("No EXIF thumbnail"));
+            return;
+          }
+          await writeFile(exifThumb, Buffer.concat(chunks));
+          resolve();
+        });
+        proc.on("error", (err) => {
+          exifSpan.end();
+          reject(err);
+        });
+      });
+      span.setAttribute("thumbnail.source", "exiftool");
+      return exifThumb;
+    } catch {
+      // Fall through to heif-thumbnailer
+    }
 
-  await rm(dir, { recursive: true, force: true });
-  return undefined;
+    // Try heif-thumbnailer (works for HEIC container thumbnails)
+    const heifThumb = join(dir, "thumbnail.png");
+    try {
+      const heifArgs = [sourcePath, heifThumb];
+      logger.verbose("Running heif-thumbnailer", { args: heifArgs.join(" ") });
+      const heifSpan = tracer.startSpan("exec.heif-thumbnailer");
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn("heif-thumbnailer", heifArgs);
+        proc.on("close", async (code) => {
+          heifSpan.setAttribute("process.exit_code", code ?? -1);
+          heifSpan.end();
+          if (code !== 0) {
+            reject(new Error("No HEIC thumbnail"));
+            return;
+          }
+          resolve();
+        });
+        proc.on("error", (err) => {
+          heifSpan.end();
+          reject(err);
+        });
+      });
+      // Verify the file was created and is non-empty
+      const stat = await readFile(heifThumb);
+      if (stat.length > 0) {
+        span.setAttribute("thumbnail.source", "heif-thumbnailer");
+        return heifThumb;
+      }
+    } catch {
+      // No thumbnail found
+    }
+
+    await rm(dir, { recursive: true, force: true });
+    return undefined;
+  } finally {
+    span.end();
+  }
 }
 
 /** Binary search on quality targeting a DSSIM value using sharp + ffmpeg SSIM filter. */
@@ -725,47 +749,58 @@ async function runExiftool(
     dpi?: number;
   },
 ): Promise<Buffer> {
-  const dir = mkdtempSync(join(tmpdir(), "asset-proxy-meta-"));
-  const outPath = join(dir, "output");
-  await writeFile(outPath, buffer);
-
-  const exiftoolArgs = ["-overwrite_original"];
-  if (opts.sourcePath) {
-    if (opts.copyrightOnly) {
-      exiftoolArgs.push("-tagsfromfile", opts.sourcePath, "-Copyright");
-    } else {
-      exiftoolArgs.push("-tagsfromfile", opts.sourcePath, "-all:all");
-    }
-  }
-  if (opts.stripColorProfile) {
-    exiftoolArgs.push("-ICC_Profile:all=");
-  }
-  if (opts.dpi && opts.dpi > 0) {
-    exiftoolArgs.push(
-      `-XResolution=${opts.dpi}`,
-      `-YResolution=${opts.dpi}`,
-      "-ResolutionUnit=inches",
-    );
-  }
-  exiftoolArgs.push(outPath);
-  logger.verbose("Running exiftool", { args: exiftoolArgs.join(" ") });
-
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn("exiftool", exiftoolArgs);
-    proc.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`exiftool exited with code ${code}`));
-    });
-    proc.on("error", reject);
+  const span = tracer.startSpan("exec.exiftool", {
+    attributes: {
+      "exiftool.has_source": !!opts.sourcePath,
+      "exiftool.copyright_only": !!opts.copyrightOnly,
+    },
   });
+  try {
+    const dir = mkdtempSync(join(tmpdir(), "asset-proxy-meta-"));
+    const outPath = join(dir, "output");
+    await writeFile(outPath, buffer);
 
-  const result = await readFile(outPath);
-  await rm(dir, { recursive: true, force: true });
-  return result;
+    const exiftoolArgs = ["-overwrite_original"];
+    if (opts.sourcePath) {
+      if (opts.copyrightOnly) {
+        exiftoolArgs.push("-tagsfromfile", opts.sourcePath, "-Copyright");
+      } else {
+        exiftoolArgs.push("-tagsfromfile", opts.sourcePath, "-all:all");
+      }
+    }
+    if (opts.stripColorProfile) {
+      exiftoolArgs.push("-ICC_Profile:all=");
+    }
+    if (opts.dpi && opts.dpi > 0) {
+      exiftoolArgs.push(
+        `-XResolution=${opts.dpi}`,
+        `-YResolution=${opts.dpi}`,
+        "-ResolutionUnit=inches",
+      );
+    }
+    exiftoolArgs.push(outPath);
+    logger.verbose("Running exiftool", { args: exiftoolArgs.join(" ") });
+
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn("exiftool", exiftoolArgs);
+      proc.on("close", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`exiftool exited with code ${code}`));
+      });
+      proc.on("error", reject);
+    });
+
+    const result = await readFile(outPath);
+    await rm(dir, { recursive: true, force: true });
+    return result;
+  } finally {
+    span.end();
+  }
 }
 
 function runFfmpeg(args: string[]): Readable {
   logger.verbose("Running ffmpeg", { args: args.join(" ") });
+  const span = tracer.startSpan("exec.ffmpeg");
   const proc = spawn("ffmpeg", args);
 
   let stderr = "";
@@ -775,12 +810,14 @@ function runFfmpeg(args: string[]): Readable {
   });
 
   proc.on("close", (code) => {
+    span.setAttribute("process.exit_code", code ?? -1);
     if (code !== 0) {
       logger.error("ffmpeg exited with non-zero code", {
         code,
         stderr: stderr.slice(-2000),
       });
     }
+    span.end();
   });
 
   proc.stdout.on("error", () => {
@@ -802,6 +839,7 @@ function detectTrimCrop(
   sourceUrl: string,
   trim: TrimOptions,
 ): Promise<string | undefined> {
+  const span = tracer.startSpan("exec.ffmpeg.cropdetect");
   return new Promise((resolve) => {
     // cropdetect round=2 to allow odd dimensions, limit=threshold/255
     const limit = Math.min(trim.threshold / 255, 1);
@@ -825,10 +863,12 @@ function detectTrimCrop(
       stderr += chunk.toString();
     });
 
-    proc.on("close", () => {
+    proc.on("close", (code) => {
+      span.setAttribute("process.exit_code", code ?? -1);
       // Parse last cropdetect line: "crop=W:H:X:Y"
       const match = stderr.match(/crop=(\d+:\d+:\d+:\d+)/g);
       if (!match) {
+        span.end();
         resolve(undefined);
         return;
       }
@@ -836,19 +876,19 @@ function detectTrimCrop(
       const [w, h, x, y] = last.replace("crop=", "").split(":").map(Number);
 
       if (trim.equalHor || trim.equalVert) {
-        // For equal trimming, use the smaller offset on each side
-        // cropdetect gives top-left (x, y). We need to compute both sides.
-        // Source dimensions are unknown here, but we can adjust by
-        // using the detected crop directly — equal trimming means symmetric crop.
-        // We re-centre the crop region.
         const cropFilter = `crop=${w}:${h}`;
+        span.end();
         resolve(cropFilter);
       } else {
+        span.end();
         resolve(`crop=${w}:${h}:${x}:${y}`);
       }
     });
 
-    proc.on("error", () => resolve(undefined));
+    proc.on("error", () => {
+      span.end();
+      resolve(undefined);
+    });
   });
 }
 

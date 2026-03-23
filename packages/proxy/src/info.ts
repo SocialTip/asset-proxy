@@ -12,6 +12,7 @@ import {
 } from "@socialtip/asset-proxy-url-parser";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
+import { tracer, withSpan } from "./tracing.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -242,6 +243,9 @@ async function runExiftool(
   source: Buffer | Promise<Buffer> | string,
   groups: string[],
 ): Promise<Record<string, unknown>> {
+  const span = tracer.startSpan("exec.exiftool.metadata", {
+    attributes: { "exiftool.groups": groups.join(",") },
+  });
   const args = ["-fast", "-json", "-n", "-G1", ...groups, "-"];
   const proc = execFile("exiftool", args);
 
@@ -298,6 +302,7 @@ async function runExiftool(
   }
 
   const parsed = JSON.parse(await stdout);
+  span.end();
   return Array.isArray(parsed) ? parsed[0] : parsed;
 }
 
@@ -338,15 +343,17 @@ async function probeMetadata(
   getBuffer: LazyBuffer,
 ): Promise<InfoResponse> {
   // ffprobe reads directly from URL — no download needed
-  const { stdout } = await execFileAsync("ffprobe", [
-    "-v",
-    "error",
-    "-show_format",
-    "-show_streams",
-    "-of",
-    "json",
-    sourceUrl,
-  ]);
+  const { stdout } = await withSpan("exec.ffprobe.metadata", {}, () =>
+    execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-show_format",
+      "-show_streams",
+      "-of",
+      "json",
+      sourceUrl,
+    ]),
+  );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const probe: any = JSON.parse(stdout);
@@ -641,14 +648,20 @@ async function resolveGcsUrl(gsUrl: string): Promise<string> {
   const bucket = withoutScheme.slice(0, slashIdx);
   const objectPath = withoutScheme.slice(slashIdx + 1);
 
-  const [signedUrl] = await gcs
-    .bucket(bucket)
-    .file(objectPath)
-    .getSignedUrl({
-      version: "v4",
-      action: "read",
-      expires: Date.now() + 15 * 60 * 1000,
-    });
+  return withSpan(
+    "gcs.getSignedUrl",
+    { "gcs.bucket": bucket, "gcs.object": objectPath },
+    async () => {
+      const [signedUrl] = await gcs
+        .bucket(bucket)
+        .file(objectPath)
+        .getSignedUrl({
+          version: "v4",
+          action: "read",
+          expires: Date.now() + 15 * 60 * 1000,
+        });
 
-  return signedUrl;
+      return signedUrl;
+    },
+  );
 }
