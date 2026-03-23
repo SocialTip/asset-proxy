@@ -292,9 +292,17 @@ function serializeOptions(options: UrlGeneratorOptions): string[] {
   }
   if (options.videoThumbnailAnimation) {
     const v = options.videoThumbnailAnimation;
-    segments.push(
-      `vta:${v.step}:${v.delay}:${v.frames}:${v.frameWidth}:${v.frameHeight}`,
-    );
+    let vtaStr = `vta:${v.step}:${v.delay}:${v.frames}:${v.frameWidth}:${v.frameHeight}`;
+    if (
+      v.fill ||
+      v.extendFrame ||
+      v.trim ||
+      (v.focusX !== undefined && v.focusX !== 0.5) ||
+      (v.focusY !== undefined && v.focusY !== 0.5)
+    ) {
+      vtaStr += `:${bool(v.extendFrame ?? false)}:${bool(v.trim ?? false)}:${bool(v.fill ?? false)}:${v.focusX ?? 0.5}:${v.focusY ?? 0.5}`;
+    }
+    segments.push(vtaStr);
   }
 
   if (options.jpegOptions) {

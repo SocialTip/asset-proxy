@@ -673,17 +673,33 @@ const rawOptionsSchema = z
     /** Use only keyframes for video thumbnails. */
     video_thumbnail_keyframes: zBool.optional(),
     video_thumbnail_tile: notImplemented("video_thumbnail_tile").optional(),
-    /** Video animation. Format: `<step>:<delay>:<frames>:<frame_width>:<frame_height>`. */
+    /** Video animation. Format: `<step>:<delay>:<frames>:<frame_width>:<frame_height>:<extend_frame>:<trim>:<fill>:<focus_x>:<focus_y>`. */
     video_thumbnail_animation: z
       .string()
       .transform((v) => {
-        const [step, delay, frames, frameWidth, frameHeight] = v.split(":");
+        const [
+          step,
+          delay,
+          frames,
+          frameWidth,
+          frameHeight,
+          extendFrame,
+          trim,
+          fill,
+          focusX,
+          focusY,
+        ] = v.split(":");
         return {
           step: step ? parseFloat(step) : 0,
           delay: delay ? parseInt(delay, 10) : 100,
           frames: frames ? parseInt(frames, 10) : 0,
           frameWidth: frameWidth ? parseInt(frameWidth, 10) : 0,
           frameHeight: frameHeight ? parseInt(frameHeight, 10) : 0,
+          extendFrame: extendFrame === "1",
+          trim: trim === "1",
+          fill: fill === "1",
+          focusX: focusX ? parseFloat(focusX) : 0.5,
+          focusY: focusY ? parseFloat(focusY) : 0.5,
         };
       })
       .optional(),
@@ -1006,6 +1022,11 @@ export interface ParsedUrlInput {
     frames: number;
     frameWidth: number;
     frameHeight: number;
+    extendFrame: boolean;
+    trim: boolean;
+    fill: boolean;
+    focusX: number;
+    focusY: number;
   };
   /** Extract a region before resizing (width, height, optional gravity). */
   crop?: { width: number; height: number; gravity?: Gravity };
@@ -1166,6 +1187,11 @@ export const parsedUrlSchema = z.object({
       frames: z.number(),
       frameWidth: z.number(),
       frameHeight: z.number(),
+      extendFrame: z.boolean(),
+      trim: z.boolean(),
+      fill: z.boolean(),
+      focusX: z.number(),
+      focusY: z.number(),
     })
     .optional(),
   crop: z

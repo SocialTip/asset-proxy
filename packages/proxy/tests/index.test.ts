@@ -1121,6 +1121,78 @@ describe("video thumbnail with image options", () => {
     expect(result.outputFormat).toBe("jpg");
   });
 
+  it("vta parses fill, extendFrame, trim, focusX, focusY", () => {
+    const result = parseProcessingUrl(
+      "/vta:0.5:100:10:320:180:1:0:1:0.3:0.7/plain/https://example.com/video.mp4@gif",
+    );
+    expect(isImageUrl(result)).toBe(true);
+    const vta = result.videoThumbnailAnimation!;
+    expect(vta.extendFrame).toBe(true);
+    expect(vta.trim).toBe(false);
+    expect(vta.fill).toBe(true);
+    expect(vta.focusX).toBe(0.3);
+    expect(vta.focusY).toBe(0.7);
+  });
+
+  it("vta defaults new params when omitted", () => {
+    const result = parseProcessingUrl(
+      "/vta:0.5:100:10:200:150/plain/https://example.com/video.mp4@gif",
+    );
+    const vta = result.videoThumbnailAnimation!;
+    expect(vta.extendFrame).toBe(false);
+    expect(vta.trim).toBe(false);
+    expect(vta.fill).toBe(false);
+    expect(vta.focusX).toBe(0.5);
+    expect(vta.focusY).toBe(0.5);
+  });
+
+  it("vta fill produces scale+crop ffmpeg filters", () => {
+    const args = imageArgs(
+      "/vta:0.5:100:5:320:180:0:0:1/plain/https://example.com/video.mp4@gif",
+    );
+    const vfIdx = args.indexOf("-vf");
+    expect(vfIdx).toBeGreaterThan(-1);
+    const filterStr = args[vfIdx + 1];
+    expect(filterStr).toContain(
+      "scale=320:180:force_original_aspect_ratio=increase",
+    );
+    expect(filterStr).toContain("crop=320:180:");
+  });
+
+  it("vta fill uses custom focus point in crop", () => {
+    const args = imageArgs(
+      "/vta:0.5:100:5:320:180:0:0:1:0.3:0.7/plain/https://example.com/video.mp4@gif",
+    );
+    const vfIdx = args.indexOf("-vf");
+    const filterStr = args[vfIdx + 1];
+    expect(filterStr).toContain("crop=320:180:(iw-320)*0.3:(ih-180)*0.7");
+  });
+
+  it("vta extendFrame produces scale+pad ffmpeg filters", () => {
+    const args = imageArgs(
+      "/vta:0.5:100:5:320:180:1/plain/https://example.com/video.mp4@gif",
+    );
+    const vfIdx = args.indexOf("-vf");
+    const filterStr = args[vfIdx + 1];
+    expect(filterStr).toContain(
+      "scale=320:180:force_original_aspect_ratio=decrease",
+    );
+    expect(filterStr).toContain("pad=320:180:(ow-iw)/2:(oh-ih)/2:color=black");
+  });
+
+  it("vta without fill or extendFrame uses fit (decrease) only", () => {
+    const args = imageArgs(
+      "/vta:0.5:100:5:320:180/plain/https://example.com/video.mp4@gif",
+    );
+    const vfIdx = args.indexOf("-vf");
+    const filterStr = args[vfIdx + 1];
+    expect(filterStr).toContain(
+      "scale=320:180:force_original_aspect_ratio=decrease",
+    );
+    expect(filterStr).not.toContain("crop=");
+    expect(filterStr).not.toContain("pad=");
+  });
+
   it("vts respects explicit video output format", () => {
     const result = parseProcessingUrl(
       "/vts:3/plain/https://example.com/video.mp4@webp",
