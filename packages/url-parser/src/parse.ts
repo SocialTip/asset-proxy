@@ -1017,15 +1017,25 @@ export interface ParsedUrlInput {
   videoThumbnailKeyframes?: boolean;
   /** Video animation config. */
   videoThumbnailAnimation?: {
+    /** Interval in seconds between sampled video frames (0 = auto). */
     step: number;
+    /** Delay between animation frames in milliseconds. */
     delay: number;
+    /** Maximum number of output frames (0 = unlimited). */
     frames: number;
+    /** Target frame width in pixels (0 = derive from aspect ratio). */
     frameWidth: number;
+    /** Target frame height in pixels (0 = derive from aspect ratio). */
     frameHeight: number;
+    /** Pad frames with black to match exact frameWidth/frameHeight. */
     extendFrame: boolean;
+    /** Remove unused frames from the animation. */
     trim: boolean;
+    /** Crop-fill to exact frameWidth/frameHeight instead of fitting. */
     fill: boolean;
+    /** Horizontal crop anchor for fill mode (0–1, default 0.5). */
     focusX: number;
+    /** Vertical crop anchor for fill mode (0–1, default 0.5). */
     focusY: number;
   };
   /** Extract a region before resizing (width, height, optional gravity). */
