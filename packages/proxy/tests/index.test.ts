@@ -32,7 +32,7 @@ function setupSpawnMock() {
     stdout.push(null);
     // Fire close after stdout ends so piped data flushes first
     stdout.on("end", () => {
-      for (const cb of listeners.get("close") ?? []) cb(0);
+      for (const cb of listeners.get("close") ?? []) cb(0 as never);
     });
   });
   return proc;
@@ -57,7 +57,7 @@ function setupSpawnMockError() {
   // Simulate ffmpeg failing with non-zero exit code.
   // Use setTimeout to ensure pipe has connected before we destroy the stream.
   setTimeout(() => {
-    for (const cb of listeners.get("close") ?? []) cb(1);
+    for (const cb of listeners.get("close") ?? []) cb(1 as never);
   }, 10);
   return proc;
 }
