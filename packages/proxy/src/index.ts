@@ -399,7 +399,9 @@ app.use(
 async function start() {
   await gpuReady;
   app.listen(env.PORT, () => {
-    logger.info(`asset-proxy listening on :${env.PORT}`);
+    logger.info(`asset-proxy listening on :${env.PORT}`, {
+      version: process.env.BUILD_VERSION ?? "<unset>",
+    });
   });
 }
 
