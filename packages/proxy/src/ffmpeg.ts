@@ -1130,6 +1130,7 @@ function buildImageArgs(
         width: parsed.resize.width,
         height: parsed.resize.height,
         gpu: false,
+        enlarge: parsed.enlarge,
       }),
     );
   }
@@ -1453,6 +1454,7 @@ interface ScaleFilterParams {
   width: number;
   height: number;
   gpu: boolean;
+  enlarge?: boolean;
 }
 
 const CPU_ALGORITHM_FLAGS: Record<string, string> = {
@@ -1477,6 +1479,7 @@ function buildScaleFilter({
   width,
   height,
   gpu,
+  enlarge,
 }: ScaleFilterParams): string {
   const w = width > 0 ? width : -1;
   const h = height > 0 ? height : -1;
@@ -1508,16 +1511,25 @@ function buildScaleFilter({
     }
   }
 
+  // When enlarge is explicitly disabled, clamp target dimensions so the
+  // image is never scaled beyond its original size.
+  const noEnlarge = enlarge === false;
+  const clampW = noEnlarge && width > 0 ? `'min(${width}\\,iw)'` : String(w);
+  const clampH = noEnlarge && height > 0 ? `'min(${height}\\,ih)'` : String(h);
+
   switch (resizingType) {
     case "fit":
       if (gpu) {
         return `${scaleName}=w='min(${width || 99999},iw*min(${width || 99999}/iw\\,${height || 99999}/ih))':h='min(${height || 99999},ih*min(${width || 99999}/iw\\,${height || 99999}/ih))'${flagsSuffix}`;
       }
-      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=decrease${flagsSuffix}`;
+      return `${scaleName}=${clampW}:${clampH}:force_original_aspect_ratio=decrease${flagsSuffix}`;
 
     case "fill":
       if (gpu) {
         return `${scaleName}=w='max(${width},iw*max(${width}/iw\\,${height}/ih))':h='max(${height},ih*max(${width}/iw\\,${height}/ih))'${flagsSuffix},hwdownload,format=nv12,crop=${width}:${height},hwupload_cuda`;
+      }
+      if (noEnlarge) {
+        return `${scaleName}=${clampW}:${clampH}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width}\\,iw)':'min(${height}\\,ih)'`;
       }
       return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop=${width}:${height}`;
 
@@ -1528,15 +1540,18 @@ function buildScaleFilter({
       return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width},iw)':'min(${height},ih)'`;
 
     case "force":
+      if (noEnlarge) {
+        return `${scaleName}=${clampW}:${clampH}${flagsSuffix}`;
+      }
       return `${scaleName}=${width}:${height}${flagsSuffix}`;
 
     case "auto":
       if (gpu) {
         return `hwdownload,format=nv12,scale=${w}:${h}:force_original_aspect_ratio='if(gt(dar,${width}/${height}),1,2)'${flagsSuffix}`;
       }
-      return `scale=${w}:${h}:force_original_aspect_ratio='if(gt(dar,${width}/${height}),1,2)'${flagsSuffix}`;
+      return `scale=${clampW}:${clampH}:force_original_aspect_ratio='if(gt(dar,${width}/${height}),1,2)'${flagsSuffix}`;
 
     default:
-      return `${scaleName}=${w}:${h}${flagsSuffix}`;
+      return `${scaleName}=${clampW}:${clampH}${flagsSuffix}`;
   }
 }
