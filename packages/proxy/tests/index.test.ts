@@ -923,6 +923,63 @@ describe("video ffmpeg args (GPU)", () => {
       }),
     ).toThrow("not supported with GPU acceleration");
   });
+
+  it("GPU webm output downloads frames to CPU for libvpx-vp9", () => {
+    expect(gpuVideoArgs({ resizingType: "force", outputFormat: "webm" }))
+      .toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-hwaccel",
+        "cuda",
+        "-hwaccel_output_format",
+        "cuda",
+        "-resize",
+        "480x360",
+        "-i",
+        "https://example.com/video.mp4",
+        "-vf",
+        "hwdownload,format=nv12",
+        "-c:v",
+        "libvpx-vp9",
+        "-c:a",
+        "libopus",
+        "-f",
+        "webm",
+        "pipe:1",
+      ]
+    `);
+  });
+
+  it("GPU webm with scale_cuda appends hwdownload", () => {
+    expect(
+      gpuVideoArgs({
+        resizingType: "fill",
+        resizingAlgorithm: { mode: "gpu", scaler: "scale_cuda" },
+        outputFormat: "webm",
+      }),
+    ).toMatchInlineSnapshot(`
+      [
+        "-hide_banner",
+        "-y",
+        "-hwaccel",
+        "cuda",
+        "-hwaccel_output_format",
+        "cuda",
+        "-i",
+        "https://example.com/video.mp4",
+        "-vf",
+        "scale_cuda=w='max(480,iw*max(480/iw\\,360/ih))':h='max(360,ih*max(480/iw\\,360/ih))',hwdownload,format=nv12,crop=480:360",
+        "-c:v",
+        "libvpx-vp9",
+        "-c:a",
+        "libopus",
+        "-f",
+        "webm",
+        "pipe:1",
+      ]
+    `);
+  });
 });
 
 describe("validation errors", () => {

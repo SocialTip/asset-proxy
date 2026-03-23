@@ -966,6 +966,21 @@ export function buildVideoArgs(
     }
   }
 
+  // For CPU-based encoders (e.g. libvpx-vp9 for WebM), download frames from GPU to CPU
+  if (gpu && outputFormat === "webm") {
+    const vfIdx = args.lastIndexOf("-vf");
+    if (vfIdx !== -1) {
+      let vf = args[vfIdx + 1];
+      vf = vf.replace(/,hwupload_cuda$/, "");
+      if (!vf.includes("hwdownload")) {
+        vf += ",hwdownload,format=nv12";
+      }
+      args[vfIdx + 1] = vf;
+    } else {
+      args.push("-vf", "hwdownload,format=nv12");
+    }
+  }
+
   if (cut !== undefined) {
     args.push("-t", String(cut));
   }
