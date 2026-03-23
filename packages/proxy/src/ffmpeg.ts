@@ -815,7 +815,9 @@ function runFfmpeg(args: string[]): Readable {
   const proc = spawn("ffmpeg", args);
   const output = new PassThrough();
 
-  proc.stdout.on("data", (chunk: Buffer) => output.write(chunk));
+  // Pipe stdout but don't let it end the PassThrough — we control
+  // that from the close handler so we can emit errors on failure.
+  proc.stdout.pipe(output, { end: false });
 
   let stderr = "";
   proc.stderr.on("data", (chunk: Buffer) => {
