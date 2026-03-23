@@ -575,7 +575,7 @@ lines.push(
 );
 lines.push("");
 lines.push(
-  'Claude must run the "Run all" script below exactly as written — do not modify, reorder, parallelise, or skip any commands. Run the entire script sequentially in a single bash invocation. After all commands complete, inspect each output file using `ffprobe` / `file` / `stat`, fill in the results tables, and update the "Last run" timestamp. For info endpoint tests, paste the JSON response into the result cell.',
+  `Claude must copy the "Run all" script below verbatim into \`${planDir}/run.sh\`, then execute it with \`bash run.sh\`. Do not modify, reorder, parallelise, or skip any commands. After all commands complete, inspect each output file using \`ffprobe\` / \`file\` / \`stat\`, fill in the results tables, and update the "Last run" timestamp. For info endpoint tests, paste the JSON response into the result cell.`,
 );
 lines.push("");
 
@@ -589,11 +589,14 @@ for (const section of sections) {
 lines.push("### Run all");
 lines.push("");
 lines.push("```sh");
+lines.push("#!/usr/bin/env bash");
+lines.push("set -eo pipefail");
+lines.push("");
 lines.push(
   `curl -sf '${baseUrl}/health' || { echo 'Health check failed'; exit 1; }`,
 );
 lines.push(`mkdir -p ${planDir}/run-$(date +%Y-%m-%d-%H-%M-%S) && cd $_`);
-lines.push(allCommands.join(" && \\\n"));
+lines.push(allCommands.join("\n"));
 lines.push("```");
 lines.push("");
 
