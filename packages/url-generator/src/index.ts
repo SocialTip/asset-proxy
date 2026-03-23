@@ -74,12 +74,29 @@ export function generateInfoUrl(
   config?: UrlGeneratorConfig,
   infoOptions?: InfoOptions,
 ): string {
-  const processingUrl = generateUrl({ sourceUrl: options.sourceUrl }, config);
   const infoSegments = serializeInfoOptions(infoOptions);
   const infoPath = infoSegments.length > 0 ? infoSegments.join("/") + "/" : "";
-  // Insert /info and info options before the signature
-  const [signature, ...rest] = processingUrl.slice(1).split("/");
-  return `/info/${signature}/${infoPath}${rest.join("/")}`;
+
+  let sourceUrlPart: string;
+  if (config?.encryptionKey) {
+    const key = Buffer.from(config.encryptionKey, "hex");
+    sourceUrlPart = `enc/${encryptSourceUrl(options.sourceUrl, key, { deterministic: config.deterministicEncryption })}`;
+  } else {
+    sourceUrlPart = `plain/${options.sourceUrl}`;
+  }
+
+  const pathAfterSignature = `/${infoPath}${sourceUrlPart}`;
+
+  let signature = "insecure";
+  if (config?.signingKey && config?.signingSalt) {
+    signature = sign(
+      pathAfterSignature,
+      Buffer.from(config.signingKey, "hex"),
+      Buffer.from(config.signingSalt, "hex"),
+    );
+  }
+
+  return `/info/${signature}${pathAfterSignature}`;
 }
 
 function serializeInfoOptions(options?: InfoOptions): string[] {
