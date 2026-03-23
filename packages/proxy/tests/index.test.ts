@@ -1218,7 +1218,9 @@ describe("miscellaneous options", () => {
       .get("/insecure/att:1/w:100/plain/https://example.com/photo.jpg")
       .buffer(true);
     expect(res.status).toBe(200);
-    expect(res.headers["content-disposition"]).toBe("attachment");
+    expect(res.headers["content-disposition"]).toBe(
+      'attachment; filename="image.jpg"',
+    );
   });
 
   it("cache_buster is ignored but does not break processing", async () => {

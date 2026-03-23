@@ -79,4 +79,7 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s \
   CMD curl -f http://localhost:8080/health || exit 1
 
+ARG BUILD_VERSION="<unset>"
+ENV BUILD_VERSION=${BUILD_VERSION}
+
 CMD ["node", "packages/proxy/dist/index.js"]

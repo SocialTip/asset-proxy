@@ -47,3 +47,5 @@ jobs:
           context: .
           push: ${{ inputs.push }}
           tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            BUILD_VERSION=${{ github.sha }}
