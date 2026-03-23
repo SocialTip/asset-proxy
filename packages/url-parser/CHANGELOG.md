@@ -1,3 +1,18 @@
+## 0.5.0
+
+- fix: use scale_cuda for GPU video resize instead of cuvid -resize
+- docs: documented videoThumbnailAnimation options
+- feat: support fill, extendFrame, trim, and focus point in VTA
+- feat(proxy): add page info option, inline snapshots for validation tests
+- refactor: add zod schema for info control options, add max_src_resolution
+- feat(proxy): add hashsum verification and source limits to info endpoint
+- feat(proxy): add calc_hashsums info option
+- feat(proxy): add blurhash info option
+- feat(proxy): add dominant colours info option
+- feat(proxy): add average colour info option
+- feat(proxy): add palette info option
+- refactor: move info URL option parsing to url-parser package
+
 ## 0.4.1
 
 - fix: preserve JSDoc on ParsedUrlInput in declaration output

@@ -1,3 +1,21 @@
+## 0.5.0
+
+- fix: include info options in signature computation in generateInfoUrl
+- feat: support fill, extendFrame, trim, and focus point in VTA
+- feat(proxy): add page info option, inline snapshots for validation tests
+- feat(proxy): add calc_hashsums info option
+- feat(proxy): add blurhash info option
+- feat(proxy): add dominant colours info option
+- feat(proxy): add average colour info option
+- feat(proxy): add palette info option
+- refactor: move info URL option parsing to url-parser package
+- feat(proxy): add bands, sample_format, pages_number, alpha info options
+- fix: make colorspace an opt-in info option (cs:1)
+- feat(proxy): add XMP metadata option to info endpoint
+- feat(proxy): add IPTC metadata option to info endpoint
+- feat(proxy): add EXIF metadata option to info endpoint
+- test(url-generator): add imgproxy backcompat tests for generateInfoUrl
+
 ## 0.4.1
 
 - test: include resize dimensions in resizing algorithm tests
