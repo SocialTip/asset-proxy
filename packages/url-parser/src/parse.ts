@@ -12,6 +12,7 @@ const cpuAlgorithms = [
   "lanczos2",
   "lanczos3",
 ] as const;
+// TODO: support "cuvid" as a third GPU scaler option (uses decoder-level resize via -resize flag)
 const gpuScalers = ["scale_cuda", "scale_npp"] as const;
 type CpuAlgorithm = (typeof cpuAlgorithms)[number];
 type GpuScaler = (typeof gpuScalers)[number];
@@ -36,9 +37,12 @@ const resizingAlgorithmSchema = z.union([
 ]);
 
 const zResizingAlgorithm = z.string().transform((v): ResizingAlgorithm => {
+  if (v === "gpu") {
+    return { mode: "gpu", scaler: "scale_cuda" };
+  }
   if (v.startsWith("gpu:")) {
     const parts = v.slice(4).split(":");
-    const scaler = parts[0];
+    const scaler = parts[0] || "scale_cuda";
     if (!gpuScalerSet.has(scaler)) {
       throw new HTTPError(
         `Invalid GPU scaler '${scaler}': expected one of ${gpuScalers.join(", ")}`,

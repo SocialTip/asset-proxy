@@ -905,50 +905,26 @@ export function buildVideoArgs(
   if (gpu) {
     args.push("-hwaccel", "cuda", "-hwaccel_output_format", "cuda");
 
-    if (resizingAlgorithm?.mode === "gpu") {
-      args.push("-i", sourceUrl);
-      const scaleFilter = buildScaleFilter({
-        resizingType: resizingType ?? "fit",
-        resizingAlgorithm,
-        width,
-        height,
-        gpu: true,
-      });
-      const vf = [...preFilters, scaleFilter, ...postFilters].join(",");
-      args.push("-vf", vf);
-    } else if (resizingAlgorithm?.mode === "cpu") {
+    if (resizingAlgorithm?.mode === "cpu") {
       throw new HTTPError(
         "CPU resizing algorithms are not supported with GPU acceleration — use gpu:scale_cuda or gpu:scale_npp, or disable GPU",
         { code: "BAD_REQUEST" },
       );
-    } else if (hasResize && resizingType && resizingType !== "force") {
-      const defaultScaler: ResizingAlgorithm = {
-        mode: "gpu",
-        scaler: "scale_cuda",
-      };
+    } else if (hasResize) {
+      const scaler: ResizingAlgorithm =
+        resizingAlgorithm?.mode === "gpu"
+          ? resizingAlgorithm
+          : { mode: "gpu", scaler: "scale_cuda" };
       args.push("-i", sourceUrl);
       const scaleFilter = buildScaleFilter({
-        resizingType,
-        resizingAlgorithm: defaultScaler,
+        resizingType: resizingType ?? "fit",
+        resizingAlgorithm: scaler,
         width,
         height,
         gpu: true,
       });
       const vf = [...preFilters, scaleFilter, ...postFilters].join(",");
       args.push("-vf", vf);
-    } else if (hasResize) {
-      if (width <= 0 || height <= 0) {
-        throw new HTTPError(
-          "Both width and height are required for default GPU resize",
-          { code: "BAD_REQUEST" },
-        );
-      }
-      args.push("-resize", `${width}x${height}`);
-      args.push("-i", sourceUrl);
-      const extra = [...preFilters, ...postFilters];
-      if (extra.length > 0) {
-        args.push("-vf", extra.join(","));
-      }
     } else {
       args.push("-i", sourceUrl);
       const extra = [...preFilters, ...postFilters];
@@ -1449,7 +1425,7 @@ function buildScaleFilter({
   let flagsSuffix = "";
 
   if (gpu) {
-    // Only called with an explicit GPU scaler (cuvid default is handled via -resize in buildVideoArgs)
+    // GPU always requires an explicit scaler (scale_cuda or scale_npp)
     assert(
       resizingAlgorithm?.mode === "gpu",
       "buildScaleFilter with gpu=true requires an explicit GPU scaler",
