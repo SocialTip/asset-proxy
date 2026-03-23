@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Readable } from "node:stream";
+import { PassThrough, type Readable } from "node:stream";
 import sharp from "sharp";
 import { env } from "./env.js";
 import {
@@ -20,7 +20,7 @@ import {
   type VideoUrl,
 } from "@socialtip/asset-proxy-url-parser";
 import { logger } from "./logger.js";
-import { tracer } from "./tracing.js";
+import { recordException, tracer } from "./tracing.js";
 
 export const gpuReady: Promise<boolean> = env.SKIP_GPU
   ? Promise.resolve(false)
@@ -432,15 +432,19 @@ async function extractThumbnail(
         proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
         proc.on("close", async (code) => {
           exifSpan.setAttribute("process.exit_code", code ?? -1);
-          exifSpan.end();
           if (code !== 0 || chunks.length === 0) {
-            reject(new Error("No EXIF thumbnail"));
+            const err = new Error("No EXIF thumbnail");
+            recordException(exifSpan, err);
+            exifSpan.end();
+            reject(err);
             return;
           }
           await writeFile(exifThumb, Buffer.concat(chunks));
+          exifSpan.end();
           resolve();
         });
         proc.on("error", (err) => {
+          recordException(exifSpan, err);
           exifSpan.end();
           reject(err);
         });
@@ -461,14 +465,18 @@ async function extractThumbnail(
         const proc = spawn("heif-thumbnailer", heifArgs);
         proc.on("close", async (code) => {
           heifSpan.setAttribute("process.exit_code", code ?? -1);
-          heifSpan.end();
           if (code !== 0) {
-            reject(new Error("No HEIC thumbnail"));
+            const err = new Error("No HEIC thumbnail");
+            recordException(heifSpan, err);
+            heifSpan.end();
+            reject(err);
             return;
           }
+          heifSpan.end();
           resolve();
         });
         proc.on("error", (err) => {
+          recordException(heifSpan, err);
           heifSpan.end();
           reject(err);
         });
@@ -793,6 +801,9 @@ async function runExiftool(
     const result = await readFile(outPath);
     await rm(dir, { recursive: true, force: true });
     return result;
+  } catch (err) {
+    recordException(span, err);
+    throw err;
   } finally {
     span.end();
   }
@@ -802,6 +813,11 @@ function runFfmpeg(args: string[]): Readable {
   logger.verbose("Running ffmpeg", { args: args.join(" ") });
   const span = tracer.startSpan("exec.ffmpeg");
   const proc = spawn("ffmpeg", args);
+  const output = new PassThrough();
+
+  // Pipe stdout but don't let it end the PassThrough — we control
+  // that from the close handler so we can emit errors on failure.
+  proc.stdout.pipe(output, { end: false });
 
   let stderr = "";
   proc.stderr.on("data", (chunk: Buffer) => {
@@ -812,19 +828,24 @@ function runFfmpeg(args: string[]): Readable {
   proc.on("close", (code) => {
     span.setAttribute("process.exit_code", code ?? -1);
     if (code !== 0) {
+      const err = new Error(`ffmpeg exited with code ${code}`);
+      recordException(span, err);
       logger.error("ffmpeg exited with non-zero code", {
         code,
         stderr: stderr.slice(-2000),
       });
+      output.destroy(err);
+    } else {
+      output.end();
     }
     span.end();
   });
 
-  proc.stdout.on("error", () => {
+  output.on("error", () => {
     proc.kill("SIGTERM");
   });
 
-  return proc.stdout;
+  return output;
 }
 
 interface TrimOptions {

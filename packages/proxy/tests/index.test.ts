@@ -14,42 +14,51 @@ const mockSpawn = vi.mocked(spawn);
 function setupSpawnMock() {
   const stdout = new Readable({ read() {} });
   const stderr = new Readable({ read() {} });
+  const listeners = new Map<string, ((...args: never[]) => void)[]>();
   const proc = {
     stdout,
     stderr,
     stdin: new Readable({ read() {} }),
     kill: vi.fn(),
-    on: vi.fn(),
+    on: vi.fn((event: string, cb: (...args: never[]) => void) => {
+      if (!listeners.has(event)) listeners.set(event, []);
+      listeners.get(event)!.push(cb);
+    }),
     pid: 1,
   };
   mockSpawn.mockReturnValue(proc as never);
-  // Push data and end the stream in the next tick so processImage resolves
   process.nextTick(() => {
     stdout.push(Buffer.from("fake"));
     stdout.push(null);
+    // Fire close after stdout ends so piped data flushes first
+    stdout.on("end", () => {
+      for (const cb of listeners.get("close") ?? []) cb(0 as never);
+    });
   });
   return proc;
 }
 
 function setupSpawnMockError() {
-  const stdout = new Readable({
-    read() {
-      // Emit error on first read attempt
-      process.nextTick(() =>
-        this.destroy(new Error("ffmpeg exited with code 1")),
-      );
-    },
-  });
+  const stdout = new Readable({ read() {} });
   const stderr = new Readable({ read() {} });
+  const listeners = new Map<string, ((...args: never[]) => void)[]>();
   const proc = {
     stdout,
     stderr,
     stdin: new Readable({ read() {} }),
     kill: vi.fn(),
-    on: vi.fn(),
+    on: vi.fn((event: string, cb: (...args: never[]) => void) => {
+      if (!listeners.has(event)) listeners.set(event, []);
+      listeners.get(event)!.push(cb);
+    }),
     pid: 1,
   };
   mockSpawn.mockReturnValue(proc as never);
+  // Simulate ffmpeg failing with non-zero exit code.
+  // Use setTimeout to ensure pipe has connected before we destroy the stream.
+  setTimeout(() => {
+    for (const cb of listeners.get("close") ?? []) cb(1 as never);
+  }, 10);
   return proc;
 }
 

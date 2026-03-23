@@ -12,7 +12,7 @@ import {
 } from "@socialtip/asset-proxy-url-parser";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
-import { tracer, withSpan } from "./tracing.js";
+import { recordException, tracer, withSpan } from "./tracing.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -246,64 +246,70 @@ async function runExiftool(
   const span = tracer.startSpan("exec.exiftool.metadata", {
     attributes: { "exiftool.groups": groups.join(",") },
   });
-  const args = ["-fast", "-json", "-n", "-G1", ...groups, "-"];
-  const proc = execFile("exiftool", args);
+  try {
+    const args = ["-fast", "-json", "-n", "-G1", ...groups, "-"];
+    const proc = execFile("exiftool", args);
 
-  // Collect stdout and wait for close. Must be registered before writing to
-  // stdin — if exiftool exits quickly the close event would be missed.
-  const stdout = new Promise<string>((resolve, reject) => {
-    let out = "";
-    proc.stdout!.on("data", (chunk: string | Buffer) => {
-      out += typeof chunk === "string" ? chunk : chunk.toString();
-    });
-    proc.on("close", () => resolve(out));
-    proc.on("error", reject);
-  });
-
-  // Exiftool may exit after reading the metadata header but before we finish
-  // writing. Swallow the resulting EPIPE on stdin for all branches.
-  proc.stdin!.on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code !== "EPIPE") throw err;
-  });
-
-  if (Buffer.isBuffer(source)) {
-    proc.stdin!.end(source.subarray(0, METADATA_STREAM_LIMIT));
-  } else if (typeof source !== "string") {
-    const buf = await source;
-    proc.stdin!.end(buf.subarray(0, METADATA_STREAM_LIMIT));
-  } else {
-    const controller = new AbortController();
-    const res = await fetch(source, { signal: controller.signal });
-    if (!res.ok || !res.body) {
-      proc.stdin!.end();
-      throw new HTTPError("Could not fetch source", {
-        code: "UNPROCESSABLE_ENTITY",
+    // Collect stdout and wait for close. Must be registered before writing to
+    // stdin — if exiftool exits quickly the close event would be missed.
+    const stdout = new Promise<string>((resolve, reject) => {
+      let out = "";
+      proc.stdout!.on("data", (chunk: string | Buffer) => {
+        out += typeof chunk === "string" ? chunk : chunk.toString();
       });
-    }
-    // When the HTTP response is slower than exiftool (e.g. large remote files
-    // with small EXIF headers), exiftool can finish and exit while we are still
-    // streaming. Track exit state to stop writing.
-    let exited = false;
-    proc.on("exit", () => {
-      exited = true;
+      proc.on("close", () => resolve(out));
+      proc.on("error", reject);
     });
-    let written = 0;
-    for await (const chunk of res.body) {
-      if (exited) break;
-      const buf = Buffer.from(chunk);
-      const remaining = METADATA_STREAM_LIMIT - written;
-      if (remaining <= 0) break;
-      proc.stdin!.write(buf.subarray(0, remaining));
-      written += buf.length;
-      if (written >= METADATA_STREAM_LIMIT) break;
-    }
-    controller.abort();
-    if (!exited) proc.stdin!.end();
-  }
 
-  const parsed = JSON.parse(await stdout);
-  span.end();
-  return Array.isArray(parsed) ? parsed[0] : parsed;
+    // Exiftool may exit after reading the metadata header but before we finish
+    // writing. Swallow the resulting EPIPE on stdin for all branches.
+    proc.stdin!.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code !== "EPIPE") throw err;
+    });
+
+    if (Buffer.isBuffer(source)) {
+      proc.stdin!.end(source.subarray(0, METADATA_STREAM_LIMIT));
+    } else if (typeof source !== "string") {
+      const buf = await source;
+      proc.stdin!.end(buf.subarray(0, METADATA_STREAM_LIMIT));
+    } else {
+      const controller = new AbortController();
+      const res = await fetch(source, { signal: controller.signal });
+      if (!res.ok || !res.body) {
+        proc.stdin!.end();
+        throw new HTTPError("Could not fetch source", {
+          code: "UNPROCESSABLE_ENTITY",
+        });
+      }
+      // When the HTTP response is slower than exiftool (e.g. large remote files
+      // with small EXIF headers), exiftool can finish and exit while we are still
+      // streaming. Track exit state to stop writing.
+      let exited = false;
+      proc.on("exit", () => {
+        exited = true;
+      });
+      let written = 0;
+      for await (const chunk of res.body) {
+        if (exited) break;
+        const buf = Buffer.from(chunk);
+        const remaining = METADATA_STREAM_LIMIT - written;
+        if (remaining <= 0) break;
+        proc.stdin!.write(buf.subarray(0, remaining));
+        written += buf.length;
+        if (written >= METADATA_STREAM_LIMIT) break;
+      }
+      controller.abort();
+      if (!exited) proc.stdin!.end();
+    }
+
+    const parsed = JSON.parse(await stdout);
+    return Array.isArray(parsed) ? parsed[0] : parsed;
+  } catch (err) {
+    recordException(span, err);
+    throw err;
+  } finally {
+    span.end();
+  }
 }
 
 function groupExiftoolOutput(

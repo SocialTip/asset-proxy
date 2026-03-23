@@ -16,8 +16,7 @@ import { env } from "./env.js";
 import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
 import { handleInfoRequest } from "./info.js";
 import { logger } from "./logger.js";
-import { trace } from "@opentelemetry/api";
-import { tracer, withSpan } from "./tracing.js";
+import { recordException, tracer, withSpan } from "./tracing.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -323,6 +322,9 @@ async function handleRequest(req: express.Request, res: express.Response) {
       }
       throw err;
     }
+  } catch (err) {
+    recordException(span, err);
+    throw err;
   } finally {
     span.end();
   }
@@ -345,23 +347,27 @@ async function processAndRespond(
     if (contentType) res.set("Content-Type", contentType);
     res.set("Cache-Control", env.CACHE_CONTROL);
     setContentDisposition(res, parsed);
-    trace.getActiveSpan()?.addEvent("response.body.start");
-    Readable.fromWeb(
+    const responseSpan = tracer.startSpan("response.stream");
+    const stream = Readable.fromWeb(
       response.body as import("node:stream/web").ReadableStream,
-    ).pipe(res);
+    );
+    stream.pipe(res);
+    stream.on("end", () => responseSpan.end());
+    stream.on("error", () => responseSpan.end());
     return;
   }
 
   if (isImageUrl(parsed)) {
     try {
-      const result = await processImage(sourceUrl, parsed);
+      const result = await withSpan("processImage", {}, () =>
+        processImage(sourceUrl, parsed),
+      );
       res.set(
         "Content-Type",
         CONTENT_TYPES[result.outputFormat] || "image/jpeg",
       );
       res.set("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(res, parsed, result.outputFormat);
-      trace.getActiveSpan()?.addEvent("response.body.start");
       res.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
@@ -375,19 +381,43 @@ async function processAndRespond(
     }
   } else if (isVideoUrl(parsed)) {
     try {
-      const result = await processVideo(sourceUrl, parsed);
+      const result = await withSpan("processVideo", {}, () =>
+        processVideo(sourceUrl, parsed),
+      );
+
+      // Wait for first data chunk before sending headers, so that ffmpeg
+      // failures result in a proper error status instead of an empty 200.
+      const firstChunk = await new Promise<Buffer>((resolve, reject) => {
+        result.once("data", (chunk: Buffer) => resolve(chunk));
+        result.once("error", reject);
+        result.once("end", () =>
+          reject(
+            new HTTPError("Video processing produced no output", {
+              code: "INTERNAL_SERVER_ERROR",
+            }),
+          ),
+        );
+      });
+
       res.set(
         "Content-Type",
         CONTENT_TYPES[parsed.outputFormat] || "video/mp4",
       );
       res.set("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(res, parsed, parsed.outputFormat);
-      trace.getActiveSpan()?.addEvent("response.body.start");
+      const responseSpan = tracer.startSpan("response.stream");
+      res.write(firstChunk);
       result.pipe(res);
 
       await new Promise<void>((resolve, reject) => {
-        result.on("end", resolve);
-        result.on("error", reject);
+        result.on("end", () => {
+          responseSpan.end();
+          resolve();
+        });
+        result.on("error", (err) => {
+          responseSpan.end();
+          reject(err);
+        });
       });
     } catch (err) {
       if (err instanceof HTTPError) throw err;

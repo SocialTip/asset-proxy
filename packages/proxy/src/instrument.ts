@@ -9,6 +9,13 @@ import {
   SimpleLogRecordProcessor,
 } from "@opentelemetry/sdk-logs";
 
+const environment = process.env.OTEL_ENVIRONMENT ?? "production";
+const existing = process.env.OTEL_RESOURCE_ATTRIBUTES ?? "";
+const envAttr = `deployment.environment.name=${environment}`;
+process.env.OTEL_RESOURCE_ATTRIBUTES = existing
+  ? `${existing},${envAttr}`
+  : envAttr;
+
 const sdk = new NodeSDK({
   traceExporter: new OTLPTraceExporter(),
   metricReaders: [
