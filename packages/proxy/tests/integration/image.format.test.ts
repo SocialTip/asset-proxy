@@ -39,6 +39,9 @@ describe("image output formats", () => {
   it("converts to webp", async () => {
     const { buffer, res } = await fetchImageWithFormat("/w:100", "webp");
     expect(res.headers.get("content-type")).toBe("image/webp");
+    expect(res.headers.get("content-disposition")).toBe(
+      'inline; filename="image.webp"',
+    );
     const meta = await sharp(buffer).metadata();
     expect(meta.format).toBe("webp");
     expect(await toPng(buffer)).toMatchImageSnapshot();
@@ -47,6 +50,9 @@ describe("image output formats", () => {
   it("converts to png", async () => {
     const { buffer, res } = await fetchImageWithFormat("/w:100", "png");
     expect(res.headers.get("content-type")).toBe("image/png");
+    expect(res.headers.get("content-disposition")).toBe(
+      'inline; filename="image.png"',
+    );
     const meta = await sharp(buffer).metadata();
     expect(meta.format).toBe("png");
     expect(await toPng(buffer)).toMatchImageSnapshot();
@@ -55,6 +61,9 @@ describe("image output formats", () => {
   it("converts to avif", async () => {
     const { buffer, res } = await fetchImageWithFormat("/w:100", "avif");
     expect(res.headers.get("content-type")).toBe("image/avif");
+    expect(res.headers.get("content-disposition")).toBe(
+      'inline; filename="image.avif"',
+    );
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
 
@@ -63,24 +72,33 @@ describe("image output formats", () => {
     const res = await fetch(url);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/jpeg");
+    expect(res.headers.get("content-disposition")).toBe(
+      'inline; filename="image.jpg"',
+    );
   });
 });
 
 describe("format-specific options", () => {
   it("jpeg progressive encoding", async () => {
-    const buffer = await fetchImage("/w:100/jpgo:1");
+    const { buffer, res } = await fetchImageWithFormat("/w:100/jpgo:1", "jpg");
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
     const meta = await sharp(buffer).metadata();
     expect(meta.isProgressive).toBe(true);
   });
 
   it("jpeg no_subsample (4:4:4 chroma)", async () => {
-    const buffer = await fetchImage("/w:100/jpgo:0:1");
+    const { buffer, res } = await fetchImageWithFormat(
+      "/w:100/jpgo:0:1",
+      "jpg",
+    );
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
     const meta = await sharp(buffer).metadata();
     expect(meta.chromaSubsampling).toBe("4:4:4");
   });
 
   it("png interlaced", async () => {
-    const { buffer } = await fetchImageWithFormat("/w:100/pngo:1", "png");
+    const { buffer, res } = await fetchImageWithFormat("/w:100/pngo:1", "png");
+    expect(res.headers.get("content-type")).toBe("image/png");
     const meta = await sharp(buffer).metadata();
     expect(meta.isProgressive).toBe(true);
   });
@@ -131,7 +149,11 @@ describe("format-specific options", () => {
   });
 
   it("avif subsample 4:4:4", async () => {
-    const { buffer } = await fetchImageWithFormat("/w:100/avo:4:4:4", "avif");
+    const { buffer, res } = await fetchImageWithFormat(
+      "/w:100/avo:4:4:4",
+      "avif",
+    );
+    expect(res.headers.get("content-type")).toBe("image/avif");
     expect(buffer.length).toBeGreaterThan(0);
   });
 });

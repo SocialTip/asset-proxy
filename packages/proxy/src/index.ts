@@ -218,17 +218,34 @@ function checkAnimationLimits(
   }
 }
 
+const FORMAT_EXTENSIONS: Record<string, string> = {
+  mp4: ".mp4",
+  webm: ".webm",
+  jpg: ".jpg",
+  png: ".png",
+  webp: ".webp",
+  avif: ".avif",
+  gif: ".gif",
+};
+
 function setContentDisposition(
   res: express.Response,
   parsed: ReturnType<typeof parseProcessingUrl>,
+  outputFormat?: string,
 ): void {
-  if (parsed.filename || parsed.returnAttachment) {
-    const type = parsed.returnAttachment ? "attachment" : "inline";
-    res.set(
-      "Content-Disposition",
-      contentDisposition(parsed.filename ?? undefined, { type }),
-    );
+  let filename = parsed.filename;
+  if (filename && outputFormat) {
+    const ext = FORMAT_EXTENSIONS[outputFormat];
+    if (ext) filename = filename.replace(/\.[^.]+$/, ext);
   }
+  if (!filename && outputFormat) {
+    filename = `image${FORMAT_EXTENSIONS[outputFormat] ?? ""}`;
+  }
+  const type = parsed.returnAttachment ? "attachment" : "inline";
+  res.set(
+    "Content-Disposition",
+    contentDisposition(filename ?? undefined, { type }),
+  );
 }
 
 async function handleRequest(req: express.Request, res: express.Response) {
@@ -310,7 +327,7 @@ async function processAndRespond(
         CONTENT_TYPES[result.outputFormat] || "image/jpeg",
       );
       res.set("Cache-Control", env.CACHE_CONTROL);
-      setContentDisposition(res, parsed);
+      setContentDisposition(res, parsed, result.outputFormat);
       res.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
@@ -330,7 +347,7 @@ async function processAndRespond(
         CONTENT_TYPES[parsed.outputFormat] || "video/mp4",
       );
       res.set("Cache-Control", env.CACHE_CONTROL);
-      setContentDisposition(res, parsed);
+      setContentDisposition(res, parsed, parsed.outputFormat);
       result.pipe(res);
 
       await new Promise<void>((resolve, reject) => {
