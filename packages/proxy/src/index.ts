@@ -384,6 +384,21 @@ async function processAndRespond(
       const result = await withSpan("processVideo", {}, () =>
         processVideo(sourceUrl, parsed),
       );
+
+      // Wait for first data chunk before sending headers, so that ffmpeg
+      // failures result in a proper error status instead of an empty 200.
+      const firstChunk = await new Promise<Buffer>((resolve, reject) => {
+        result.once("data", (chunk: Buffer) => resolve(chunk));
+        result.once("error", reject);
+        result.once("end", () =>
+          reject(
+            new HTTPError("Video processing produced no output", {
+              code: "INTERNAL_SERVER_ERROR",
+            }),
+          ),
+        );
+      });
+
       res.set(
         "Content-Type",
         CONTENT_TYPES[parsed.outputFormat] || "video/mp4",
@@ -391,6 +406,7 @@ async function processAndRespond(
       res.set("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(res, parsed, parsed.outputFormat);
       const responseSpan = tracer.startSpan("response.stream");
+      res.write(firstChunk);
       result.pipe(res);
 
       await new Promise<void>((resolve, reject) => {

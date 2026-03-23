@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Readable } from "node:stream";
+import { PassThrough, type Readable } from "node:stream";
 import sharp from "sharp";
 import { env } from "./env.js";
 import {
@@ -813,6 +813,9 @@ function runFfmpeg(args: string[]): Readable {
   logger.verbose("Running ffmpeg", { args: args.join(" ") });
   const span = tracer.startSpan("exec.ffmpeg");
   const proc = spawn("ffmpeg", args);
+  const output = new PassThrough();
+
+  proc.stdout.on("data", (chunk: Buffer) => output.write(chunk));
 
   let stderr = "";
   proc.stderr.on("data", (chunk: Buffer) => {
@@ -823,20 +826,24 @@ function runFfmpeg(args: string[]): Readable {
   proc.on("close", (code) => {
     span.setAttribute("process.exit_code", code ?? -1);
     if (code !== 0) {
-      recordException(span, new Error(`ffmpeg exited with code ${code}`));
+      const err = new Error(`ffmpeg exited with code ${code}`);
+      recordException(span, err);
       logger.error("ffmpeg exited with non-zero code", {
         code,
         stderr: stderr.slice(-2000),
       });
+      output.destroy(err);
+    } else {
+      output.end();
     }
     span.end();
   });
 
-  proc.stdout.on("error", () => {
+  output.on("error", () => {
     proc.kill("SIGTERM");
   });
 
-  return proc.stdout;
+  return output;
 }
 
 interface TrimOptions {
