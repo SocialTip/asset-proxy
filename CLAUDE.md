@@ -1,6 +1,7 @@
 ## General guidelines
 
 - Whenever adding or modifying a consumer-facing contract, update the README.md
+- Do not add section separator comments (e.g. `// --- Section name ---`) to files
 
 ## Documentation
 

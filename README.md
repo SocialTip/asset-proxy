@@ -466,13 +466,7 @@ Images are tagged with the commit SHA. Pushes to `main` are additionally tagged 
 
 ## Testing
 
-Integration tests require a running service via Docker Compose. This starts the asset-proxy container (CPU mode) alongside an nginx file server that serves test fixtures:
-
-```bash
-pnpm test:up      # start containers (builds image, waits for healthy)
-pnpm test         # run all tests across all packages
-pnpm test:down    # stop and remove containers
-```
+See [docs/Testing.md](docs/Testing.md) for full testing documentation, including integration tests and deployment test plans.
 
 ## Environment variables
 
