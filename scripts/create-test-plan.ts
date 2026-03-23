@@ -109,163 +109,213 @@ const imageTests: Test[] = [];
 
 imageTests.push({
   name: "Resize (fill 480x360)",
-  command: `curl -sS -o test-image-resize-fill.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fill", width: 480, height: 360 } }, config))}'`,
+  command: `curl -sS -o test-image-resize-fill.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fill", width: 480, height: 360 } }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect 480x360)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Resize (fit 480x360)",
-  command: `curl -sS -o test-image-resize-fit.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 360 } }, config))}'`,
+  command: `curl -sS -o test-image-resize-fit.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 360 } }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect fit within 480x360)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Width only (300)",
-  command: `curl -sS -o test-image-width.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 300, height: 0 } }, config))}'`,
+  command: `curl -sS -o test-image-width.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 300, height: 0 } }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect width=300)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Quality (q:30)",
-  command: `curl -sS -o test-image-q30.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, quality: 30 }, config))}'`,
+  command: `curl -sS -o test-image-q30.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, quality: 30 }, config))}'`,
   checks: [
     "Output file size (expect smaller than default quality)",
     "Output dimensions",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Format conversion (jpg to webp)",
-  command: `curl -sS -o test-image-format.webp -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, outputFormat: "webp" }, config))}'`,
+  command: `curl -sS -o test-image-format.webp -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, outputFormat: "webp" }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions",
     "Output format (expect webp)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Format conversion (jpg to avif)",
-  command: `curl -sS -o test-image-format.avif -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, outputFormat: "avif" }, config))}'`,
+  command: `curl -sS -o test-image-format.avif -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, outputFormat: "avif" }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions",
     "Output format (expect avif)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Format conversion (jpg to png)",
-  command: `curl -sS -o test-image-format.png -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, outputFormat: "png" }, config))}'`,
+  command: `curl -sS -o test-image-format.png -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, outputFormat: "png" }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions",
     "Output format (expect png)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Best format",
-  command: `curl -sS -D headers.tmp -o test-image-best.tmp -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, bestFormat: true }, config))}' && fn=$(sed -n 's/.*filename="\\([^"]*\\)".*/\\1/p' headers.tmp) && mv test-image-best.tmp "test-image-best-$fn" && rm headers.tmp`,
+  command: `curl -sS -D headers.tmp -o test-image-best.tmp -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, bestFormat: true }, config))}' && fn=$(sed -n 's/.*filename="\\([^"]*\\)".*/\\1/p' headers.tmp) && mv test-image-best.tmp "test-image-best-$fn" && rm headers.tmp`,
   checks: [
     "Output file size",
     "Output format (check extension from Content-Disposition)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Blur (sigma 5)",
-  command: `curl -sS -o test-image-blur.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, blur: 5 }, config))}'`,
-  checks: ["Output file size", "Output dimensions", "Time taken"],
+  command: `curl -sS -o test-image-blur.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, blur: 5 }, config))}'`,
+  checks: [
+    "Output file size",
+    "Output dimensions",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 imageTests.push({
   name: "Sharpen (sigma 1.5)",
-  command: `curl -sS -o test-image-sharpen.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, sharpen: 1.5 }, config))}'`,
-  checks: ["Output file size", "Output dimensions", "Time taken"],
+  command: `curl -sS -o test-image-sharpen.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, sharpen: 1.5 }, config))}'`,
+  checks: [
+    "Output file size",
+    "Output dimensions",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 imageTests.push({
   name: "Rotate 90",
-  command: `curl -sS -o test-image-rotate.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, rotate: 90 }, config))}'`,
+  command: `curl -sS -o test-image-rotate.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, rotate: 90 }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect swapped w/h)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Flip horizontal",
-  command: `curl -sS -o test-image-flip.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, flip: { horizontal: true, vertical: false } }, config))}'`,
-  checks: ["Output file size", "Output dimensions", "Time taken"],
+  command: `curl -sS -o test-image-flip.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, flip: { horizontal: true, vertical: false } }, config))}'`,
+  checks: [
+    "Output file size",
+    "Output dimensions",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 imageTests.push({
   name: "Crop aspect ratio (1:1)",
-  command: `curl -sS -o test-image-car.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, cropAspectRatio: 1 }, config))}'`,
+  command: `curl -sS -o test-image-car.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, cropAspectRatio: 1 }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect square)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Brightness (+50)",
-  command: `curl -sS -o test-image-bright.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, brightness: 50 }, config))}'`,
-  checks: ["Output file size", "Output dimensions", "Time taken"],
+  command: `curl -sS -o test-image-bright.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, brightness: 50 }, config))}'`,
+  checks: [
+    "Output file size",
+    "Output dimensions",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 imageTests.push({
   name: "Monochrome",
-  command: `curl -sS -o test-image-mono.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, monochrome: { intensity: 1, colour: "b3b3b3" } }, config))}'`,
-  checks: ["Output file size", "Output dimensions", "Time taken"],
+  command: `curl -sS -o test-image-mono.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, monochrome: { intensity: 1, colour: "b3b3b3" } }, config))}'`,
+  checks: [
+    "Output file size",
+    "Output dimensions",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 imageTests.push({
   name: "Pixelate (10)",
-  command: `curl -sS -o test-image-pixelate.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, pixelate: 10 }, config))}'`,
-  checks: ["Output file size", "Output dimensions", "Time taken"],
+  command: `curl -sS -o test-image-pixelate.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, pixelate: 10 }, config))}'`,
+  checks: [
+    "Output file size",
+    "Output dimensions",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 imageTests.push({
   name: "Padding (20px, red background)",
-  command: `curl -sS -o test-image-padding.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, padding: { top: 20, right: 20, bottom: 20, left: 20 }, background: { r: 255, g: 0, b: 0 } }, config))}'`,
+  command: `curl -sS -o test-image-padding.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, padding: { top: 20, right: 20, bottom: 20, left: 20 }, background: { r: 255, g: 0, b: 0 } }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect +40px each side)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 imageTests.push({
   name: "Gradient overlay",
-  command: `curl -sS -o test-image-gradient.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, gradient: { opacity: 0.5, colour: "000", direction: "down", start: 0, stop: 0.5 } }, config))}'`,
-  checks: ["Output file size", "Output dimensions", "Time taken"],
+  command: `curl -sS -o test-image-gradient.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, resize: { type: "fit", width: 480, height: 0 }, gradient: { opacity: 0.5, colour: "000", direction: "down", start: 0, stop: 0.5 } }, config))}'`,
+  checks: [
+    "Output file size",
+    "Output dimensions",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 imageTests.push({
   name: "Raw passthrough",
-  command: `curl -sS -o test-image-raw.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, raw: true }, config))}'`,
-  checks: ["Output file size (expect same as source)", "Time taken"],
+  command: `curl -sS -o test-image-raw.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: imageUrl, raw: true }, config))}'`,
+  checks: [
+    "Output file size (expect same as source)",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 sections.push({ title: "Image Processing", tests: imageTests });
@@ -274,113 +324,135 @@ const videoTests: Test[] = [];
 
 videoTests.push({
   name: "Resize (fill 480x360)",
-  command: `curl -sS -o test-video-resize-fill.mp4 -w '%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, resize: { type: "fill", width: 480, height: 360 } }, config))}'`,
+  command: `curl -sS -o test-video-resize-fill.mp4 -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, resize: { type: "fill", width: 480, height: 360 } }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect 480x360)",
     "Output duration",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 videoTests.push({
   name: "Resize (fit 480x360)",
-  command: `curl -sS -o test-video-resize-fit.mp4 -w '%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, resize: { type: "fit", width: 480, height: 360 } }, config))}'`,
+  command: `curl -sS -o test-video-resize-fit.mp4 -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, resize: { type: "fit", width: 480, height: 360 } }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect fit within 480x360)",
     "Output duration",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 videoTests.push({
   name: "Resize (force 480x360)",
-  command: `curl -sS -o test-video-resize-force.mp4 -w '%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, resize: { type: "force", width: 480, height: 360 } }, config))}'`,
+  command: `curl -sS -o test-video-resize-force.mp4 -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, resize: { type: "force", width: 480, height: 360 } }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect exactly 480x360, may be stretched)",
     "Output duration",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 videoTests.push({
   name: "Cut (first 5 seconds)",
-  command: `curl -sS -o test-video-cut.mp4 -w '%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, cut: 5 }, config))}'`,
+  command: `curl -sS -o test-video-cut.mp4 -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, cut: 5 }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect same as source)",
     "Output duration (expect ~5s)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 videoTests.push({
   name: "Mute",
-  command: `curl -sS -o test-video-mute.mp4 -w '%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, mute: true }, config))}'`,
+  command: `curl -sS -o test-video-mute.mp4 -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, mute: true }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect same as source)",
     "Audio track (expect none)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 videoTests.push({
   name: "Framerate (15fps)",
-  command: `curl -sS -o test-video-fr15.mp4 -w '%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, framerate: 15 }, config))}'`,
+  command: `curl -sS -o test-video-fr15.mp4 -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, framerate: 15 }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect same as source)",
     "Output framerate (expect 15fps)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 videoTests.push({
   name: "Format conversion (mp4 to webm)",
-  command: `curl -sS -o test-video-format.webm -w '%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, outputFormat: "webm" }, config))}'`,
+  command: `curl -sS -o test-video-format.webm -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, outputFormat: "webm" }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect same as source)",
     "Output format (expect webm/vp9)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 videoTests.push({
   name: "Combined (resize fill + mute + 15fps + cut 5s)",
-  command: `curl -sS -o test-video-combined.mp4 -w '%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, resize: { type: "fill", width: 480, height: 360 }, mute: true, framerate: 15, cut: 5 }, config))}'`,
+  command: `curl -sS -o test-video-combined.mp4 -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, resize: { type: "fill", width: 480, height: 360 }, mute: true, framerate: 15, cut: 5 }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect 480x360)",
     "Output duration (expect ~5s)",
     "Output framerate (expect 15fps)",
     "Audio track (expect none)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 videoTests.push({
   name: "Video thumbnail (image at 2s)",
-  command: `curl -sS -o test-video-thumb.jpg -w '%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, videoThumbnailSecond: 2, outputFormat: "jpg" }, config))}'`,
+  command: `curl -sS -o test-video-thumb.jpg -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, videoThumbnailSecond: 2, outputFormat: "jpg" }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect same as source)",
     "Output format (expect jpg)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
 videoTests.push({
-  name: "Animated thumbnail (gif)",
-  command: `curl -sS -o test-video-anim.gif -w '%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, videoThumbnailAnimation: { step: 1, delay: 100, frames: 5, frameWidth: 320, frameHeight: 180 }, outputFormat: "gif" }, config))}'`,
+  name: "Animated thumbnail fit (gif)",
+  command: `curl -sS -o test-video-anim-fit.gif -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, videoThumbnailAnimation: { step: 1, delay: 100, frames: 5, frameWidth: 320, frameHeight: 180, extendFrame: false, trim: false, fill: false, focusX: 0.5, focusY: 0.5 }, outputFormat: "gif" }, config))}'`,
+  checks: [
+    "Output file size",
+    "Output dimensions (expect fit within 320x180)",
+    "Frame count (expect 5)",
+    "Latency (TTFB)",
+    "Total time",
+  ],
+});
+
+videoTests.push({
+  name: "Animated thumbnail fill (gif)",
+  command: `curl -sS -o test-video-anim-fill.gif -w 'TTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateUrl({ sourceUrl: videoUrl, videoThumbnailAnimation: { step: 1, delay: 100, frames: 5, frameWidth: 320, frameHeight: 180, extendFrame: false, trim: false, fill: true, focusX: 0.5, focusY: 0.5 }, outputFormat: "gif" }, config))}'`,
   checks: [
     "Output file size",
     "Output dimensions (expect 320x180)",
     "Frame count (expect 5)",
-    "Time taken",
+    "Latency (TTFB)",
+    "Total time",
   ],
 });
 
@@ -390,38 +462,54 @@ const infoTests: Test[] = [];
 
 infoTests.push({
   name: "Image info (basic)",
-  command: `curl -sS -w '\\n%{time_total}' '${url(generateInfoUrl({ sourceUrl: imageUrl }, config))}'`,
-  checks: ["JSON response", "Time taken"],
+  command: `curl -sS -w '\\nTTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateInfoUrl({ sourceUrl: imageUrl }, config))}'`,
+  checks: ["JSON response", "Latency (TTFB)", "Total time"],
 });
 
 infoTests.push({
   name: "Image info (with EXIF)",
-  command: `curl -sS -w '\\n%{time_total}' '${url(generateInfoUrl({ sourceUrl: imageUrl }, config, { exif: true }))}'`,
-  checks: ["JSON response (expect exif field)", "Time taken"],
+  command: `curl -sS -w '\\nTTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateInfoUrl({ sourceUrl: imageUrl }, config, { exif: true }))}'`,
+  checks: ["JSON response (expect exif field)", "Latency (TTFB)", "Total time"],
 });
 
 infoTests.push({
   name: "Image info (with hashsums)",
-  command: `curl -sS -w '\\n%{time_total}' '${url(generateInfoUrl({ sourceUrl: imageUrl }, config, { calcHashsums: ["sha256"] }))}'`,
-  checks: ["JSON response (expect hashsums field)", "Time taken"],
+  command: `curl -sS -w '\\nTTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateInfoUrl({ sourceUrl: imageUrl }, config, { calcHashsums: ["sha256"] }))}'`,
+  checks: [
+    "JSON response (expect hashsums field)",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 infoTests.push({
   name: "Image info (with dominant colours)",
-  command: `curl -sS -w '\\n%{time_total}' '${url(generateInfoUrl({ sourceUrl: imageUrl }, config, { dominantColors: true }))}'`,
-  checks: ["JSON response (expect dominant_colors field)", "Time taken"],
+  command: `curl -sS -w '\\nTTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateInfoUrl({ sourceUrl: imageUrl }, config, { dominantColors: true }))}'`,
+  checks: [
+    "JSON response (expect dominant_colors field)",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 infoTests.push({
   name: "Image info (with blurhash)",
-  command: `curl -sS -w '\\n%{time_total}' '${url(generateInfoUrl({ sourceUrl: imageUrl }, config, { blurhash: { xComponents: 4, yComponents: 3 } }))}'`,
-  checks: ["JSON response (expect blurhash field)", "Time taken"],
+  command: `curl -sS -w '\\nTTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateInfoUrl({ sourceUrl: imageUrl }, config, { blurhash: { xComponents: 4, yComponents: 3 } }))}'`,
+  checks: [
+    "JSON response (expect blurhash field)",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 infoTests.push({
   name: "Video info",
-  command: `curl -sS -w '\\n%{time_total}' '${url(generateInfoUrl({ sourceUrl: videoUrl }, config))}'`,
-  checks: ["JSON response (expect video_meta field)", "Time taken"],
+  command: `curl -sS -w '\\nTTFB:%{time_starttransfer} Total:%{time_total}' '${url(generateInfoUrl({ sourceUrl: videoUrl }, config))}'`,
+  checks: [
+    "JSON response (expect video_meta field)",
+    "Latency (TTFB)",
+    "Total time",
+  ],
 });
 
 sections.push({ title: "Info Endpoint", tests: infoTests });
@@ -487,7 +575,7 @@ lines.push(
 );
 lines.push("");
 lines.push(
-  'Claude should create the run subdirectory, execute all commands from the script below, inspect output files using `ffprobe` / `file` / `stat`, fill in the results tables, and update the "Last run" timestamp when complete. For info endpoint tests, paste the JSON response into the result cell.',
+  `Claude must copy the "Run all" script below verbatim into \`${planDir}/run.sh\`, then execute it with \`bash run.sh\`. Do not modify, reorder, parallelise, or skip any commands. After all commands complete, inspect each output file using \`ffprobe\` / \`file\` / \`stat\`, fill in the results tables, and update the "Last run" timestamp. For info endpoint tests, paste the JSON response into the result cell.`,
 );
 lines.push("");
 
@@ -501,11 +589,14 @@ for (const section of sections) {
 lines.push("### Run all");
 lines.push("");
 lines.push("```sh");
+lines.push("#!/usr/bin/env bash");
+lines.push("set -eo pipefail");
+lines.push("");
 lines.push(
   `curl -sf '${baseUrl}/health' || { echo 'Health check failed'; exit 1; }`,
 );
 lines.push(`mkdir -p ${planDir}/run-$(date +%Y-%m-%d-%H-%M-%S) && cd $_`);
-lines.push(allCommands.join(" && \\\n"));
+lines.push(allCommands.join("\n"));
 lines.push("```");
 lines.push("");
 
