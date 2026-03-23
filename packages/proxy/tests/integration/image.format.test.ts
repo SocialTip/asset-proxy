@@ -1,3 +1,5 @@
+import { generateUrl } from "@socialtip/asset-proxy-url-generator";
+import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 import {
   fetchImage,
   fetchImageFrom,
@@ -7,6 +9,7 @@ import {
   SOURCE_URL,
   SERVICE_URL,
 } from "./helpers.js";
+import { URL_CONFIG } from "./setup.js";
 
 const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
 
@@ -68,8 +71,8 @@ describe("image output formats", () => {
   });
 
   it("defaults to jpg for image sources", async () => {
-    const url = `${SERVICE_URL}/insecure/w:100/plain/${SOURCE_URL}`;
-    const res = await fetch(url);
+    const parsed = parseProcessingUrl(`/insecure/w:100/plain/${SOURCE_URL}`);
+    const res = await fetch(`${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/jpeg");
     expect(res.headers.get("content-disposition")).toBe(
@@ -165,8 +168,10 @@ describe("best format", () => {
   // so w:50 images (~50x38 = 1900px) stay below the limit while w:100+ images exceed it.
 
   it("selects a lossless encoding for a low-complexity image", async () => {
-    const url = `${SERVICE_URL}/insecure/w:50/f:best/plain/${SOURCE_URL}`;
-    const res = await fetch(url);
+    const parsed = parseProcessingUrl(
+      `/insecure/w:50/f:best/plain/${SOURCE_URL}`,
+    );
+    const res = await fetch(`${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`);
     expect(res.status).toBe(200);
     const buffer = Buffer.from(await res.arrayBuffer());
     const meta = await sharp(buffer).metadata();
@@ -185,8 +190,10 @@ describe("best format", () => {
   });
 
   it("selects a lossy encoding for a high-complexity image", async () => {
-    const url = `${SERVICE_URL}/insecure/w:50/f:best/plain/${BUTTERFLY_URL}`;
-    const res = await fetch(url);
+    const parsed = parseProcessingUrl(
+      `/insecure/w:50/f:best/plain/${BUTTERFLY_URL}`,
+    );
+    const res = await fetch(`${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`);
     expect(res.status).toBe(200);
     const buffer = Buffer.from(await res.arrayBuffer());
     const meta = await sharp(buffer).metadata();
@@ -205,11 +212,17 @@ describe("best format", () => {
   });
 
   it("best format with quality respects quality setting for complex images", async () => {
+    const lowQParsed = parseProcessingUrl(
+      `/insecure/w:50/q:10/f:best/plain/${BUTTERFLY_URL}`,
+    );
+    const highQParsed = parseProcessingUrl(
+      `/insecure/w:50/q:95/f:best/plain/${BUTTERFLY_URL}`,
+    );
     const lowQ = await fetch(
-      `${SERVICE_URL}/insecure/w:50/q:10/f:best/plain/${BUTTERFLY_URL}`,
+      `${SERVICE_URL}${generateUrl(lowQParsed, URL_CONFIG)}`,
     );
     const highQ = await fetch(
-      `${SERVICE_URL}/insecure/w:50/q:95/f:best/plain/${BUTTERFLY_URL}`,
+      `${SERVICE_URL}${generateUrl(highQParsed, URL_CONFIG)}`,
     );
     expect(lowQ.status).toBe(200);
     expect(highQ.status).toBe(200);
@@ -219,14 +232,23 @@ describe("best format", () => {
   });
 
   it("best format produces smaller output than an arbitrary format", async () => {
+    const bestParsed = parseProcessingUrl(
+      `/insecure/w:50/f:best/plain/${BUTTERFLY_URL}`,
+    );
+    const jpgParsed = parseProcessingUrl(
+      `/insecure/w:50/plain/${BUTTERFLY_URL}@jpg`,
+    );
+    const pngParsed = parseProcessingUrl(
+      `/insecure/w:50/plain/${BUTTERFLY_URL}@png`,
+    );
     const best = await fetch(
-      `${SERVICE_URL}/insecure/w:50/f:best/plain/${BUTTERFLY_URL}`,
+      `${SERVICE_URL}${generateUrl(bestParsed, URL_CONFIG)}`,
     );
     const jpg = await fetch(
-      `${SERVICE_URL}/insecure/w:50/plain/${BUTTERFLY_URL}@jpg`,
+      `${SERVICE_URL}${generateUrl(jpgParsed, URL_CONFIG)}`,
     );
     const png = await fetch(
-      `${SERVICE_URL}/insecure/w:50/plain/${BUTTERFLY_URL}@png`,
+      `${SERVICE_URL}${generateUrl(pngParsed, URL_CONFIG)}`,
     );
     expect(best.status).toBe(200);
     const bestBuf = Buffer.from(await best.arrayBuffer());
@@ -242,8 +264,10 @@ describe("best format", () => {
     expect(process.env.BEST_FORMAT_MAX_RESOLUTION).toBe("0.005");
 
     // At w:200, output is ~200x150 = 30000 pixels which exceeds 0.005 MP → JPEG fallback.
-    const url = `${SERVICE_URL}/insecure/w:200/f:best/plain/${SOURCE_URL}`;
-    const res = await fetch(url);
+    const parsed = parseProcessingUrl(
+      `/insecure/w:200/f:best/plain/${SOURCE_URL}`,
+    );
+    const res = await fetch(`${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/jpeg");
   });

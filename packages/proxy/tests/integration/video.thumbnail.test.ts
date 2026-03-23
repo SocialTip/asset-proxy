@@ -1,5 +1,7 @@
 import sharp from "sharp";
-import { SERVICE_URL } from "./setup.js";
+import { generateUrl } from "@socialtip/asset-proxy-url-generator";
+import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
+import { SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 const VIDEO_URL = "http://file-server/test-video.mp4";
 
@@ -7,9 +9,16 @@ async function toPng(buffer: Buffer): Promise<Buffer> {
   return sharp(buffer).png().toBuffer();
 }
 
+function videoUrlWithFormat(path: string, format: string): string {
+  const parsed = parseProcessingUrl(
+    `/insecure${path}/plain/${VIDEO_URL}@${format}`,
+  );
+  return `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
+}
+
 describe("video thumbnails", () => {
   it("extracts frame at given second (vts)", async () => {
-    const url = `${SERVICE_URL}/insecure/vts:0/w:128/plain/${VIDEO_URL}@jpg`;
+    const url = videoUrlWithFormat("/vts:0/w:128", "jpg");
     const res = await fetch(url);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/jpeg");
@@ -20,7 +29,7 @@ describe("video thumbnails", () => {
   });
 
   it("extracts frame at 0.5 seconds (vts:0.5)", async () => {
-    const url = `${SERVICE_URL}/insecure/vts:0.5/w:128/plain/${VIDEO_URL}@jpg`;
+    const url = videoUrlWithFormat("/vts:0.5/w:128", "jpg");
     const res = await fetch(url);
     expect(res.status).toBe(200);
     const buffer = Buffer.from(await res.arrayBuffer());
@@ -30,7 +39,7 @@ describe("video thumbnails", () => {
   });
 
   it("extracts keyframe only (vtk)", async () => {
-    const url = `${SERVICE_URL}/insecure/vtk:1/w:128/plain/${VIDEO_URL}@jpg`;
+    const url = videoUrlWithFormat("/vtk:1/w:128", "jpg");
     const res = await fetch(url);
     expect(res.status).toBe(200);
     const buffer = Buffer.from(await res.arrayBuffer());
@@ -38,7 +47,7 @@ describe("video thumbnails", () => {
   });
 
   it("generates animated gif from video (vta)", async () => {
-    const url = `${SERVICE_URL}/insecure/vta:0.2:100:5:128:96/plain/${VIDEO_URL}@gif`;
+    const url = videoUrlWithFormat("/vta:0.2:100:5:128:96", "gif");
     const res = await fetch(url);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/gif");
@@ -49,7 +58,7 @@ describe("video thumbnails", () => {
   });
 
   it("generates animated webp from video (vta)", async () => {
-    const url = `${SERVICE_URL}/insecure/vta:0.2:100:5:128:96/plain/${VIDEO_URL}@webp`;
+    const url = videoUrlWithFormat("/vta:0.2:100:5:128:96", "webp");
     const res = await fetch(url);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/webp");
@@ -60,7 +69,7 @@ describe("video thumbnails", () => {
   });
 
   it("vta fit preserves aspect ratio within box", async () => {
-    const url = `${SERVICE_URL}/insecure/vta:0.2:100:3:320:180/plain/${VIDEO_URL}@gif`;
+    const url = videoUrlWithFormat("/vta:0.2:100:3:320:180", "gif");
     const res = await fetch(url);
     expect(res.status).toBe(200);
     const buffer = Buffer.from(await res.arrayBuffer());
@@ -72,7 +81,7 @@ describe("video thumbnails", () => {
   });
 
   it("vta fill crops to exact dimensions", async () => {
-    const url = `${SERVICE_URL}/insecure/vta:0.2:100:3:320:180:0:0:1/plain/${VIDEO_URL}@gif`;
+    const url = videoUrlWithFormat("/vta:0.2:100:3:320:180:0:0:1", "gif");
     const res = await fetch(url);
     expect(res.status).toBe(200);
     const buffer = Buffer.from(await res.arrayBuffer());
@@ -83,7 +92,7 @@ describe("video thumbnails", () => {
   });
 
   it("vta extendFrame pads to exact dimensions", async () => {
-    const url = `${SERVICE_URL}/insecure/vta:0.2:100:3:320:180:1/plain/${VIDEO_URL}@gif`;
+    const url = videoUrlWithFormat("/vta:0.2:100:3:320:180:1", "gif");
     const res = await fetch(url);
     expect(res.status).toBe(200);
     const buffer = Buffer.from(await res.arrayBuffer());

@@ -1,6 +1,8 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { generateUrl } from "@socialtip/asset-proxy-url-generator";
+import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 import {
   fetchVideo,
   probeVideo,
@@ -8,10 +10,14 @@ import {
   VIDEO_SOURCE_URL,
   SERVICE_URL,
 } from "./video-helpers.js";
+import { URL_CONFIG } from "./setup.js";
 
 describe("video resize", () => {
   it("resizes to 128x128 fill with framerate and cut", async () => {
-    const url = `${SERVICE_URL}/insecure/resize:fill:128:128/fr:15/ct:1/plain/${VIDEO_SOURCE_URL}`;
+    const parsed = parseProcessingUrl(
+      `/insecure/resize:fill:128:128/fr:15/ct:1/plain/${VIDEO_SOURCE_URL}`,
+    );
+    const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
     const res = await fetch(url);
 
     expect(res.status).toBe(200);

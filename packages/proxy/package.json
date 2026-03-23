@@ -28,6 +28,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@socialtip/asset-proxy-url-generator": "workspace:*",
     "@types/content-disposition": "^0.5.9",
     "@types/express": "^5.0.6",
     "@types/express-serve-static-core": "^5.1.1",

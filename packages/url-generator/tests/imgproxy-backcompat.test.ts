@@ -334,6 +334,33 @@ describe("imgproxy backward compatibility: info URL", () => {
     expect(ours).toBe(theirs);
   });
 
+  it("signed and encrypted with info option", () => {
+    const ours = generateInfoUrl(
+      { sourceUrl: SRC },
+      {
+        encryptionKey: KEY_HEX,
+        deterministicEncryption: true,
+        signingKey: SIGNING_KEY,
+        signingSalt: SIGNING_SALT,
+      },
+      { exif: true },
+    );
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "encrypted" },
+      encryptKey: KEY_HEX,
+      encryptIV: imgproxyEncryptIV(SRC),
+      key: SIGNING_KEY,
+      salt: SIGNING_SALT,
+      options: { exif: 1 },
+    });
+
+    expect(ours).toBe(theirs);
+    expect(ours).toMatchInlineSnapshot(
+      `"/info/sw-iVDHlGP1Zc3ij4ktICDuW8LhmCb8oIbPH4ElWr5Q/exif:t/enc/NWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-"`,
+    );
+  });
+
   it("with exif option", () => {
     const ours = generateInfoUrl({ sourceUrl: SRC }, undefined, { exif: true });
     const theirs = generateImageInfoUrl({
