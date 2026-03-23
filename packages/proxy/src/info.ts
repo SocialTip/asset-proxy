@@ -256,6 +256,12 @@ async function runExiftool(
     proc.on("error", reject);
   });
 
+  // Exiftool may exit after reading the metadata header but before we finish
+  // writing. Swallow the resulting EPIPE on stdin for all branches.
+  proc.stdin!.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code !== "EPIPE") throw err;
+  });
+
   if (Buffer.isBuffer(source)) {
     proc.stdin!.end(source.subarray(0, METADATA_STREAM_LIMIT));
   } else if (typeof source !== "string") {
@@ -272,14 +278,10 @@ async function runExiftool(
     }
     // When the HTTP response is slower than exiftool (e.g. large remote files
     // with small EXIF headers), exiftool can finish and exit while we are still
-    // streaming. Track exit state to stop writing, and swallow EPIPE on stdin
-    // in case of a race between the exit check and the next write.
+    // streaming. Track exit state to stop writing.
     let exited = false;
     proc.on("exit", () => {
       exited = true;
-    });
-    proc.stdin!.on("error", (err: NodeJS.ErrnoException) => {
-      if (err.code !== "EPIPE") throw err;
     });
     let written = 0;
     for await (const chunk of res.body) {
