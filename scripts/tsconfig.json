@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "noEmit": true,
+    "paths": {
+      "@socialtip/asset-proxy-url-generator": [
+        "../packages/url-generator/src/index.ts"
+      ]
+    }
+  },
+  "include": ["*.ts"]
+}
