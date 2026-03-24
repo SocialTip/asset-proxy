@@ -58,23 +58,26 @@ function writeToCacheStream(
   contentType: string,
   prefixChunk?: Buffer,
 ): Readable {
-  if (!cacheBucket) return source;
   const passthrough = new PassThrough();
-  const cacheStream = cacheBucket
-    .file(cacheKey(requestPath))
-    .createWriteStream({ contentType });
   if (prefixChunk) {
     passthrough.write(prefixChunk);
-    cacheStream.write(prefixChunk);
   }
   source.pipe(passthrough);
-  source.pipe(cacheStream);
-  cacheStream.on("error", (err) => {
-    logger.warn("Failed to write to cache bucket", {
-      error: err instanceof Error ? err.message : String(err),
-      cacheKey: cacheKey(requestPath),
+  if (cacheBucket) {
+    const cacheStream = cacheBucket
+      .file(cacheKey(requestPath))
+      .createWriteStream({ contentType });
+    if (prefixChunk) {
+      cacheStream.write(prefixChunk);
+    }
+    source.pipe(cacheStream);
+    cacheStream.on("error", (err) => {
+      logger.warn("Failed to write to cache bucket", {
+        error: err instanceof Error ? err.message : String(err),
+        cacheKey: cacheKey(requestPath),
+      });
     });
-  });
+  }
   return passthrough;
 }
 
