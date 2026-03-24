@@ -25,6 +25,7 @@
     "blurhash": "^2.0.5",
     "content-disposition": "^1.0.1",
     "express": "^5.1.0",
+    "express-http-proxy": "^2.1.2",
     "winston": "^3.19.0",
     "zod": "^4.3.6"
   },
@@ -32,6 +33,7 @@
     "@socialtip/asset-proxy-url-generator": "workspace:*",
     "@types/content-disposition": "^0.5.9",
     "@types/express": "^5.0.6",
+    "@types/express-http-proxy": "^1.6.7",
     "@types/express-serve-static-core": "^5.1.1",
     "@types/jest-image-snapshot": "^6.4.1",
     "@types/node": "^25.5.0",

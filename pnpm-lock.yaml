@@ -101,6 +101,9 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.2.1
+      express-http-proxy:
+        specifier: ^2.1.2
+        version: 2.1.2
       winston:
         specifier: ^3.19.0
         version: 3.19.0
@@ -117,6 +120,9 @@ importers:
       "@types/express":
         specifier: ^5.0.6
         version: 5.0.6
+      "@types/express-http-proxy":
+        specifier: ^1.6.7
+        version: 1.6.7
       "@types/express-serve-static-core":
         specifier: ^5.1.1
         version: 5.1.1
@@ -2480,6 +2486,12 @@ packages:
         integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==,
       }
 
+  "@types/express-http-proxy@1.6.7":
+    resolution:
+      {
+        integrity: sha512-CEp9pbnwVI1RzN9PXc+KESMxwUW5r1O7tkWb5h7Wg/YAIf+KulD/zKev8fbbn+Ljt0Yvs8MXwV2W6Id+cKxe2Q==,
+      }
+
   "@types/express-serve-static-core@5.1.1":
     resolution:
       {
@@ -3438,6 +3450,17 @@ packages:
       }
     engines: { node: ">= 12" }
 
+  debug@3.2.7:
+    resolution:
+      {
+        integrity: sha512-CFjzYYAi4ThfiQvizrFQevTTXHtnCqWfe7x1AhgEscTz6ZbLbfoLRLPugTQyBth6f8ZERVUSyWHFD/7Wu4t1XQ==,
+      }
+    peerDependencies:
+      supports-color: "*"
+    peerDependenciesMeta:
+      supports-color:
+        optional: true
+
   debug@4.4.3:
     resolution:
       {
@@ -3689,6 +3712,12 @@ packages:
       }
     engines: { node: ">= 0.4" }
 
+  es6-promise@4.2.8:
+    resolution:
+      {
+        integrity: sha512-HJDGx5daxeIvxdBxvG2cb9g4tEvwIk3i8+nhX0yGrYmZUzbkdg8QbDevheDB8gd0//uPj4c1EQua8Q+MViT0/w==,
+      }
+
   esbuild@0.25.12:
     resolution:
       {
@@ -3862,6 +3891,13 @@ packages:
         integrity: sha512-1zQrciTiQfRdo7qJM1uG4navm8DayFa2TgCSRlzUyNkhcJ6XUZF3hjnpkyr3VhAqPH7i/9GkG7Tv5abz6fqz0Q==,
       }
     engines: { node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0 }
+
+  express-http-proxy@2.1.2:
+    resolution:
+      {
+        integrity: sha512-FXcAcs7Nf/hF73Mzh0WDWPwaOlsEUL/fCHW3L4wU6DH79dypsaxmbnAildCLniFs7HQuuvoiR6bjNVUvGuTb5g==,
+      }
+    engines: { node: ">=6.0.0" }
 
   express@5.2.1:
     resolution:
@@ -4348,6 +4384,13 @@ packages:
       }
     engines: { node: ">=18" }
     hasBin: true
+
+  iconv-lite@0.4.24:
+    resolution:
+      {
+        integrity: sha512-v3MXnZAcvnywkTUEZomIActle7RXXeedOR31wwl7VlyoXO4Qi9arvSenNQWne1TcRwhCL1HwLI21bEqdpj8/rA==,
+      }
+    engines: { node: ">=0.10.0" }
 
   iconv-lite@0.7.2:
     resolution:
@@ -5636,6 +5679,13 @@ packages:
         integrity: sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg==,
       }
     engines: { node: ">= 0.6" }
+
+  raw-body@2.5.3:
+    resolution:
+      {
+        integrity: sha512-s4VSOf6yN0rvbRZGxs8Om5CWj6seneMwK3oDb4lWDH0UPhWcxwOWw5+qk24bxq87szX1ydrwylIOp2uG1ojUpA==,
+      }
+    engines: { node: ">= 0.8" }
 
   raw-body@3.0.2:
     resolution:
@@ -8275,6 +8325,10 @@ snapshots:
 
   "@types/estree@1.0.8": {}
 
+  "@types/express-http-proxy@1.6.7":
+    dependencies:
+      "@types/express": 5.0.6
+
   "@types/express-serve-static-core@5.1.1":
     dependencies:
       "@types/node": 25.5.0
@@ -8940,6 +8994,10 @@ snapshots:
 
   data-uri-to-buffer@4.0.1: {}
 
+  debug@3.2.7:
+    dependencies:
+      ms: 2.1.3
+
   debug@4.4.3:
     dependencies:
       ms: 2.1.3
@@ -9056,6 +9114,8 @@ snapshots:
       get-intrinsic: 1.3.0
       has-tostringtag: 1.0.2
       hasown: 2.0.2
+
+  es6-promise@4.2.8: {}
 
   esbuild@0.25.12:
     optionalDependencies:
@@ -9215,6 +9275,14 @@ snapshots:
       jest-message-util: 30.3.0
       jest-mock: 30.3.0
       jest-util: 30.3.0
+
+  express-http-proxy@2.1.2:
+    dependencies:
+      debug: 3.2.7
+      es6-promise: 4.2.8
+      raw-body: 2.5.3
+    transitivePeerDependencies:
+      - supports-color
 
   express@5.2.1:
     dependencies:
@@ -9609,6 +9677,10 @@ snapshots:
       - supports-color
 
   husky@9.1.7: {}
+
+  iconv-lite@0.4.24:
+    dependencies:
+      safer-buffer: 2.1.2
 
   iconv-lite@0.7.2:
     dependencies:
@@ -10455,6 +10527,13 @@ snapshots:
   radix3@1.1.2: {}
 
   range-parser@1.2.1: {}
+
+  raw-body@2.5.3:
+    dependencies:
+      bytes: 3.1.2
+      http-errors: 2.0.1
+      iconv-lite: 0.4.24
+      unpipe: 1.0.0
 
   raw-body@3.0.2:
     dependencies:
