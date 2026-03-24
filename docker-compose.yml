@@ -8,6 +8,8 @@ services:
       - SIGNING_SALT=cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
       - ALLOWED_ORIGINS=http://file-server
       - BEST_FORMAT_MAX_RESOLUTION=0.005
+      - STORAGE_EMULATOR_HOST=http://fake-gcs:4443
+      - CACHE_BUCKET=test-cache
     ports:
       - "8080:8080"
     volumes:
@@ -21,6 +23,15 @@ services:
       ["pnpm", "--filter", "proxy", "exec", "tsx", "--watch", "src/index.ts"]
     depends_on:
       - file-server
+      - fake-gcs
+
+  fake-gcs:
+    image: fsouza/fake-gcs-server
+    command: ["-scheme", "http", "-port", "4443", "-data", "/data"]
+    volumes:
+      - ./packages/proxy/tests/fixtures/fake-gcs:/data:ro
+    ports:
+      - "4443:4443"
 
   file-server:
     image: nginx:alpine

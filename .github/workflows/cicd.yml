@@ -80,12 +80,22 @@ jobs:
             | sudo tar -xJ --strip-components=1 -C /usr/local
           sudo apt-get update -qq && sudo apt-get install -y -qq libimage-exiftool-perl heif-thumbnailer
 
+      - name: Start fake GCS server
+        run: |
+          docker run -d --name fake-gcs -p 4443:4443 fsouza/fake-gcs-server \
+            -scheme http -port 4443 -data /data
+          timeout 10 bash -c 'until curl -sf http://localhost:4443/storage/v1/b; do sleep 1; done'
+          curl -sf -X POST http://localhost:4443/storage/v1/b \
+            -H 'Content-Type: application/json' -d '{"name":"test-cache"}'
+
       - name: Start asset-proxy
         run: nohup pnpm --filter proxy exec tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
           ALLOWED_ORIGINS: "http://file-server"
+          STORAGE_EMULATOR_HOST: "http://localhost:4443"
+          CACHE_BUCKET: "test-cache"
 
       - name: Wait for asset-proxy
         id: wait
