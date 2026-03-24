@@ -1888,4 +1888,26 @@ describe("cache bucket", () => {
       contentType: "video/mp4",
     });
   });
+
+  it("uses full request path including /enc/ segment as cache key", async () => {
+    setupSpawnMock();
+    const sourceUrl = "https://example.com/photo.jpg";
+    const key = Buffer.from(process.env.SOURCE_URL_ENCRYPTION_KEY!, "hex");
+    const iv = randomBytes(16);
+    const cipher = createCipheriv("aes-256-cbc", key, iv);
+    const encrypted = Buffer.concat([
+      iv,
+      cipher.update(sourceUrl, "utf-8"),
+      cipher.final(),
+    ]).toString("base64url");
+
+    const path = `/insecure/w:100/enc/${encrypted}`;
+    const res = await request(app).get(path).buffer(true);
+
+    expect(res.status).toBe(200);
+    expect(mockFile).toHaveBeenCalledWith(encodeURIComponent(path));
+    expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {
+      contentType: "image/jpeg",
+    });
+  });
 });
