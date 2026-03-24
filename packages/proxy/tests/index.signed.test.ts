@@ -92,7 +92,7 @@ describe("cache bucket with signed URLs", () => {
     const path = generateUrl(
       {
         sourceUrl: "https://example.com/photo.jpg",
-        resize: { type: "fit", width: 100 },
+        resize: { type: "fit", width: 100, height: 140 },
       },
       urlConfig,
     );
@@ -102,7 +102,7 @@ describe("cache bucket with signed URLs", () => {
     expect(mockFile).toHaveBeenCalledTimes(1);
     expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
       [
-        "%2Fznk-CL1U__hIV7kLnoKgnMS2hzqqxSWerAjwHKX-WVM%2Frs%3Afit%3A100%3Aundefined%2Fplain%2Fhttps%3A%2F%2Fexample.com%2Fphoto.jpg",
+        "%2Fo8gP_AcuTUqsBpmIpWGtk0eBHf3r-jMH2njYmwtXHjI%2Frs%3Afit%3A100%3A140%2Fplain%2Fhttps%3A%2F%2Fexample.com%2Fphoto.jpg",
       ]
     `);
     expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {
@@ -115,7 +115,7 @@ describe("cache bucket with signed URLs", () => {
     const path = generateUrl(
       {
         sourceUrl: "https://example.com/photo.jpg",
-        resize: { type: "fit", width: 100 },
+        resize: { type: "fit", width: 100, height: 120 },
       },
       { ...urlConfig, encryptionKey: ENCRYPTION_KEY },
     );
@@ -125,7 +125,7 @@ describe("cache bucket with signed URLs", () => {
     expect(mockFile).toHaveBeenCalledTimes(1);
     expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
       [
-        "%2F2qKhJUFsRyXnZ6x3n-xsXyrSsB-psfb5-vHOi-cDIy4%2Frs%3Afit%3A100%3Aundefined%2Fenc%2FNWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-",
+        "%2FxZiJ_85Dt8NoOXWO_GZX9Tvq27vFD7K3C5PkVzvIQHY%2Frs%3Afit%3A100%3A120%2Fenc%2FNWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-",
       ]
     `);
     expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {
