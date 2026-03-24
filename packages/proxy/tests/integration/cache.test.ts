@@ -1,3 +1,4 @@
+import { Storage } from "@google-cloud/storage";
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 import { SERVICE_URL, URL_CONFIG } from "./setup.js";
@@ -5,30 +6,21 @@ import { SOURCE_URL, toPng } from "./helpers.js";
 import { VIDEO_SOURCE_URL } from "./video-helpers.js";
 
 const FAKE_GCS_URL = process.env.FAKE_GCS_URL ?? "http://localhost:4443";
-const CACHE_BUCKET = "test-cache";
+const gcs = new Storage({ apiEndpoint: FAKE_GCS_URL });
+const bucket = gcs.bucket("test-cache");
 
-async function fetchCachedObject(requestPath: string): Promise<Buffer> {
-  const url = `${FAKE_GCS_URL}/storage/v1/b/${CACHE_BUCKET}/o/${encodeURIComponent(requestPath)}?alt=media`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(
-      `Failed to fetch cached object: ${res.status} ${await res.text()}`,
-    );
-  }
-  return Buffer.from(await res.arrayBuffer());
+function cacheKeyFor(urlPath: string): string {
+  return urlPath.startsWith("/") ? urlPath.slice(1) : urlPath;
+}
+
+async function fetchCachedObject(urlPath: string): Promise<Buffer> {
+  const [contents] = await bucket.file(cacheKeyFor(urlPath)).download();
+  return contents;
 }
 
 async function clearCache(): Promise<void> {
-  const listUrl = `${FAKE_GCS_URL}/storage/v1/b/${CACHE_BUCKET}/o`;
-  const res = await fetch(listUrl);
-  if (!res.ok) return;
-  const body = await res.json();
-  for (const item of body.items ?? []) {
-    await fetch(
-      `${FAKE_GCS_URL}/storage/v1/b/${CACHE_BUCKET}/o/${encodeURIComponent(item.name)}`,
-      { method: "DELETE" },
-    );
-  }
+  const [files] = await bucket.getFiles();
+  await Promise.all(files.map((f) => f.delete()));
 }
 
 beforeEach(async () => {
@@ -66,5 +58,24 @@ describe("internal cache", () => {
 
     const cachedBuffer = await fetchCachedObject(urlPath);
     expect(cachedBuffer).toEqual(responseBuffer);
+  });
+
+  it("caches signed encrypted image and matches response", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:fit:80:80/plain/${SOURCE_URL}@webp`,
+    );
+    const urlPath = generateUrl(parsed, {
+      ...URL_CONFIG,
+      encryptionKey: URL_CONFIG.encryptionKey,
+    });
+    const res = await fetch(`${SERVICE_URL}${urlPath}`);
+    expect(res.status).toBe(200);
+    const responseBuffer = Buffer.from(await res.arrayBuffer());
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    const cachedBuffer = await fetchCachedObject(urlPath);
+    expect(cachedBuffer).toEqual(responseBuffer);
+    expect(await toPng(cachedBuffer)).toMatchImageSnapshot();
   });
 });
