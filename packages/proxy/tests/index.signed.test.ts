@@ -76,6 +76,7 @@ function setupSpawnMock() {
 const urlConfig = {
   signingKey: SIGNING_KEY,
   signingSalt: SIGNING_SALT,
+  deterministicEncryption: true,
 };
 
 beforeEach(() => {
@@ -98,7 +99,12 @@ describe("cache bucket with signed URLs", () => {
     const res = await request(app).get(path).buffer(true);
 
     expect(res.status).toBe(200);
-    expect(mockFile).toHaveBeenCalledWith(encodeURIComponent(path));
+    expect(mockFile).toHaveBeenCalledTimes(1);
+    expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
+      [
+        "%2Fznk-CL1U__hIV7kLnoKgnMS2hzqqxSWerAjwHKX-WVM%2Frs%3Afit%3A100%3Aundefined%2Fplain%2Fhttps%3A%2F%2Fexample.com%2Fphoto.jpg",
+      ]
+    `);
     expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {
       contentType: "image/jpeg",
     });
@@ -116,7 +122,12 @@ describe("cache bucket with signed URLs", () => {
     const res = await request(app).get(path).buffer(true);
 
     expect(res.status).toBe(200);
-    expect(mockFile).toHaveBeenCalledWith(encodeURIComponent(path));
+    expect(mockFile).toHaveBeenCalledTimes(1);
+    expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
+      [
+        "%2F2qKhJUFsRyXnZ6x3n-xsXyrSsB-psfb5-vHOi-cDIy4%2Frs%3Afit%3A100%3Aundefined%2Fenc%2FNWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-",
+      ]
+    `);
     expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {
       contentType: "image/jpeg",
     });
