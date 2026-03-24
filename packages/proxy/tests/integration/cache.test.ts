@@ -9,12 +9,8 @@ const FAKE_GCS_URL = process.env.FAKE_GCS_URL ?? "http://localhost:4443";
 const gcs = new Storage({ apiEndpoint: FAKE_GCS_URL });
 const bucket = gcs.bucket("test-cache");
 
-function cacheKeyFor(urlPath: string): string {
-  return urlPath.startsWith("/") ? urlPath.slice(1) : urlPath;
-}
-
 async function fetchCachedObject(urlPath: string): Promise<Buffer> {
-  const [contents] = await bucket.file(cacheKeyFor(urlPath)).download();
+  const [contents] = await bucket.file(urlPath).download();
   return contents;
 }
 
@@ -40,7 +36,11 @@ describe("internal cache", () => {
     // Allow a moment for the async cache write to complete
     await new Promise((r) => setTimeout(r, 500));
 
-    const cachedBuffer = await fetchCachedObject(urlPath);
+    expect(urlPath).toMatchInlineSnapshot(
+      `"/IIda0ksDQePflaC8768xYO1JkL2PZXX3IoM9eKxi79Q/f:jpg/rs:fit:100:100/enc/NzMyYzQzZGJhYjk5ZDBlZtBKi-Id0FYxlGQ7-9wXDkM3s2zCBr3Da1CfeTUcMhYe03RhgH0EO99c6crVLSXM_A"`,
+    );
+
+    const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
     expect(cachedBuffer).toEqual(responseBuffer);
     expect(await toPng(cachedBuffer)).toMatchImageSnapshot();
   });
@@ -56,26 +56,11 @@ describe("internal cache", () => {
 
     await new Promise((r) => setTimeout(r, 1000));
 
-    const cachedBuffer = await fetchCachedObject(urlPath);
-    expect(cachedBuffer).toEqual(responseBuffer);
-  });
-
-  it("caches signed encrypted image and matches response", async () => {
-    const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:80:80/plain/${SOURCE_URL}@webp`,
+    expect(urlPath).toMatchInlineSnapshot(
+      `"/Gz_DDAOd5yjP1O-If1JuZC6yE7axb-p-WmttOL6yjEM/f:mp4/rs:fill:200:200/enc/N2NhNmFkMmYzOTFhNWJlMG-aK85gpH2N6VXLBfdqOMaeRyBpwhFQE9cJlUg88UAo_oU1deehUVUo4kSOlAitLA"`,
     );
-    const urlPath = generateUrl(parsed, {
-      ...URL_CONFIG,
-      encryptionKey: URL_CONFIG.encryptionKey,
-    });
-    const res = await fetch(`${SERVICE_URL}${urlPath}`);
-    expect(res.status).toBe(200);
-    const responseBuffer = Buffer.from(await res.arrayBuffer());
 
-    await new Promise((r) => setTimeout(r, 500));
-
-    const cachedBuffer = await fetchCachedObject(urlPath);
+    const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
     expect(cachedBuffer).toEqual(responseBuffer);
-    expect(await toPng(cachedBuffer)).toMatchImageSnapshot();
   });
 });
