@@ -1,6 +1,8 @@
 import type { UrlGeneratorConfig } from "@socialtip/asset-proxy-url-generator";
 
 export const SERVICE_URL = process.env.SERVICE_URL ?? "http://localhost:8080";
+export const CACHE_PROXY_URL =
+  process.env.CACHE_PROXY_URL ?? "http://localhost:8081";
 
 export const URL_CONFIG: UrlGeneratorConfig = {
   encryptionKey:

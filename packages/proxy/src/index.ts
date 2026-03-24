@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { PassThrough, Readable } from "node:stream";
+import { Readable } from "node:stream";
 import { promisify } from "node:util";
 import contentDisposition from "content-disposition";
 import { Storage } from "@google-cloud/storage";
@@ -12,7 +12,9 @@ import {
   parseProcessingUrl,
   verifySignature,
 } from "@socialtip/asset-proxy-url-parser";
-import { env } from "./env.js";
+import { type ProcessingEnv, env as envSwitched, isCacheMode } from "./env.js";
+
+const env = envSwitched as ProcessingEnv;
 import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
 import { handleInfoRequest } from "./info.js";
 import { logger } from "./logger.js";
@@ -31,55 +33,6 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 const gcs = new Storage();
-const cacheBucket = env.CACHE_BUCKET ? gcs.bucket(env.CACHE_BUCKET) : undefined;
-
-function cacheKey(requestPath: string): string {
-  return requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
-}
-
-function writeToCacheBuffer(
-  requestPath: string,
-  buffer: Buffer,
-  contentType: string,
-): void {
-  if (!cacheBucket) return;
-  const file = cacheBucket.file(cacheKey(requestPath));
-  file.save(buffer, { contentType }).catch((err) => {
-    logger.warn("Failed to write to cache bucket", {
-      error: err instanceof Error ? err.message : String(err),
-      cacheKey: cacheKey(requestPath),
-    });
-  });
-}
-
-function writeToCacheStream(
-  requestPath: string,
-  source: Readable,
-  contentType: string,
-  prefixChunk?: Buffer,
-): Readable {
-  const passthrough = new PassThrough();
-  if (prefixChunk) {
-    passthrough.write(prefixChunk);
-  }
-  source.pipe(passthrough);
-  if (cacheBucket) {
-    const cacheStream = cacheBucket
-      .file(cacheKey(requestPath))
-      .createWriteStream({ contentType });
-    if (prefixChunk) {
-      cacheStream.write(prefixChunk);
-    }
-    source.pipe(cacheStream);
-    cacheStream.on("error", (err) => {
-      logger.warn("Failed to write to cache bucket", {
-        error: err instanceof Error ? err.message : String(err),
-        cacheKey: cacheKey(requestPath),
-      });
-    });
-  }
-  return passthrough;
-}
 
 export const app = express();
 
@@ -400,14 +353,9 @@ async function processAndRespond(
     const raw = Readable.fromWeb(
       response.body as import("node:stream/web").ReadableStream,
     );
-    const stream = writeToCacheStream(
-      req.path,
-      raw,
-      contentType ?? "application/octet-stream",
-    );
-    stream.pipe(res);
-    stream.on("end", () => responseSpan.end());
-    stream.on("error", () => responseSpan.end());
+    raw.pipe(res);
+    raw.on("end", () => responseSpan.end());
+    raw.on("error", () => responseSpan.end());
     return;
   }
 
@@ -420,7 +368,6 @@ async function processAndRespond(
       res.set("Content-Type", contentType);
       res.set("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(res, parsed, result.outputFormat);
-      writeToCacheBuffer(req.path, result.buffer, contentType);
       res.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
@@ -457,13 +404,8 @@ async function processAndRespond(
       res.set("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(res, parsed, parsed.outputFormat);
       const responseSpan = tracer.startSpan("response.stream");
-      const output = writeToCacheStream(
-        req.path,
-        result,
-        contentType,
-        firstChunk,
-      );
-      output.pipe(res);
+      res.write(firstChunk);
+      result.pipe(res);
 
       await new Promise<void>((resolve, reject) => {
         result.on("end", () => {
@@ -518,6 +460,19 @@ app.use(
 );
 
 async function start() {
+  if (isCacheMode(envSwitched)) {
+    const cacheEnv = envSwitched;
+    const { createCacheProxyApp } = await import("./cache-proxy.js");
+    const cacheApp = createCacheProxyApp();
+    cacheApp.listen(cacheEnv.PORT, () => {
+      logger.info(`asset-proxy (cache mode) listening on :${cacheEnv.PORT}`, {
+        version: process.env.BUILD_VERSION ?? "<unset>",
+        forwardUrl: cacheEnv.FORWARD_URL,
+      });
+    });
+    return;
+  }
+
   await gpuReady;
   app.listen(env.PORT, () => {
     logger.info(`asset-proxy listening on :${env.PORT}`, {

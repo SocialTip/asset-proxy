@@ -88,14 +88,13 @@ jobs:
           curl -sf -X POST http://localhost:4443/storage/v1/b \
             -H 'Content-Type: application/json' -d '{"name":"test-cache"}'
 
-      - name: Start asset-proxy
+      - name: Start asset-proxy (processing mode)
         run: nohup pnpm --filter proxy exec tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
           ALLOWED_ORIGINS: "http://file-server"
           STORAGE_EMULATOR_HOST: "http://localhost:4443"
-          CACHE_BUCKET: "test-cache"
 
       - name: Wait for asset-proxy
         id: wait
@@ -104,6 +103,22 @@ jobs:
       - name: Print asset-proxy startup logs
         if: failure() && steps.wait.outcome == 'failure'
         run: tail -100 /tmp/asset-proxy.log
+
+      - name: Start cache-proxy
+        run: nohup pnpm --filter proxy exec tsx src/index.ts > /tmp/cache-proxy.log 2>&1 &
+        env:
+          PORT: "8081"
+          FORWARD_URL: "http://localhost:8080"
+          CACHE_BUCKET: "test-cache"
+          GCS_API_ENDPOINT: "http://localhost:4443"
+
+      - name: Wait for cache-proxy
+        id: wait-cache
+        run: timeout 30 bash -c 'until curl -sf http://localhost:8081/health; do sleep 1; done'
+
+      - name: Print cache-proxy startup logs
+        if: failure() && steps.wait-cache.outcome == 'failure'
+        run: tail -100 /tmp/cache-proxy.log
 
       - run: pnpm -w run test --coverage
 
@@ -165,7 +180,11 @@ jobs:
 
       - name: Print asset-proxy logs
         if: failure() && steps.snapshots.outputs.changed != 'true'
-        run: cat /tmp/asset-proxy.log
+        run: |
+          echo "=== asset-proxy ==="
+          cat /tmp/asset-proxy.log
+          echo "=== cache-proxy ==="
+          cat /tmp/cache-proxy.log
 
   docker-build:
     if: github.event_name == 'pull_request'

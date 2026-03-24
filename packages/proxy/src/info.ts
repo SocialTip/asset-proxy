@@ -10,7 +10,9 @@ import {
   verifySignature,
   type InfoOptions,
 } from "@socialtip/asset-proxy-url-parser";
-import { env } from "./env.js";
+import { type ProcessingEnv, env as envSwitched } from "./env.js";
+
+const env = envSwitched as ProcessingEnv;
 import { logger } from "./logger.js";
 import { recordException, tracer, withSpan } from "./tracing.js";
 
