@@ -34,7 +34,7 @@ const gcs = new Storage();
 const cacheBucket = env.CACHE_BUCKET ? gcs.bucket(env.CACHE_BUCKET) : undefined;
 
 function cacheKey(requestPath: string): string {
-  return encodeURIComponent(requestPath);
+  return requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
 }
 
 function writeToCacheBuffer(

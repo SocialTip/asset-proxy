@@ -102,7 +102,7 @@ describe("cache bucket with signed URLs", () => {
     expect(mockFile).toHaveBeenCalledTimes(1);
     expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
       [
-        "%2Fo8gP_AcuTUqsBpmIpWGtk0eBHf3r-jMH2njYmwtXHjI%2Frs%3Afit%3A100%3A140%2Fplain%2Fhttps%3A%2F%2Fexample.com%2Fphoto.jpg",
+        "o8gP_AcuTUqsBpmIpWGtk0eBHf3r-jMH2njYmwtXHjI/rs:fit:100:140/plain/https://example.com/photo.jpg",
       ]
     `);
     expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {
@@ -125,7 +125,7 @@ describe("cache bucket with signed URLs", () => {
     expect(mockFile).toHaveBeenCalledTimes(1);
     expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
       [
-        "%2FxZiJ_85Dt8NoOXWO_GZX9Tvq27vFD7K3C5PkVzvIQHY%2Frs%3Afit%3A100%3A120%2Fenc%2FNWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-",
+        "xZiJ_85Dt8NoOXWO_GZX9Tvq27vFD7K3C5PkVzvIQHY/rs:fit:100:120/enc/NWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-",
       ]
     `);
     expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {

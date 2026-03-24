@@ -1869,7 +1869,7 @@ describe("cache bucket", () => {
     expect(mockFile).toHaveBeenCalledTimes(1);
     expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
       [
-        "%2Finsecure%2Fw%3A100%2Fplain%2Fhttps%3A%2F%2Fexample.com%2Fphoto.jpg",
+        "insecure/w:100/plain/https://example.com/photo.jpg",
       ]
     `);
     expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {
@@ -1883,7 +1883,12 @@ describe("cache bucket", () => {
     const res = await request(app).get(path).buffer(true);
 
     expect(res.status).toBe(200);
-    expect(mockFile).toHaveBeenCalledWith(encodeURIComponent(path));
+    expect(mockFile).toHaveBeenCalledTimes(1);
+    expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
+      [
+        "insecure/w:100/plain/https://example.com/video.mp4",
+      ]
+    `);
     expect(mockCreateWriteStream).toHaveBeenCalledWith({
       contentType: "video/mp4",
     });
@@ -1893,7 +1898,7 @@ describe("cache bucket", () => {
     setupSpawnMock();
     const sourceUrl = "https://example.com/photo.jpg";
     const key = Buffer.from(process.env.SOURCE_URL_ENCRYPTION_KEY!, "hex");
-    const iv = randomBytes(16);
+    const iv = Buffer.from("babebabebabebabebabebabebabebabe", "hex");
     const cipher = createCipheriv("aes-256-cbc", key, iv);
     const encrypted = Buffer.concat([
       iv,
@@ -1905,7 +1910,12 @@ describe("cache bucket", () => {
     const res = await request(app).get(path).buffer(true);
 
     expect(res.status).toBe(200);
-    expect(mockFile).toHaveBeenCalledWith(encodeURIComponent(path));
+    expect(mockFile).toHaveBeenCalledTimes(1);
+    expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
+      [
+        "insecure/w:100/enc/ur66vrq-ur66vrq-ur66vpYRxKqwsONREbKCebNYFuw0clAAB7Y8ETNBIgbU6K21",
+      ]
+    `);
     expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {
       contentType: "image/jpeg",
     });
