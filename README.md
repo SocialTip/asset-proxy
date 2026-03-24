@@ -66,20 +66,34 @@ When `SIGNING_KEY` and `SIGNING_SALT` are not set, the signature segment is stil
 
 ## Caching
 
-The asset proxy supports an optional internal GCS cache bucket. When `CACHE_BUCKET` is set, every processed result is written to the bucket with the URL-encoded request path as the object key. This is a write-through cache — the proxy always processes the request and writes the result to both the response and the bucket.
+The same Docker image supports two operating modes, controlled by the `FORWARD_URL` environment variable.
 
-To serve cached results without hitting the proxy on every request, deploy a load balancer in front of the proxy that checks the cache bucket first and only falls back to the proxy on a cache miss. This is the consumer's responsibility to configure (e.g. via a Cloud CDN backend bucket + URL map in Terraform).
+### Processing mode (default)
+
+When `FORWARD_URL` is **not** set, the proxy runs in its standard processing mode — it fetches the source asset, processes it (resize, transcode, etc.), and returns the result. No caching is performed in this mode.
+
+### Cache proxy mode
+
+When `FORWARD_URL` is set (e.g. `FORWARD_URL=http://asset-proxy:8080`), the proxy runs as a lightweight cache layer in front of a processing instance. `CACHE_BUCKET` must also be set in this mode.
+
+On each request the cache proxy:
+
+1. Checks the GCS cache bucket for the request path
+2. On a **cache hit**, streams the cached object directly to the client
+3. On a **cache miss**, forwards the request verbatim (path + headers) to `FORWARD_URL`, then streams the response back to the client while simultaneously writing it to the cache bucket
 
 ```mermaid
 flowchart LR
-    Client -->|request| LB[Load Balancer]
-    LB -->|1. check cache| Bucket[GCS Cache Bucket]
-    Bucket -->|hit| LB
-    LB -->|2. cache miss| Proxy[Asset Proxy]
-    Proxy -->|response| LB
-    Proxy -->|write-through| Bucket
-    LB -->|response| Client
+    Client -->|request| Cache[Cache Proxy]
+    Cache -->|1. check cache| Bucket[GCS Cache Bucket]
+    Bucket -->|hit| Cache
+    Cache -->|2. cache miss| Proxy[Processing Proxy]
+    Proxy -->|response| Cache
+    Cache -->|write-through| Bucket
+    Cache -->|response| Client
 ```
+
+In a typical deployment, both containers run in the same service. The cache proxy is the public-facing container, and the processing proxy is only reachable internally.
 
 ## Info endpoint
 
