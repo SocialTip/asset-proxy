@@ -9,7 +9,6 @@ services:
       - ALLOWED_ORIGINS=http://file-server
       - BEST_FORMAT_MAX_RESOLUTION=0.005
       - STORAGE_EMULATOR_HOST=http://fake-gcs:4443
-      - CACHE_BUCKET=test-cache
     ports:
       - "8080:8080"
     volumes:
@@ -23,6 +22,27 @@ services:
       ["pnpm", "--filter", "proxy", "exec", "tsx", "--watch", "src/index.ts"]
     depends_on:
       - file-server
+      - fake-gcs
+
+  cache-proxy:
+    build: .
+    environment:
+      - FORWARD_URL=http://asset-proxy:8080
+      - STORAGE_EMULATOR_HOST=http://fake-gcs:4443
+      - CACHE_BUCKET=test-cache
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./packages/proxy/src:/app/packages/proxy/src:ro
+      - ./packages/url-parser/src:/app/packages/url-parser/src:ro
+      - ./packages/url-parser/dist:/app/packages/url-parser/dist:ro
+      - ./packages/proxy/package.json:/app/packages/proxy/package.json:ro
+      - ./packages/url-parser/package.json:/app/packages/url-parser/package.json:ro
+      - ./package.json:/app/package.json:ro
+    command:
+      ["pnpm", "--filter", "proxy", "exec", "tsx", "--watch", "src/index.ts"]
+    depends_on:
+      - asset-proxy
       - fake-gcs
 
   fake-gcs:

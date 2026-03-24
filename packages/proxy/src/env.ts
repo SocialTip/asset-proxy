@@ -12,10 +12,17 @@ function parseFormatMap(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-const envSchema = z
+const commonFields = {
+  /** Server listen port. */
+  PORT: z.coerce.number().int().positive().default(8080),
+
+  /** Cache-Control header value for successful responses. */
+  CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
+};
+
+const processingModeSchema = z
   .object({
-    /** Server listen port. */
-    PORT: z.coerce.number().int().positive().default(8080),
+    ...commonFields,
 
     /** Set to any truthy value to skip GPU acceleration and use CPU encoding instead.
      *  When unset, GPU (NVENC) is required and the process will exit if unavailable. */
@@ -132,12 +139,6 @@ const envSchema = z
     MAX_ANIMATION_FRAME_RESOLUTION: z.coerce.number().default(0),
     /** Max result width or height in pixels. 0 = unlimited. */
     MAX_RESULT_DIMENSION: z.coerce.number().int().default(0),
-
-    /** Cache-Control header value for successful responses. */
-    CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
-
-    /** GCS bucket name for internal result caching. When set, processed results are written to this bucket with the request path as the object key. A load balancer in front of the proxy can serve cached results directly from this bucket, falling back to the proxy on cache miss. */
-    CACHE_BUCKET: z.string().optional(),
   })
   .refine(
     (data) => {
@@ -150,4 +151,26 @@ const envSchema = z
     },
   );
 
-export const env = envSchema.parse(process.env);
+const cacheModeSchema = z.object({
+  ...commonFields,
+
+  /** URL of the processing proxy to forward cache misses to. */
+  FORWARD_URL: z.string().url(),
+
+  /** GCS bucket name for the cache. */
+  CACHE_BUCKET: z.string(),
+});
+
+export type ProcessingEnv = z.infer<typeof processingModeSchema>;
+export type CacheEnv = z.infer<typeof cacheModeSchema>;
+export type Env = ProcessingEnv | CacheEnv;
+
+function isCacheMode(e: Env): e is CacheEnv {
+  return "FORWARD_URL" in e;
+}
+
+export const env: Env = process.env.FORWARD_URL
+  ? cacheModeSchema.parse(process.env)
+  : processingModeSchema.parse(process.env);
+
+export { isCacheMode };
