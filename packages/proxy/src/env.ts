@@ -135,6 +135,9 @@ const envSchema = z
 
     /** Cache-Control header value for successful responses. */
     CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
+
+    /** GCS bucket name for internal result caching. When set, processed results are written to this bucket with the request path as the object key. A load balancer in front of the proxy can serve cached results directly from this bucket, falling back to the proxy on cache miss. */
+    CACHE_BUCKET: z.string().optional(),
   })
   .refine(
     (data) => {

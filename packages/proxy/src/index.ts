@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { Readable } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { promisify } from "node:util";
 import contentDisposition from "content-disposition";
 import { Storage } from "@google-cloud/storage";
@@ -31,6 +31,55 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 const gcs = new Storage();
+const cacheBucket = env.CACHE_BUCKET ? gcs.bucket(env.CACHE_BUCKET) : undefined;
+
+function cacheKey(requestPath: string): string {
+  return requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
+}
+
+function writeToCacheBuffer(
+  requestPath: string,
+  buffer: Buffer,
+  contentType: string,
+): void {
+  if (!cacheBucket) return;
+  const file = cacheBucket.file(cacheKey(requestPath));
+  file.save(buffer, { contentType }).catch((err) => {
+    logger.warn("Failed to write to cache bucket", {
+      error: err instanceof Error ? err.message : String(err),
+      cacheKey: cacheKey(requestPath),
+    });
+  });
+}
+
+function writeToCacheStream(
+  requestPath: string,
+  source: Readable,
+  contentType: string,
+  prefixChunk?: Buffer,
+): Readable {
+  const passthrough = new PassThrough();
+  if (prefixChunk) {
+    passthrough.write(prefixChunk);
+  }
+  source.pipe(passthrough);
+  if (cacheBucket) {
+    const cacheStream = cacheBucket
+      .file(cacheKey(requestPath))
+      .createWriteStream({ contentType });
+    if (prefixChunk) {
+      cacheStream.write(prefixChunk);
+    }
+    source.pipe(cacheStream);
+    cacheStream.on("error", (err) => {
+      logger.warn("Failed to write to cache bucket", {
+        error: err instanceof Error ? err.message : String(err),
+        cacheKey: cacheKey(requestPath),
+      });
+    });
+  }
+  return passthrough;
+}
 
 export const app = express();
 
@@ -331,7 +380,7 @@ async function handleRequest(req: express.Request, res: express.Response) {
 }
 
 async function processAndRespond(
-  _req: express.Request,
+  req: express.Request,
   res: express.Response,
   parsed: ReturnType<typeof parseProcessingUrl>,
   sourceUrl: string,
@@ -348,8 +397,13 @@ async function processAndRespond(
     res.set("Cache-Control", env.CACHE_CONTROL);
     setContentDisposition(res, parsed);
     const responseSpan = tracer.startSpan("response.stream");
-    const stream = Readable.fromWeb(
+    const raw = Readable.fromWeb(
       response.body as import("node:stream/web").ReadableStream,
+    );
+    const stream = writeToCacheStream(
+      req.path,
+      raw,
+      contentType ?? "application/octet-stream",
     );
     stream.pipe(res);
     stream.on("end", () => responseSpan.end());
@@ -362,12 +416,11 @@ async function processAndRespond(
       const result = await withSpan("processImage", {}, () =>
         processImage(sourceUrl, parsed),
       );
-      res.set(
-        "Content-Type",
-        CONTENT_TYPES[result.outputFormat] || "image/jpeg",
-      );
+      const contentType = CONTENT_TYPES[result.outputFormat] || "image/jpeg";
+      res.set("Content-Type", contentType);
       res.set("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(res, parsed, result.outputFormat);
+      writeToCacheBuffer(req.path, result.buffer, contentType);
       res.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
@@ -399,15 +452,18 @@ async function processAndRespond(
         );
       });
 
-      res.set(
-        "Content-Type",
-        CONTENT_TYPES[parsed.outputFormat] || "video/mp4",
-      );
+      const contentType = CONTENT_TYPES[parsed.outputFormat] || "video/mp4";
+      res.set("Content-Type", contentType);
       res.set("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(res, parsed, parsed.outputFormat);
       const responseSpan = tracer.startSpan("response.stream");
-      res.write(firstChunk);
-      result.pipe(res);
+      const output = writeToCacheStream(
+        req.path,
+        result,
+        contentType,
+        firstChunk,
+      );
+      output.pipe(res);
 
       await new Promise<void>((resolve, reject) => {
         result.on("end", () => {

@@ -5,7 +5,7 @@
 
 ## Documentation
 
-- Do not add newlines in JSDoc comments for the purpose of screen wrapping.
+- Do not ever add newlines in comments, except for starting a new paragraph.
 
 ## Testing
 
