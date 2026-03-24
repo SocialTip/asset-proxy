@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, type Readable } from "node:stream";
 import sharp from "sharp";
-import { env } from "./env.js";
+import { type ProcessingEnv, env as envSwitched, isCacheMode } from "./env.js";
+
+const env = envSwitched as ProcessingEnv;
 import {
   HTTPError,
   type CompassGravity,
@@ -22,55 +24,56 @@ import {
 import { logger } from "./logger.js";
 import { recordException, tracer } from "./tracing.js";
 
-export const gpuReady: Promise<boolean> = env.SKIP_GPU
-  ? Promise.resolve(false)
-  : new Promise((resolve) => {
-      const proc = spawn("ffmpeg", [
-        "-hide_banner",
-        "-hwaccel",
-        "cuda",
-        "-f",
-        "lavfi",
-        "-i",
-        "nullsrc=s=192x192:d=0.1",
-        "-c:v",
-        "h264_nvenc",
-        "-f",
-        "null",
-        "-",
-      ]);
+export const gpuReady: Promise<boolean> =
+  isCacheMode(envSwitched) || env.SKIP_GPU
+    ? Promise.resolve(false)
+    : new Promise((resolve) => {
+        const proc = spawn("ffmpeg", [
+          "-hide_banner",
+          "-hwaccel",
+          "cuda",
+          "-f",
+          "lavfi",
+          "-i",
+          "nullsrc=s=192x192:d=0.1",
+          "-c:v",
+          "h264_nvenc",
+          "-f",
+          "null",
+          "-",
+        ]);
 
-      const stdout: Buffer[] = [];
-      const stderr: Buffer[] = [];
-      proc.stdout.on("data", (chunk) => stdout.push(chunk));
-      proc.stderr.on("data", (chunk) => stderr.push(chunk));
+        const stdout: Buffer[] = [];
+        const stderr: Buffer[] = [];
+        proc.stdout.on("data", (chunk) => stdout.push(chunk));
+        proc.stderr.on("data", (chunk) => stderr.push(chunk));
 
-      proc.on("close", (code) => {
-        const available = code === 0;
-        if (available) {
-          logger.info("GPU acceleration: enabled (NVENC)");
-          resolve(true);
-        } else {
+        proc.on("close", (code) => {
+          const available = code === 0;
+          if (available) {
+            logger.info("GPU acceleration: enabled (NVENC)");
+            resolve(true);
+          } else {
+            logger.error(
+              "GPU acceleration is required but not available. Set env.SKIP_GPU=1 to use CPU encoding.",
+              {
+                stdout: Buffer.concat(stdout).toString(),
+                stderr: Buffer.concat(stderr).toString(),
+                exitCode: code,
+              },
+            );
+            process.exit(1);
+          }
+        });
+
+        proc.on("error", (err) => {
           logger.error(
-            "GPU acceleration is required but not available. Set env.SKIP_GPU=1 to use CPU encoding.",
-            {
-              stdout: Buffer.concat(stdout).toString(),
-              stderr: Buffer.concat(stderr).toString(),
-              exitCode: code,
-            },
+            "GPU acceleration is required but ffmpeg could not be started. Set env.SKIP_GPU=1 to use CPU encoding.",
+            { err },
           );
           process.exit(1);
-        }
+        });
       });
-
-      proc.on("error", (err) => {
-        logger.error(
-          "GPU acceleration is required but ffmpeg could not be started. Set env.SKIP_GPU=1 to use CPU encoding.",
-          { err },
-        );
-        process.exit(1);
-      });
-    });
 
 /** Options that are only supported for image processing, not video. */
 const IMAGE_ONLY_OPTIONS: [keyof ParsedUrl, string][] = [

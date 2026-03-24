@@ -1,7 +1,7 @@
 import { Storage } from "@google-cloud/storage";
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
-import { SERVICE_URL, URL_CONFIG } from "./setup.js";
+import { CACHE_PROXY_URL, URL_CONFIG } from "./setup.js";
 import { SOURCE_URL, toPng } from "./helpers.js";
 import { VIDEO_SOURCE_URL } from "./video-helpers.js";
 
@@ -23,17 +23,16 @@ beforeEach(async () => {
   await clearCache();
 });
 
-describe("internal cache", () => {
-  it("caches image result and matches response", async () => {
+describe("cache proxy", () => {
+  it("forwards to processing proxy on cache miss and caches the result", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
-    const res = await fetch(`${SERVICE_URL}${urlPath}`);
+    const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res.status).toBe(200);
     const responseBuffer = Buffer.from(await res.arrayBuffer());
 
-    // Allow a moment for the async cache write to complete
     await new Promise((r) => setTimeout(r, 500));
 
     expect(urlPath).toMatchInlineSnapshot(
@@ -45,12 +44,31 @@ describe("internal cache", () => {
     expect(await toPng(cachedBuffer)).toMatchImageSnapshot();
   });
 
+  it("serves from cache on cache hit", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res1.status).toBe(200);
+    const buf1 = Buffer.from(await res1.arrayBuffer());
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res2.status).toBe(200);
+    expect(res2.headers.get("content-type")).toBe("image/jpeg");
+    const buf2 = Buffer.from(await res2.arrayBuffer());
+    expect(buf2).toEqual(buf1);
+  });
+
   it("caches video result and matches response", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/rs:fill:200:200/plain/${VIDEO_SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
-    const res = await fetch(`${SERVICE_URL}${urlPath}`);
+    const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res.status).toBe(200);
     const responseBuffer = Buffer.from(await res.arrayBuffer());
 
@@ -62,5 +80,58 @@ describe("internal cache", () => {
 
     const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
     expect(cachedBuffer).toEqual(responseBuffer);
+  });
+
+  it("caches with signed plain URL as key", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:fit:100:140/plain/${SOURCE_URL}`,
+    );
+    const urlPath = generateUrl(parsed, {
+      signingKey: URL_CONFIG.signingKey,
+      signingSalt: URL_CONFIG.signingSalt,
+    });
+    const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res.status).toBe(200);
+    const responseBuffer = Buffer.from(await res.arrayBuffer());
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    expect(urlPath).toMatchInlineSnapshot(
+      `"/lHGJr0YJhuqvTx_55RFqTJSGXM2mzgokm59PvP1xS68/f:jpg/rs:fit:100:140/plain/http://file-server/test-image.png"`,
+    );
+
+    const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
+    expect(cachedBuffer).toEqual(responseBuffer);
+  });
+
+  it("caches with signed encrypted URL as key", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:fit:100:120/plain/${SOURCE_URL}`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+    const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res.status).toBe(200);
+    const responseBuffer = Buffer.from(await res.arrayBuffer());
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    expect(urlPath).toMatchInlineSnapshot(
+      `"/eozMtxu0mSVarkeij1lPW8n5dv9k_VVOf4ssZumiVQc/f:jpg/rs:fit:100:120/enc/NzMyYzQzZGJhYjk5ZDBlZtBKi-Id0FYxlGQ7-9wXDkM3s2zCBr3Da1CfeTUcMhYe03RhgH0EO99c6crVLSXM_A"`,
+    );
+
+    const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
+    expect(cachedBuffer).toEqual(responseBuffer);
+  });
+
+  it("does not cache error responses", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:fit:100:100/plain/http://file-server/nonexistent.png`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+    const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+
+    const [files] = await bucket.getFiles({ prefix: urlPath.slice(1) });
+    expect(files).toHaveLength(0);
   });
 });

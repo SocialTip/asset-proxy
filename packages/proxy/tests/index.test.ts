@@ -1,5 +1,5 @@
 import { createCipheriv, randomBytes } from "node:crypto";
-import { PassThrough, Readable } from "node:stream";
+import { Readable } from "node:stream";
 import { spawn } from "node:child_process";
 import request from "supertest";
 
@@ -7,22 +7,14 @@ vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
   execFile: vi.fn(),
 }));
-const { mockSave, mockCreateWriteStream, mockFile, mockBucket } = vi.hoisted(
-  () => {
-    const mockSave = vi.fn().mockResolvedValue(undefined);
-    const mockCreateWriteStream = vi.fn();
-    const mockFile = vi.fn().mockReturnValue({
-      save: mockSave,
-      createWriteStream: mockCreateWriteStream,
-    });
-    const mockBucket = vi.fn().mockReturnValue({ file: mockFile });
-    return { mockSave, mockCreateWriteStream, mockFile, mockBucket };
-  },
-);
 vi.mock("@google-cloud/storage", () => {
   return {
     Storage: class {
-      bucket = mockBucket;
+      bucket = vi.fn().mockReturnValue({
+        file: vi.fn().mockReturnValue({
+          getSignedUrl: vi.fn().mockResolvedValue(["https://signed-url"]),
+        }),
+      });
     },
   };
 });
@@ -84,7 +76,6 @@ vi.hoisted(() => {
   process.env.SKIP_GPU = "1";
   process.env.KEEP_COPYRIGHT = "0";
   process.env.ALLOWED_ORIGINS = "http://file-server,https://example.com";
-  process.env.CACHE_BUCKET = "test-cache-bucket";
   process.env.SOURCE_URL_ENCRYPTION_KEY =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 });
@@ -120,9 +111,6 @@ const vplain = (opts: string) => `${opts}/plain/${VSRC}`;
 
 beforeEach(() => {
   mockSpawn.mockReset();
-  mockSave.mockClear();
-  mockFile.mockClear();
-  mockCreateWriteStream.mockReset().mockImplementation(() => new PassThrough());
 });
 
 describe("error handling", () => {
@@ -1856,68 +1844,5 @@ describe("best format ffmpeg args", () => {
     // When best format is active, ffmpeg should output PNG (lossless intermediate)
     expect(args).toContain("png");
     expect(args).not.toContain("mjpeg");
-  });
-});
-
-describe("cache bucket", () => {
-  it("writes image result to cache bucket with correct key and content type", async () => {
-    setupSpawnMock();
-    const path = "/insecure/w:100/plain/https://example.com/photo.jpg";
-    const res = await request(app).get(path).buffer(true);
-
-    expect(res.status).toBe(200);
-    expect(mockFile).toHaveBeenCalledTimes(1);
-    expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
-      [
-        "insecure/w:100/plain/https://example.com/photo.jpg",
-      ]
-    `);
-    expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {
-      contentType: "image/jpeg",
-    });
-  });
-
-  it("writes video result to cache bucket via stream with correct key", async () => {
-    setupSpawnMock();
-    const path = "/insecure/w:100/plain/https://example.com/video.mp4";
-    const res = await request(app).get(path).buffer(true);
-
-    expect(res.status).toBe(200);
-    expect(mockFile).toHaveBeenCalledTimes(1);
-    expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
-      [
-        "insecure/w:100/plain/https://example.com/video.mp4",
-      ]
-    `);
-    expect(mockCreateWriteStream).toHaveBeenCalledWith({
-      contentType: "video/mp4",
-    });
-  });
-
-  it("uses full request path including /enc/ segment as cache key", async () => {
-    setupSpawnMock();
-    const sourceUrl = "https://example.com/photo.jpg";
-    const key = Buffer.from(process.env.SOURCE_URL_ENCRYPTION_KEY!, "hex");
-    const iv = Buffer.from("babebabebabebabebabebabebabebabe", "hex");
-    const cipher = createCipheriv("aes-256-cbc", key, iv);
-    const encrypted = Buffer.concat([
-      iv,
-      cipher.update(sourceUrl, "utf-8"),
-      cipher.final(),
-    ]).toString("base64url");
-
-    const path = `/insecure/w:100/enc/${encrypted}`;
-    const res = await request(app).get(path).buffer(true);
-
-    expect(res.status).toBe(200);
-    expect(mockFile).toHaveBeenCalledTimes(1);
-    expect(mockFile.mock.calls[0]).toMatchInlineSnapshot(`
-      [
-        "insecure/w:100/enc/ur66vrq-ur66vrq-ur66vpYRxKqwsONREbKCebNYFuw0clAAB7Y8ETNBIgbU6K21",
-      ]
-    `);
-    expect(mockSave).toHaveBeenCalledWith(expect.any(Buffer), {
-      contentType: "image/jpeg",
-    });
   });
 });
