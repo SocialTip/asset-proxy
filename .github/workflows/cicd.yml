@@ -110,7 +110,7 @@ jobs:
           PORT: "8081"
           FORWARD_URL: "http://localhost:8080"
           CACHE_BUCKET: "test-cache"
-          STORAGE_EMULATOR_HOST: "http://localhost:4443"
+          GCS_API_ENDPOINT: "http://localhost:4443"
 
       - name: Wait for cache-proxy
         id: wait-cache

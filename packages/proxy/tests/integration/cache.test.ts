@@ -52,15 +52,21 @@ describe("cache proxy", () => {
 
     const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res1.status).toBe(200);
-    const buf1 = Buffer.from(await res1.arrayBuffer());
 
     await new Promise((r) => setTimeout(r, 500));
 
+    // Overwrite the cached object with sentinel content to prove the next request reads from the bucket
+    const key = urlPath.slice(1);
+    const file = bucket.file(key);
+    await file.save(Buffer.from("sentinel"), {
+      contentType: "text/plain",
+      resumable: false,
+    });
+
     const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res2.status).toBe(200);
-    expect(res2.headers.get("content-type")).toBe("image/jpeg");
-    const buf2 = Buffer.from(await res2.arrayBuffer());
-    expect(buf2).toEqual(buf1);
+    const body = await res2.text();
+    expect(body).toBe("sentinel");
   });
 
   it("caches video result and matches response", async () => {
