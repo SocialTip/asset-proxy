@@ -471,9 +471,9 @@ async function start() {
     });
     server = app;
   }
-  
-  if (cacheEnv.HEALTH_PORT) {
-    startHealthServer(cacheEnv.HEALTH_PORT);
+
+  if (envSwitched.HEALTH_PORT) {
+    startHealthServer(envSwitched.HEALTH_PORT);
   }
 
   if (process.env.NODE_V8_COVERAGE) {
