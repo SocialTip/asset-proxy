@@ -108,23 +108,13 @@ export function createCacheProxyApp(): express.Express {
         const file = cacheBucket.file(key);
 
         const pending = inflight.get(key);
-        if (pending) {
-          try {
-            await pending;
-          } catch {
-            // Cache write failed — fall through to fetch from upstream.
-          }
-          const [exists] = await file.exists();
-          if (exists) {
-            serveFromCache(req, res, file);
-            return;
-          }
-        } else {
-          const [exists] = await file.exists();
-          if (exists) {
-            serveFromCache(req, res, file);
-            return;
-          }
+        await pending?.catch(() => {
+          // Cache write failed — fall through to fetch from upstream.
+        });
+        const [exists] = await file.exists();
+        if (exists) {
+          serveFromCache(req, res, file);
+          return;
         }
 
         const forwardUrl = `${env.FORWARD_URL}${req.originalUrl}`;
