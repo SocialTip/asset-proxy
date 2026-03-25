@@ -4,6 +4,7 @@ import express from "express";
 import parseRange from "range-parser";
 import { type CacheEnv, env as envSwitched } from "./env.js";
 import { logger } from "./logger.js";
+import { tracer } from "./tracing.js";
 
 const env = envSwitched as CacheEnv;
 
@@ -45,7 +46,10 @@ export function createCacheProxyApp(): express.Express {
     res: express.Response,
     file: ReturnType<typeof cacheBucket.file>,
   ): void {
+    const span = tracer.startSpan("cache.serveFromCache");
+    const metadataSpan = tracer.startSpan("cache.bucket.getMetadata");
     file.getMetadata().then(([metadata]) => {
+      metadataSpan.end();
       const contentType =
         (metadata.contentType as string) ?? "application/octet-stream";
       const fileSize = Number(metadata.size);
@@ -69,14 +73,21 @@ export function createCacheProxyApp(): express.Express {
           if (rangeSize <= CONTENT_LENGTH_OMIT_THRESHOLD) {
             res.set("Content-Length", String(rangeSize));
           }
-          file.createReadStream({ start, end }).pipe(res);
+          const readStream = file.createReadStream({ start, end });
+          const ttfbSpan = tracer.startSpan("cache.bucket.readStream.ttfb");
+          readStream.once("data", () => ttfbSpan.end());
+          readStream.pipe(res);
         }
       } else {
         if (fileSize > 0 && fileSize <= CONTENT_LENGTH_OMIT_THRESHOLD) {
           res.set("Content-Length", String(fileSize));
         }
-        file.createReadStream().pipe(res);
+        const readStream = file.createReadStream();
+        const ttfbSpan = tracer.startSpan("cache.bucket.readStream.ttfb");
+        readStream.once("data", () => ttfbSpan.end());
+        readStream.pipe(res);
       }
+      span.end();
     });
   }
 
