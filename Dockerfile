@@ -76,7 +76,10 @@ ENV OTEL_TRACES_SAMPLER_ARG=
 ENV OTEL_RESOURCE_ATTRIBUTES=
 ENV OTEL_ENVIRONMENT=production
 
+# Main h2c port for asset processing requests.
 ENV PORT=8080
+# Separate HTTP/1.1 port for health checks. The main server speaks h2c only,
+# which most load-balancer probes (Cloud Run, Kubernetes) do not support.
 ENV HEALTH_PORT=8082
 EXPOSE 8080
 EXPOSE 8082
