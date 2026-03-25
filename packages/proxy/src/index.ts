@@ -395,7 +395,7 @@ async function processAndRespond(
       res.set("Content-Type", contentType);
       res.set("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(res, parsed, result.outputFormat);
-      res.send(result.buffer);
+      Readable.from(result.buffer).pipe(res);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
       logger.error("Error processing video", {
