@@ -76,6 +76,10 @@ export function createCacheProxyApp(): express.Express {
     ) => {
       try {
         const key = cacheKey(req.path);
+        if (!key) {
+          res.status(404).set("Content-type", "text/plain").end();
+          return;
+        }
         const file = cacheBucket.file(key);
 
         const pending = inflight.get(key);
