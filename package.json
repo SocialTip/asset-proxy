@@ -9,7 +9,7 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest",
     "test:up": "docker compose up -d --build --wait",
-    "test:restart": "docker compose restart asset-proxy",
+    "test:restart": "docker compose restart asset-proxy cache-proxy",
     "test:down": "docker compose down",
     "lint": "eslint .",
     "format": "prettier --write .",

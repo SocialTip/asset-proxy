@@ -217,6 +217,12 @@ describe("cache proxy", () => {
     expect(res.headers.get("content-length")).toBeTruthy();
   });
 
+  it("returns 404 for empty request URL", async () => {
+    const res = await fetch(`${CACHE_PROXY_URL}/`);
+    expect(await res.text()).toMatchInlineSnapshot(`""`);
+    expect(res.status).toBe(404);
+  });
+
   it("does not cache error responses", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/rs:fit:100:100/plain/http://file-server/nonexistent.png`,
@@ -224,6 +230,10 @@ describe("cache proxy", () => {
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.headers.get("content-type")).toMatchInlineSnapshot(
+      `"text/html; charset=utf-8"`,
+    );
+    expect(await res.text()).toMatchInlineSnapshot(`"Unhandled error"`);
 
     const [files] = await bucket.getFiles({ prefix: urlPath.slice(1) });
     expect(files).toHaveLength(0);
