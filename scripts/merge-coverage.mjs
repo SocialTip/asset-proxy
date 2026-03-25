@@ -1,7 +1,8 @@
+import process from "node:process";
+import { readFileSync, existsSync } from "node:fs";
 import libCoverage from "istanbul-lib-coverage";
 import libReport from "istanbul-lib-report";
 import reports from "istanbul-reports";
-import { readFileSync, existsSync } from "node:fs";
 
 /**
  * Extract per-line execution counts from an istanbul file coverage object.
