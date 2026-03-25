@@ -71,8 +71,20 @@ map.merge(vitestData);
 for (const [file, serverFileCov] of Object.entries(serverData)) {
   if (!file.includes("/src/")) continue;
 
-  if (vitestData[file]) {
+  const vitestFileCov = vitestData[file];
+  if (
+    vitestFileCov &&
+    Object.keys(vitestFileCov.statementMap).length >=
+      Object.keys(serverFileCov.statementMap).length
+  ) {
     augment(map.fileCoverageFor(file).data, serverFileCov);
+  } else if (vitestFileCov) {
+    // Server coverage has more mapped statements (vitest only partially
+    // instrumented this file). Replace vitest's entry with server data
+    // augmented by vitest's line-level counts.
+    const serverCopy = JSON.parse(JSON.stringify(serverFileCov));
+    augment(serverCopy, vitestFileCov);
+    map.data[file] = libCoverage.createFileCoverage(serverCopy);
   } else {
     map.addFileCoverage(serverFileCov);
   }
