@@ -1,5 +1,6 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
+import { FastifyOtelInstrumentation } from "@fastify/otel";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
@@ -16,6 +17,8 @@ process.env.OTEL_RESOURCE_ATTRIBUTES = existing
   ? `${existing},${envAttr}`
   : envAttr;
 
+export const fastifyOtelInstrumentation = new FastifyOtelInstrumentation();
+
 const sdk = new NodeSDK({
   traceExporter: new OTLPTraceExporter(),
   metricReaders: [
@@ -28,7 +31,12 @@ const sdk = new NodeSDK({
       ? new BatchLogRecordProcessor(new OTLPLogExporter())
       : new SimpleLogRecordProcessor(new OTLPLogExporter()),
   ],
-  instrumentations: [getNodeAutoInstrumentations({})],
+  instrumentations: [
+    getNodeAutoInstrumentations({
+      "@opentelemetry/instrumentation-fastify": { enabled: false },
+    }),
+    fastifyOtelInstrumentation,
+  ],
 });
 
 sdk.start();
