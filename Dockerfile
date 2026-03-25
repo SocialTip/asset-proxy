@@ -77,10 +77,12 @@ ENV OTEL_RESOURCE_ATTRIBUTES=
 ENV OTEL_ENVIRONMENT=production
 
 ENV PORT=8080
+ENV HEALTH_PORT=8082
 EXPOSE 8080
+EXPOSE 8082
 
 HEALTHCHECK --interval=30s --timeout=5s \
-  CMD curl -f --http2-prior-knowledge http://localhost:8080/health || exit 1
+  CMD curl -f http://localhost:8082/health || exit 1
 
 ARG BUILD_VERSION="<unset>"
 ENV BUILD_VERSION=${BUILD_VERSION}
