@@ -9,6 +9,7 @@ import type { Http2Server } from "node:http2";
 import parseRange from "range-parser";
 import { type CacheEnv, env as envSwitched } from "./env.js";
 import { h2cFetch } from "./h2c-fetch.js";
+import { fastifyOtelInstrumentation } from "./instrument.js";
 import { logger } from "./logger.js";
 import { tracer } from "./tracing.js";
 
@@ -35,6 +36,7 @@ export async function createCacheProxyApp() {
   const cacheBucket = gcs.bucket(env.CACHE_BUCKET);
   const inflight = new Map<string, Promise<void>>();
   const app = Fastify({ http2: true });
+  await app.register(fastifyOtelInstrumentation.plugin());
 
   app.get("/health", async (_request, reply) => {
     return reply.send("ok");
