@@ -1,6 +1,7 @@
 import { PassThrough, Readable } from "node:stream";
 import { Storage } from "@google-cloud/storage";
 import express from "express";
+import parseRange from "range-parser";
 import { type CacheEnv, env as envSwitched } from "./env.js";
 import { logger } from "./logger.js";
 
@@ -18,32 +19,6 @@ const HOP_BY_HOP = new Set([
 
 function cacheKey(requestPath: string): string {
   return requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
-}
-
-function parseRangeHeader(
-  header: string,
-  fileSize: number,
-): { start: number; end: number } | null {
-  const match = header.match(/^bytes=(\d*)-(\d*)$/);
-  if (!match) return null;
-
-  let start: number;
-  let end: number;
-
-  if (match[1] === "" && match[2] !== "") {
-    const suffix = Number(match[2]);
-    start = Math.max(0, fileSize - suffix);
-    end = fileSize - 1;
-  } else if (match[2] === "") {
-    start = Number(match[1]);
-    end = fileSize - 1;
-  } else {
-    start = Number(match[1]);
-    end = Math.min(Number(match[2]), fileSize - 1);
-  }
-
-  if (start > end || start >= fileSize) return null;
-  return { start, end };
 }
 
 export function createCacheProxyApp(): express.Express {
@@ -74,21 +49,17 @@ export function createCacheProxyApp(): express.Express {
 
       const rangeHeader = req.headers.range;
       if (rangeHeader && fileSize > 0) {
-        const range = parseRangeHeader(rangeHeader, fileSize);
-        if (range) {
-          res.status(206);
-          res.set(
-            "Content-Range",
-            `bytes ${range.start}-${range.end}/${fileSize}`,
-          );
-          res.set("Content-Length", String(range.end - range.start + 1));
-          file
-            .createReadStream({ start: range.start, end: range.end })
-            .pipe(res);
-        } else {
+        const ranges = parseRange(fileSize, rangeHeader);
+        if (ranges === -1 || ranges === -2 || ranges.length !== 1) {
           res.status(416);
           res.set("Content-Range", `bytes */${fileSize}`);
           res.end();
+        } else {
+          const { start, end } = ranges[0];
+          res.status(206);
+          res.set("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+          res.set("Content-Length", String(end - start + 1));
+          file.createReadStream({ start, end }).pipe(res);
         }
       } else {
         if (fileSize > 0) res.set("Content-Length", String(fileSize));
