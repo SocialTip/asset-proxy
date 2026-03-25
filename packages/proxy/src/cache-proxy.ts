@@ -51,11 +51,51 @@ export function createCacheProxyApp(): express.Express {
     apiEndpoint: process.env.GCS_API_ENDPOINT || undefined,
   });
   const cacheBucket = gcs.bucket(env.CACHE_BUCKET);
+  const inflight = new Map<string, Promise<void>>();
   const app = express();
 
   app.get("/health", (_req, res) => {
     res.send("ok");
   });
+
+  function serveFromCache(
+    req: express.Request,
+    res: express.Response,
+    file: ReturnType<typeof cacheBucket.file>,
+  ): void {
+    file.getMetadata().then(([metadata]) => {
+      const contentType =
+        (metadata.contentType as string) ?? "application/octet-stream";
+      const fileSize = Number(metadata.size);
+
+      res.set("Content-Type", contentType);
+      res.set("Cache-Control", env.CACHE_CONTROL);
+      res.set("Accept-Ranges", "bytes");
+
+      const rangeHeader = req.headers.range;
+      if (rangeHeader && fileSize > 0) {
+        const range = parseRangeHeader(rangeHeader, fileSize);
+        if (range) {
+          res.status(206);
+          res.set(
+            "Content-Range",
+            `bytes ${range.start}-${range.end}/${fileSize}`,
+          );
+          res.set("Content-Length", String(range.end - range.start + 1));
+          file
+            .createReadStream({ start: range.start, end: range.end })
+            .pipe(res);
+        } else {
+          res.status(416);
+          res.set("Content-Range", `bytes */${fileSize}`);
+          res.end();
+        }
+      } else {
+        if (fileSize > 0) res.set("Content-Length", String(fileSize));
+        file.createReadStream().pipe(res);
+      }
+    });
+  }
 
   app.use(
     async (
@@ -67,40 +107,24 @@ export function createCacheProxyApp(): express.Express {
         const key = cacheKey(req.path);
         const file = cacheBucket.file(key);
 
-        const [exists] = await file.exists();
-        if (exists) {
-          const [metadata] = await file.getMetadata();
-          const contentType =
-            (metadata.contentType as string) ?? "application/octet-stream";
-          const fileSize = Number(metadata.size);
-
-          res.set("Content-Type", contentType);
-          res.set("Cache-Control", env.CACHE_CONTROL);
-          res.set("Accept-Ranges", "bytes");
-
-          const rangeHeader = req.headers.range;
-          if (rangeHeader && fileSize > 0) {
-            const range = parseRangeHeader(rangeHeader, fileSize);
-            if (range) {
-              res.status(206);
-              res.set(
-                "Content-Range",
-                `bytes ${range.start}-${range.end}/${fileSize}`,
-              );
-              res.set("Content-Length", String(range.end - range.start + 1));
-              file
-                .createReadStream({ start: range.start, end: range.end })
-                .pipe(res);
-            } else {
-              res.status(416);
-              res.set("Content-Range", `bytes */${fileSize}`);
-              res.end();
-            }
-          } else {
-            if (fileSize > 0) res.set("Content-Length", String(fileSize));
-            file.createReadStream().pipe(res);
+        const pending = inflight.get(key);
+        if (pending) {
+          try {
+            await pending;
+          } catch {
+            // Cache write failed — fall through to fetch from upstream.
           }
-          return;
+          const [exists] = await file.exists();
+          if (exists) {
+            serveFromCache(req, res, file);
+            return;
+          }
+        } else {
+          const [exists] = await file.exists();
+          if (exists) {
+            serveFromCache(req, res, file);
+            return;
+          }
         }
 
         const forwardUrl = `${env.FORWARD_URL}${req.originalUrl}`;
@@ -145,16 +169,25 @@ export function createCacheProxyApp(): express.Express {
           .file(key)
           .createWriteStream({ contentType, resumable: false });
 
+        const cacheWrite = new Promise<void>((resolve, reject) => {
+          cacheStream.on("finish", resolve);
+          cacheStream.on("error", reject);
+        });
+        inflight.set(key, cacheWrite);
+        cacheWrite
+          .catch((err) => {
+            logger.warn("Failed to write to cache bucket", {
+              error: err instanceof Error ? err.message : String(err),
+              cacheKey: key,
+            });
+          })
+          .finally(() => {
+            inflight.delete(key);
+          });
+
         source.pipe(clientStream);
         source.pipe(cacheStream);
         clientStream.pipe(res);
-
-        cacheStream.on("error", (err) => {
-          logger.warn("Failed to write to cache bucket", {
-            error: err instanceof Error ? err.message : String(err),
-            cacheKey: key,
-          });
-        });
       } catch (err) {
         next(err);
       }
