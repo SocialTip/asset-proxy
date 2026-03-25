@@ -58,6 +58,15 @@ export async function createCacheProxyApp() {
     reply.header("Content-Type", contentType);
     reply.header("Cache-Control", env.CACHE_CONTROL);
     reply.header("Accept-Ranges", "bytes");
+    if (metadata.etag) {
+      reply.header("ETag", metadata.etag as string);
+    }
+    if (metadata.updated) {
+      reply.header(
+        "Last-Modified",
+        new Date(metadata.updated as string).toUTCString(),
+      );
+    }
 
     const rangeHeader = request.headers.range;
     if (rangeHeader && fileSize > 0) {

@@ -67,6 +67,11 @@ describe("cache proxy", () => {
     expect(res2.status).toBe(200);
     const body = await res2.text();
     expect(body).toBe("sentinel");
+    expect(res2.headers.get("etag")).toBeTruthy();
+    expect(res2.headers.get("last-modified")).toBeTruthy();
+    expect(
+      new Date(res2.headers.get("last-modified")!).getTime(),
+    ).not.toBeNaN();
   });
 
   it("caches video result and matches response", async () => {
