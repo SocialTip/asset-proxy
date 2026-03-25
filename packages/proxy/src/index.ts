@@ -19,6 +19,8 @@ import {
   verifySignature,
 } from "@socialtip/asset-proxy-url-parser";
 import { type ProcessingEnv, env as envSwitched, isCacheMode } from "./env.js";
+import { startHealthServer } from "./health-server.js";
+import { fastifyOtelInstrumentation } from "./instrument.js";
 
 const env = envSwitched as ProcessingEnv;
 import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
@@ -41,6 +43,7 @@ const CONTENT_TYPES: Record<string, string> = {
 const gcs = new Storage();
 
 export const app = Fastify({ http2: true });
+app.register(fastifyOtelInstrumentation.plugin());
 
 function assertOriginAllowed(sourceUrl: string): void {
   const { ALLOWED_ORIGINS } = env;
@@ -467,6 +470,10 @@ async function start() {
       version: process.env.BUILD_VERSION ?? "<unset>",
     });
     server = app;
+  }
+  
+  if (cacheEnv.HEALTH_PORT) {
+    startHealthServer(cacheEnv.HEALTH_PORT);
   }
 
   if (process.env.NODE_V8_COVERAGE) {

@@ -3,6 +3,8 @@ services:
     build: .
     init: true
     environment:
+      - HEALTH_PORT=8082
+      - NODE_V8_COVERAGE
       - SKIP_GPU=1
       - SOURCE_URL_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       - SIGNING_KEY=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
@@ -10,9 +12,9 @@ services:
       - ALLOWED_ORIGINS=http://file-server
       - BEST_FORMAT_MAX_RESOLUTION=0.005
       - STORAGE_EMULATOR_HOST=http://fake-gcs:4443
-      - NODE_V8_COVERAGE
     ports:
       - "8080:8080"
+      - "8082:8082"
     volumes:
       - ./packages/proxy/src:/app/packages/proxy/src:ro
       - ./packages/proxy/dist:/app/packages/proxy/dist:ro
@@ -39,12 +41,14 @@ services:
     build: .
     init: true
     environment:
+      - HEALTH_PORT=8082
+      - NODE_V8_COVERAGE
       - FORWARD_URL=http://asset-proxy:8080
       - CACHE_BUCKET=test-cache
       - GCS_API_ENDPOINT=http://fake-gcs:4443
-      - NODE_V8_COVERAGE
     ports:
       - "8081:8080"
+      - "8083:8082"
     volumes:
       - ./packages/proxy/src:/app/packages/proxy/src:ro
       - ./packages/proxy/dist:/app/packages/proxy/dist:ro

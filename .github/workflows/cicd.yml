@@ -91,6 +91,7 @@ jobs:
       - name: Start asset-proxy (processing mode)
         run: nohup node packages/proxy/dist/index.js > /tmp/asset-proxy.log 2>&1 &
         env:
+          HEALTH_PORT: "8082"
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
           SIGNING_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -102,7 +103,7 @@ jobs:
 
       - name: Wait for asset-proxy
         id: wait
-        run: timeout 30 bash -c 'until curl -sf --http2-prior-knowledge http://localhost:8080/health; do sleep 1; done'
+        run: timeout 30 bash -c 'until curl -sf http://localhost:8082/health; do sleep 1; done'
 
       - name: Print asset-proxy startup logs
         if: failure() && steps.wait.outcome == 'failure'
@@ -111,6 +112,7 @@ jobs:
       - name: Start cache-proxy
         run: nohup node packages/proxy/dist/index.js > /tmp/cache-proxy.log 2>&1 &
         env:
+          HEALTH_PORT: "8083"
           PORT: "8081"
           FORWARD_URL: "http://localhost:8080"
           CACHE_BUCKET: "test-cache"
@@ -119,7 +121,7 @@ jobs:
 
       - name: Wait for cache-proxy
         id: wait-cache
-        run: timeout 30 bash -c 'until curl -sf --http2-prior-knowledge http://localhost:8081/health; do sleep 1; done'
+        run: timeout 30 bash -c 'until curl -sf http://localhost:8083/health; do sleep 1; done'
 
       - name: Print cache-proxy startup logs
         if: failure() && steps.wait-cache.outcome == 'failure'
