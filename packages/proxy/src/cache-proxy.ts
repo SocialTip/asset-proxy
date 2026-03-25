@@ -65,7 +65,10 @@ export function createCacheProxyApp(): express.Express {
           const { start, end } = ranges[0];
           res.status(206);
           res.set("Content-Range", `bytes ${start}-${end}/${fileSize}`);
-          res.set("Content-Length", String(end - start + 1));
+          const rangeSize = end - start + 1;
+          if (rangeSize <= CONTENT_LENGTH_OMIT_THRESHOLD) {
+            res.set("Content-Length", String(rangeSize));
+          }
           file.createReadStream({ start, end }).pipe(res);
         }
       } else {
