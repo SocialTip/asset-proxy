@@ -81,7 +81,7 @@ When `FORWARD_URL` is set (e.g. `FORWARD_URL=http://asset-proxy:8080`), the prox
 On each request the cache proxy:
 
 1. Checks the GCS cache bucket for the request path
-2. On a **cache hit**, streams the cached object directly to the client
+2. On a **cache hit**, streams the cached object directly to the client with `ETag` and `Last-Modified` response headers derived from the cached object metadata
 3. On a **cache miss**, forwards the request verbatim (path + headers) to `FORWARD_URL`, then streams the response back to the client while simultaneously writing it to the cache bucket
 
 ```mermaid

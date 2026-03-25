@@ -38,7 +38,12 @@ const mockCreateReadStream = vi.fn(
 const mockFile = vi.fn(() => ({
   exists: vi.fn(async () => [cacheWriteFinished]),
   getMetadata: vi.fn(async () => [
-    { contentType: "video/mp4", size: storedContent.length },
+    {
+      contentType: "video/mp4",
+      size: storedContent.length,
+      etag: '"abc123"',
+      updated: "2025-01-01T00:00:00Z",
+    },
   ]),
   createReadStream: mockCreateReadStream,
   createWriteStream: mockCreateWriteStream,
