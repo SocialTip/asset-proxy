@@ -444,6 +444,8 @@ app.setErrorHandler((err: Error, _request, reply) => {
 });
 
 async function start() {
+  let server: { close(): Promise<void> };
+
   if (isCacheMode(envSwitched)) {
     const cacheEnv = envSwitched;
     const { createCacheProxyApp } = await import("./cache-proxy.js");
@@ -453,26 +455,34 @@ async function start() {
       version: process.env.BUILD_VERSION ?? "<unset>",
       forwardUrl: cacheEnv.FORWARD_URL,
     });
-    if (cacheEnv.HEALTH_PORT) {
-      startHealthServer(cacheEnv.HEALTH_PORT);
+    server = cacheApp;
+  } else {
+    await gpuReady;
+    try {
+      await app.listen({ port: env.PORT, host: "0.0.0.0" });
+    } catch (err) {
+      logger.error("Server error", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return;
     }
-    return;
+    logger.info(`asset-proxy listening on :${env.PORT}`, {
+      version: process.env.BUILD_VERSION ?? "<unset>",
+    });
+    server = app;
   }
 
-  await gpuReady;
-  try {
-    await app.listen({ port: env.PORT, host: "0.0.0.0" });
-  } catch (err) {
-    logger.error("Server error", {
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return;
+  if (envSwitched.HEALTH_PORT) {
+    startHealthServer(envSwitched.HEALTH_PORT);
   }
-  logger.info(`asset-proxy listening on :${env.PORT}`, {
-    version: process.env.BUILD_VERSION ?? "<unset>",
-  });
-  if (env.HEALTH_PORT) {
-    startHealthServer(env.HEALTH_PORT);
+
+  if (process.env.NODE_V8_COVERAGE) {
+    for (const signal of ["SIGTERM", "SIGINT"] as const) {
+      process.on(signal, () => {
+        server.close().finally(() => process.exit(0));
+        setTimeout(() => process.exit(0), 5000).unref();
+      });
+    }
   }
 }
 
