@@ -16,6 +16,9 @@ const commonFields = {
   /** Server listen port. */
   PORT: z.coerce.number().int().positive().default(8080),
 
+  /** Optional HTTP/1.1 health-check port. When set, the proxy starts a plain HTTP/1.1 server on this port that responds to GET /health. Useful for load-balancer probes that do not support h2c. */
+  HEALTH_PORT: z.coerce.number().int().positive().optional(),
+
   /** Cache-Control header value for successful responses. */
   CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
 };

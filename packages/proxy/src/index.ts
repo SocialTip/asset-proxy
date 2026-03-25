@@ -19,6 +19,7 @@ import {
   verifySignature,
 } from "@socialtip/asset-proxy-url-parser";
 import { type ProcessingEnv, env as envSwitched, isCacheMode } from "./env.js";
+import { startHealthServer } from "./health-server.js";
 
 const env = envSwitched as ProcessingEnv;
 import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
@@ -450,6 +451,9 @@ async function start() {
       version: process.env.BUILD_VERSION ?? "<unset>",
       forwardUrl: cacheEnv.FORWARD_URL,
     });
+    if (cacheEnv.HEALTH_PORT) {
+      startHealthServer(cacheEnv.HEALTH_PORT);
+    }
     return;
   }
 
@@ -465,6 +469,9 @@ async function start() {
   logger.info(`asset-proxy listening on :${env.PORT}`, {
     version: process.env.BUILD_VERSION ?? "<unset>",
   });
+  if (env.HEALTH_PORT) {
+    startHealthServer(env.HEALTH_PORT);
+  }
 }
 
 start();

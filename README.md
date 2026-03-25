@@ -205,3 +205,10 @@ curl --http2-prior-knowledge http://localhost:8080/health
 ```
 GET /health → 200 ok
 ```
+
+The health endpoint is available over h2c on the main port. If your load balancer or orchestrator requires HTTP/1.1 health probes, set the `HEALTH_PORT` environment variable to start an additional plain HTTP/1.1 server that serves the same `/health` endpoint:
+
+```bash
+HEALTH_PORT=8082 pnpm start
+curl http://localhost:8082/health   # HTTP/1.1
+```
