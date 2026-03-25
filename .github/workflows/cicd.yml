@@ -120,10 +120,12 @@ jobs:
         if: failure() && steps.wait-cache.outcome == 'failure'
         run: tail -100 /tmp/cache-proxy.log
 
-      - run: pnpm -w run test --coverage
+      - name: Run tests
+        id: tests
+        run: pnpm -w run test --coverage
 
       - name: Update snapshots
-        if: failure()
+        if: failure() && steps.tests.outcome == 'failure'
         run: pnpm -w run test --update
 
       - name: Check for snapshot changes
