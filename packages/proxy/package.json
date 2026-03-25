@@ -24,7 +24,7 @@
     "@socialtip/asset-proxy-url-parser": "workspace:*",
     "blurhash": "^2.0.5",
     "content-disposition": "^1.0.1",
-    "express": "^5.1.0",
+    "fastify": "^5.8.4",
     "range-parser": "^1.2.1",
     "winston": "^3.19.0",
     "zod": "^4.3.6"
@@ -32,16 +32,12 @@
   "devDependencies": {
     "@socialtip/asset-proxy-url-generator": "workspace:*",
     "@types/content-disposition": "^0.5.9",
-    "@types/express": "^5.0.6",
-    "@types/express-serve-static-core": "^5.1.1",
     "@types/jest-image-snapshot": "^6.4.1",
     "@types/node": "^25.5.0",
     "@types/range-parser": "^1.2.7",
-    "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.0",
     "jest-image-snapshot": "^6.5.2",
     "sharp": "^0.34.5",
-    "supertest": "^7.2.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"

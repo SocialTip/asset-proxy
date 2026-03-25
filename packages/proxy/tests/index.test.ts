@@ -1,7 +1,7 @@
 import { createCipheriv, randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
 import { spawn } from "node:child_process";
-import request from "supertest";
+import { request } from "./setup.js";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
@@ -1587,7 +1587,7 @@ describe("miscellaneous options", () => {
         .buffer(true);
       expect(res.status).toBe(200);
       expect(res.headers["content-type"]).toContain("image/png");
-      expect(res.body.toString()).toBe("raw-image-data");
+      expect(res.text).toBe("raw-image-data");
       expect(mockSpawn).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;
@@ -1606,7 +1606,7 @@ describe("miscellaneous options", () => {
         .get("/insecure/skp:jpg:png/w:100/plain/https://example.com/photo.jpg")
         .buffer(true);
       expect(res.status).toBe(200);
-      expect(res.body.toString()).toBe("passthrough");
+      expect(res.text).toBe("passthrough");
       expect(mockSpawn).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;

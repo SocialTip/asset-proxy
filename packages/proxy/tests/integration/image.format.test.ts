@@ -9,7 +9,7 @@ import {
   SOURCE_URL,
   SERVICE_URL,
 } from "./helpers.js";
-import { URL_CONFIG } from "./setup.js";
+import { URL_CONFIG, h2cFetch as fetch } from "./setup.js";
 
 const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
 

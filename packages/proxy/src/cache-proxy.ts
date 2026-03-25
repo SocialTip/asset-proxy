@@ -1,19 +1,18 @@
-import { PassThrough, Readable } from "node:stream";
+import { PassThrough } from "node:stream";
 import { Storage } from "@google-cloud/storage";
-import express from "express";
+import Fastify, {
+  type FastifyReply,
+  type FastifyRequest,
+  type RouteGenericInterface,
+} from "fastify";
+import type { Http2Server } from "node:http2";
 import parseRange from "range-parser";
 import { type CacheEnv, env as envSwitched } from "./env.js";
+import { h2cFetch } from "./h2c-fetch.js";
 import { logger } from "./logger.js";
 import { tracer } from "./tracing.js";
 
 const env = envSwitched as CacheEnv;
-
-// Cloud Run buffers responses that declare Content-Length and rejects them when
-// they exceed 32 MB. Responses without Content-Length use Transfer-Encoding:
-// chunked, which Cloud Run streams through without a size limit. We omit
-// Content-Length for files above this threshold to avoid hitting that limit.
-// Set to 20 MB to leave comfortable headroom below Cloud Run's 32 MB cap.
-const CONTENT_LENGTH_OMIT_THRESHOLD = 20 * 1024 * 1024;
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -29,182 +28,145 @@ function cacheKey(requestPath: string): string {
   return requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
 }
 
-export function createCacheProxyApp(): express.Express {
+export async function createCacheProxyApp() {
   const gcs = new Storage({
     apiEndpoint: process.env.GCS_API_ENDPOINT || undefined,
   });
   const cacheBucket = gcs.bucket(env.CACHE_BUCKET);
   const inflight = new Map<string, Promise<void>>();
-  const app = express();
+  const app = Fastify({ http2: true });
 
-  app.get("/health", (_req, res) => {
-    res.send("ok");
+  app.get("/health", async (_request, reply) => {
+    return reply.send("ok");
   });
 
-  function serveFromCache(
-    req: express.Request,
-    res: express.Response,
+  async function serveFromCache(
+    request: FastifyRequest<RouteGenericInterface, Http2Server>,
+    reply: FastifyReply<RouteGenericInterface, Http2Server>,
     file: ReturnType<typeof cacheBucket.file>,
-  ): void {
+  ): Promise<void> {
     const span = tracer.startSpan("cache.serveFromCache");
     const metadataSpan = tracer.startSpan("cache.bucket.getMetadata");
-    file.getMetadata().then(([metadata]) => {
-      metadataSpan.end();
-      const contentType =
-        (metadata.contentType as string) ?? "application/octet-stream";
-      const fileSize = Number(metadata.size);
+    const [metadata] = await file.getMetadata();
+    metadataSpan.end();
+    const contentType =
+      (metadata.contentType as string) ?? "application/octet-stream";
+    const fileSize = Number(metadata.size);
 
-      res.set("Content-Type", contentType);
-      res.set("Cache-Control", env.CACHE_CONTROL);
-      res.set("Accept-Ranges", "bytes");
+    reply.header("Content-Type", contentType);
+    reply.header("Cache-Control", env.CACHE_CONTROL);
+    reply.header("Accept-Ranges", "bytes");
 
-      const rangeHeader = req.headers.range;
-      if (rangeHeader && fileSize > 0) {
-        const ranges = parseRange(fileSize, rangeHeader);
-        if (ranges === -1 || ranges === -2 || ranges.length !== 1) {
-          res.status(416);
-          res.set("Content-Range", `bytes */${fileSize}`);
-          res.end();
-        } else {
-          const { start, end } = ranges[0];
-          res.status(206);
-          res.set("Content-Range", `bytes ${start}-${end}/${fileSize}`);
-          const rangeSize = end - start + 1;
-          if (rangeSize <= CONTENT_LENGTH_OMIT_THRESHOLD) {
-            res.set("Content-Length", String(rangeSize));
-          }
-          const readStream = file.createReadStream({ start, end });
-          const ttfbSpan = tracer.startSpan("cache.bucket.readStream.ttfb");
-          readStream.once("data", () => ttfbSpan.end());
-          readStream.pipe(res);
-        }
+    const rangeHeader = request.headers.range;
+    if (rangeHeader && fileSize > 0) {
+      const ranges = parseRange(fileSize, rangeHeader);
+      if (ranges === -1 || ranges === -2 || ranges.length !== 1) {
+        reply.code(416);
+        reply.header("Content-Range", `bytes */${fileSize}`);
+        span.end();
+        return reply.send();
       } else {
-        if (fileSize > 0 && fileSize <= CONTENT_LENGTH_OMIT_THRESHOLD) {
-          res.set("Content-Length", String(fileSize));
-        }
-        const readStream = file.createReadStream();
+        const { start, end } = ranges[0];
+        reply.code(206);
+        reply.header("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+        reply.header("Content-Length", String(end - start + 1));
+        const readStream = file.createReadStream({ start, end });
         const ttfbSpan = tracer.startSpan("cache.bucket.readStream.ttfb");
         readStream.once("data", () => ttfbSpan.end());
-        readStream.pipe(res);
+        span.end();
+        return reply.send(readStream);
       }
+    } else {
+      if (fileSize > 0) {
+        reply.header("Content-Length", String(fileSize));
+      }
+      const readStream = file.createReadStream();
+      const ttfbSpan = tracer.startSpan("cache.bucket.readStream.ttfb");
+      readStream.once("data", () => ttfbSpan.end());
       span.end();
-    });
+      return reply.send(readStream);
+    }
   }
 
-  app.use(
-    async (
-      req: express.Request,
-      res: express.Response,
-      next: express.NextFunction,
-    ) => {
-      try {
-        const key = cacheKey(req.path);
-        if (!key) {
-          res.status(404).set("Content-type", "text/plain").end();
-          return;
-        }
-        const file = cacheBucket.file(key);
+  app.get("/*", async (request, reply) => {
+    const key = cacheKey(request.url.split("?")[0]);
+    if (!key) {
+      return reply.code(404).header("Content-Type", "text/plain").send();
+    }
+    const file = cacheBucket.file(key);
 
-        const pending = inflight.get(key);
-        await pending?.catch(() => {
-          // Cache write failed — fall through to fetch from upstream.
-        });
-        const [exists] = await file.exists();
-        if (exists) {
-          serveFromCache(req, res, file);
-          return;
-        }
+    const pending = inflight.get(key);
+    await pending?.catch(() => {
+      // Cache write failed — fall through to fetch from upstream.
+    });
+    const [exists] = await file.exists();
+    if (exists) {
+      return serveFromCache(request, reply, file);
+    }
 
-        const forwardUrl = `${env.FORWARD_URL}${req.originalUrl}`;
-        const headers: Record<string, string> = {};
-        for (const [key, value] of Object.entries(req.headers)) {
-          if (
-            typeof value === "string" &&
-            !HOP_BY_HOP.has(key.toLowerCase()) &&
-            key.toLowerCase() !== "range"
-          ) {
-            headers[key] = value;
-          }
-        }
-
-        const upstream = await fetch(forwardUrl, { headers });
-
-        res.status(upstream.status);
-        const upstreamSize =
-          Number(upstream.headers.get("content-length")) || 0;
-        for (const [key, value] of upstream.headers) {
-          if (HOP_BY_HOP.has(key.toLowerCase())) continue;
-          if (
-            key.toLowerCase() === "content-length" &&
-            upstreamSize > CONTENT_LENGTH_OMIT_THRESHOLD
-          ) {
-            continue;
-          }
-          res.set(key, value);
-        }
-
-        if (!upstream.ok || !upstream.body) {
-          if (upstream.body) {
-            Readable.fromWeb(
-              upstream.body as import("node:stream/web").ReadableStream,
-            ).pipe(res);
-          } else {
-            res.end();
-          }
-          return;
-        }
-
-        const contentType =
-          upstream.headers.get("content-type") ?? "application/octet-stream";
-        const source = Readable.fromWeb(
-          upstream.body as import("node:stream/web").ReadableStream,
-        );
-        const clientStream = new PassThrough();
-        const cacheStream = cacheBucket
-          .file(key)
-          .createWriteStream({ contentType, resumable: false });
-
-        const cacheWrite = new Promise<void>((resolve, reject) => {
-          cacheStream.on("finish", resolve);
-          cacheStream.on("error", reject);
-        });
-        inflight.set(key, cacheWrite);
-        cacheWrite
-          .catch((err) => {
-            logger.warn("Failed to write to cache bucket", {
-              error: err instanceof Error ? err.message : String(err),
-              cacheKey: key,
-            });
-          })
-          .finally(() => {
-            inflight.delete(key);
-          });
-
-        source.pipe(clientStream);
-        source.pipe(cacheStream);
-        clientStream.pipe(res);
-      } catch (err) {
-        next(err);
+    const forwardUrl = `${env.FORWARD_URL}${request.url}`;
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(request.headers)) {
+      if (
+        typeof value === "string" &&
+        !HOP_BY_HOP.has(key.toLowerCase()) &&
+        key.toLowerCase() !== "range"
+      ) {
+        headers[key] = value;
       }
-    },
-  );
+    }
 
-  app.use(
-    (
-      err: unknown,
-      _req: express.Request,
-      res: express.Response,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      _next: express.NextFunction,
-    ) => {
-      const message =
-        err instanceof Error ? err.message : "Internal server error";
-      logger.error("Cache proxy error", { error: message });
-      if (!res.headersSent) {
-        res.status(500).send(message);
+    const upstream = await h2cFetch(forwardUrl, { headers });
+
+    reply.code(upstream.status);
+    for (const [key, value] of upstream.headers) {
+      if (HOP_BY_HOP.has(key.toLowerCase())) continue;
+      reply.header(key, value);
+    }
+
+    if (!upstream.ok || !upstream.body) {
+      if (upstream.body) {
+        return reply.send(upstream.body);
       }
-    },
-  );
+      return reply.send();
+    }
+
+    const contentType =
+      upstream.headers.get("content-type") ?? "application/octet-stream";
+    const source = upstream.body;
+    const clientStream = new PassThrough();
+    const cacheStream = cacheBucket
+      .file(key)
+      .createWriteStream({ contentType, resumable: false });
+
+    const cacheWrite = new Promise<void>((resolve, reject) => {
+      cacheStream.on("finish", resolve);
+      cacheStream.on("error", reject);
+    });
+    inflight.set(key, cacheWrite);
+    cacheWrite
+      .catch((err) => {
+        logger.warn("Failed to write to cache bucket", {
+          error: err instanceof Error ? err.message : String(err),
+          cacheKey: key,
+        });
+      })
+      .finally(() => {
+        inflight.delete(key);
+      });
+
+    source.pipe(clientStream);
+    source.pipe(cacheStream);
+    return reply.send(clientStream);
+  });
+
+  app.setErrorHandler((err: Error, _request, reply) => {
+    const message = err.message ?? "Internal server error";
+    logger.error("Cache proxy error", { error: message });
+    if (!reply.sent) {
+      reply.code(500).send(message);
+    }
+  });
 
   return app;
 }
