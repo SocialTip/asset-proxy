@@ -1,5 +1,7 @@
 # asset-proxy
 
+[![codecov](https://codecov.io/gh/SocialTip/asset-proxy/graph/badge.svg?token=PmyIMrwlw6)](https://codecov.io/gh/SocialTip/asset-proxy)
+
 An image and video processing service with an [imgproxy](https://docs.imgproxy.net/usage/processing)-compatible URL API. Uses ffmpeg (with optional NVIDIA GPU acceleration) for the vast majority of processing, and sharp for certain image-specific operations.
 
 ## URL format
