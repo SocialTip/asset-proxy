@@ -7,6 +7,13 @@ import { logger } from "./logger.js";
 
 const env = envSwitched as CacheEnv;
 
+// Cloud Run buffers responses that declare Content-Length and rejects them when
+// they exceed 32 MB. Responses without Content-Length use Transfer-Encoding:
+// chunked, which Cloud Run streams through without a size limit. We omit
+// Content-Length for files above this threshold to avoid hitting that limit.
+// Set to 20 MB to leave comfortable headroom below Cloud Run's 32 MB cap.
+const CONTENT_LENGTH_OMIT_THRESHOLD = 20 * 1024 * 1024;
+
 const HOP_BY_HOP = new Set([
   "connection",
   "keep-alive",
@@ -62,7 +69,9 @@ export function createCacheProxyApp(): express.Express {
           file.createReadStream({ start, end }).pipe(res);
         }
       } else {
-        if (fileSize > 0) res.set("Content-Length", String(fileSize));
+        if (fileSize > 0 && fileSize <= CONTENT_LENGTH_OMIT_THRESHOLD) {
+          res.set("Content-Length", String(fileSize));
+        }
         file.createReadStream().pipe(res);
       }
     });
@@ -107,10 +116,17 @@ export function createCacheProxyApp(): express.Express {
         const upstream = await fetch(forwardUrl, { headers });
 
         res.status(upstream.status);
+        const upstreamSize =
+          Number(upstream.headers.get("content-length")) || 0;
         for (const [key, value] of upstream.headers) {
-          if (!HOP_BY_HOP.has(key.toLowerCase())) {
-            res.set(key, value);
+          if (HOP_BY_HOP.has(key.toLowerCase())) continue;
+          if (
+            key.toLowerCase() === "content-length" &&
+            upstreamSize > CONTENT_LENGTH_OMIT_THRESHOLD
+          ) {
+            continue;
           }
+          res.set(key, value);
         }
 
         if (!upstream.ok || !upstream.body) {
