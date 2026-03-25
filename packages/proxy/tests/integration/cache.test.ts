@@ -129,6 +129,94 @@ describe("cache proxy", () => {
     expect(cachedBuffer).toEqual(responseBuffer);
   });
 
+  it("returns 206 with correct range on cache hit", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res1.status).toBe(200);
+    const fullBody = Buffer.from(await res1.arrayBuffer());
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`, {
+      headers: { Range: "bytes=0-9" },
+    });
+    expect(res2.status).toBe(206);
+    expect(res2.headers.get("content-range")).toBe(
+      `bytes 0-9/${fullBody.length}`,
+    );
+    expect(res2.headers.get("content-length")).toBe("10");
+    expect(res2.headers.get("accept-ranges")).toBe("bytes");
+    const partial = Buffer.from(await res2.arrayBuffer());
+    expect(partial).toEqual(fullBody.subarray(0, 10));
+  });
+
+  it("returns 206 for suffix range on cache hit", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res1.status).toBe(200);
+    const fullBody = Buffer.from(await res1.arrayBuffer());
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`, {
+      headers: { Range: "bytes=-5" },
+    });
+    expect(res2.status).toBe(206);
+    const expectedStart = fullBody.length - 5;
+    expect(res2.headers.get("content-range")).toBe(
+      `bytes ${expectedStart}-${fullBody.length - 1}/${fullBody.length}`,
+    );
+    expect(res2.headers.get("content-length")).toBe("5");
+    const partial = Buffer.from(await res2.arrayBuffer());
+    expect(partial).toEqual(fullBody.subarray(expectedStart));
+  });
+
+  it("returns 416 for unsatisfiable range on cache hit", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res1.status).toBe(200);
+    const fullBody = Buffer.from(await res1.arrayBuffer());
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`, {
+      headers: {
+        Range: `bytes=${fullBody.length + 100}-${fullBody.length + 200}`,
+      },
+    });
+    expect(res2.status).toBe(416);
+    expect(res2.headers.get("content-range")).toBe(
+      `bytes */${fullBody.length}`,
+    );
+  });
+
+  it("returns Accept-Ranges header on cache hit without Range request", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    await new Promise((r) => setTimeout(r, 500));
+
+    const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("accept-ranges")).toBe("bytes");
+    expect(res.headers.get("content-length")).toBeTruthy();
+  });
+
   it("does not cache error responses", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/rs:fit:100:100/plain/http://file-server/nonexistent.png`,

@@ -1,6 +1,7 @@
 import { PassThrough, Readable } from "node:stream";
 import { Storage } from "@google-cloud/storage";
 import express from "express";
+import parseRange from "range-parser";
 import { type CacheEnv, env as envSwitched } from "./env.js";
 import { logger } from "./logger.js";
 
@@ -25,11 +26,47 @@ export function createCacheProxyApp(): express.Express {
     apiEndpoint: process.env.GCS_API_ENDPOINT || undefined,
   });
   const cacheBucket = gcs.bucket(env.CACHE_BUCKET);
+  const inflight = new Map<string, Promise<void>>();
   const app = express();
 
   app.get("/health", (_req, res) => {
     res.send("ok");
   });
+
+  function serveFromCache(
+    req: express.Request,
+    res: express.Response,
+    file: ReturnType<typeof cacheBucket.file>,
+  ): void {
+    file.getMetadata().then(([metadata]) => {
+      const contentType =
+        (metadata.contentType as string) ?? "application/octet-stream";
+      const fileSize = Number(metadata.size);
+
+      res.set("Content-Type", contentType);
+      res.set("Cache-Control", env.CACHE_CONTROL);
+      res.set("Accept-Ranges", "bytes");
+
+      const rangeHeader = req.headers.range;
+      if (rangeHeader && fileSize > 0) {
+        const ranges = parseRange(fileSize, rangeHeader);
+        if (ranges === -1 || ranges === -2 || ranges.length !== 1) {
+          res.status(416);
+          res.set("Content-Range", `bytes */${fileSize}`);
+          res.end();
+        } else {
+          const { start, end } = ranges[0];
+          res.status(206);
+          res.set("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+          res.set("Content-Length", String(end - start + 1));
+          file.createReadStream({ start, end }).pipe(res);
+        }
+      } else {
+        if (fileSize > 0) res.set("Content-Length", String(fileSize));
+        file.createReadStream().pipe(res);
+      }
+    });
+  }
 
   app.use(
     async (
@@ -41,21 +78,24 @@ export function createCacheProxyApp(): express.Express {
         const key = cacheKey(req.path);
         const file = cacheBucket.file(key);
 
+        const pending = inflight.get(key);
+        await pending?.catch(() => {
+          // Cache write failed — fall through to fetch from upstream.
+        });
         const [exists] = await file.exists();
         if (exists) {
-          const [metadata] = await file.getMetadata();
-          const contentType =
-            (metadata.contentType as string) ?? "application/octet-stream";
-          res.set("Content-Type", contentType);
-          res.set("Cache-Control", env.CACHE_CONTROL);
-          file.createReadStream().pipe(res);
+          serveFromCache(req, res, file);
           return;
         }
 
         const forwardUrl = `${env.FORWARD_URL}${req.originalUrl}`;
         const headers: Record<string, string> = {};
         for (const [key, value] of Object.entries(req.headers)) {
-          if (typeof value === "string" && !HOP_BY_HOP.has(key.toLowerCase())) {
+          if (
+            typeof value === "string" &&
+            !HOP_BY_HOP.has(key.toLowerCase()) &&
+            key.toLowerCase() !== "range"
+          ) {
             headers[key] = value;
           }
         }
@@ -90,16 +130,25 @@ export function createCacheProxyApp(): express.Express {
           .file(key)
           .createWriteStream({ contentType, resumable: false });
 
+        const cacheWrite = new Promise<void>((resolve, reject) => {
+          cacheStream.on("finish", resolve);
+          cacheStream.on("error", reject);
+        });
+        inflight.set(key, cacheWrite);
+        cacheWrite
+          .catch((err) => {
+            logger.warn("Failed to write to cache bucket", {
+              error: err instanceof Error ? err.message : String(err),
+              cacheKey: key,
+            });
+          })
+          .finally(() => {
+            inflight.delete(key);
+          });
+
         source.pipe(clientStream);
         source.pipe(cacheStream);
         clientStream.pipe(res);
-
-        cacheStream.on("error", (err) => {
-          logger.warn("Failed to write to cache bucket", {
-            error: err instanceof Error ? err.message : String(err),
-            cacheKey: key,
-          });
-        });
       } catch (err) {
         next(err);
       }
