@@ -39,7 +39,7 @@ export default defineConfig({
     ],
     reporters: ["default"],
     printConsoleTrace: false,
-    onConsoleLog: () => false,
+    silent: "passed-only",
     coverage: {
       provider: "v8",
       include: ["packages/*/src/**"],
