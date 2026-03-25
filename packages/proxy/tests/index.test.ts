@@ -1,7 +1,7 @@
 import { createCipheriv, randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
 import { spawn } from "node:child_process";
-import request from "supertest";
+import { request } from "./setup.js";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
@@ -119,9 +119,9 @@ beforeEach(() => {
 describe("error handling", () => {
   it("returns 500 with 'Unhandled error' when image processing fails", async () => {
     setupSpawnMockError();
-    const res = await request(app)
-      .get("/insecure/w:100/plain/https://example.com/photo.jpg")
-      .buffer(true);
+    const res = await request(app).get(
+      "/insecure/w:100/plain/https://example.com/photo.jpg",
+    );
 
     expect(res.status).toBe(500);
     expect(res.text).toBe("Unhandled error");
@@ -143,9 +143,9 @@ describe("error handling", () => {
 describe("origin allowlist", () => {
   it("allows a request with a permitted origin", async () => {
     setupSpawnMock();
-    const res = await request(app)
-      .get("/insecure/w:100/plain/https://example.com/photo.jpg")
-      .buffer(true);
+    const res = await request(app).get(
+      "/insecure/w:100/plain/https://example.com/photo.jpg",
+    );
 
     expect(res.status).toBe(200);
   });
@@ -1521,21 +1521,17 @@ describe("miscellaneous options", () => {
   it("processes normally when expires timestamp is in the future", async () => {
     setupSpawnMock();
     const futureTimestamp = Math.floor(Date.now() / 1000) + 3600;
-    const res = await request(app)
-      .get(
-        `/insecure/exp:${futureTimestamp}/w:100/plain/https://example.com/photo.jpg`,
-      )
-      .buffer(true);
+    const res = await request(app).get(
+      `/insecure/exp:${futureTimestamp}/w:100/plain/https://example.com/photo.jpg`,
+    );
     expect(res.status).toBe(200);
   });
 
   it("sets Content-Disposition: attachment with filename", async () => {
     setupSpawnMock();
-    const res = await request(app)
-      .get(
-        "/insecure/att:1/fn:photo.jpg/w:100/plain/https://example.com/photo.jpg",
-      )
-      .buffer(true);
+    const res = await request(app).get(
+      "/insecure/att:1/fn:photo.jpg/w:100/plain/https://example.com/photo.jpg",
+    );
     expect(res.status).toBe(200);
     expect(res.headers["content-disposition"]).toBe(
       'attachment; filename="photo.jpg"',
@@ -1544,11 +1540,9 @@ describe("miscellaneous options", () => {
 
   it("sets Content-Disposition: inline with filename when att is not set", async () => {
     setupSpawnMock();
-    const res = await request(app)
-      .get(
-        "/insecure/fn:download.jpg/w:100/plain/https://example.com/photo.jpg",
-      )
-      .buffer(true);
+    const res = await request(app).get(
+      "/insecure/fn:download.jpg/w:100/plain/https://example.com/photo.jpg",
+    );
     expect(res.status).toBe(200);
     expect(res.headers["content-disposition"]).toBe(
       'inline; filename="download.jpg"',
@@ -1557,9 +1551,9 @@ describe("miscellaneous options", () => {
 
   it("sets Content-Disposition: attachment without filename", async () => {
     setupSpawnMock();
-    const res = await request(app)
-      .get("/insecure/att:1/w:100/plain/https://example.com/photo.jpg")
-      .buffer(true);
+    const res = await request(app).get(
+      "/insecure/att:1/w:100/plain/https://example.com/photo.jpg",
+    );
     expect(res.status).toBe(200);
     expect(res.headers["content-disposition"]).toBe(
       'attachment; filename="image.jpg"',
@@ -1568,9 +1562,9 @@ describe("miscellaneous options", () => {
 
   it("cache_buster is ignored but does not break processing", async () => {
     setupSpawnMock();
-    const res = await request(app)
-      .get("/insecure/cb:v2/w:100/plain/https://example.com/photo.jpg")
-      .buffer(true);
+    const res = await request(app).get(
+      "/insecure/cb:v2/w:100/plain/https://example.com/photo.jpg",
+    );
     expect(res.status).toBe(200);
   });
 
@@ -1582,12 +1576,12 @@ describe("miscellaneous options", () => {
       }),
     );
     try {
-      const res = await request(app)
-        .get("/insecure/raw:1/plain/https://example.com/photo.jpg")
-        .buffer(true);
+      const res = await request(app).get(
+        "/insecure/raw:1/plain/https://example.com/photo.jpg",
+      );
       expect(res.status).toBe(200);
       expect(res.headers["content-type"]).toContain("image/png");
-      expect(res.body.toString()).toBe("raw-image-data");
+      expect(res.text).toBe("raw-image-data");
       expect(mockSpawn).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;
@@ -1602,11 +1596,11 @@ describe("miscellaneous options", () => {
       }),
     );
     try {
-      const res = await request(app)
-        .get("/insecure/skp:jpg:png/w:100/plain/https://example.com/photo.jpg")
-        .buffer(true);
+      const res = await request(app).get(
+        "/insecure/skp:jpg:png/w:100/plain/https://example.com/photo.jpg",
+      );
       expect(res.status).toBe(200);
-      expect(res.body.toString()).toBe("passthrough");
+      expect(res.text).toBe("passthrough");
       expect(mockSpawn).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;
@@ -1615,9 +1609,9 @@ describe("miscellaneous options", () => {
 
   it("skip_processing processes normally when extension does not match", async () => {
     setupSpawnMock();
-    const res = await request(app)
-      .get("/insecure/skp:png/w:100/plain/https://example.com/photo.jpg")
-      .buffer(true);
+    const res = await request(app).get(
+      "/insecure/skp:png/w:100/plain/https://example.com/photo.jpg",
+    );
     expect(res.status).toBe(200);
     expect(mockSpawn).toHaveBeenCalled();
   });
@@ -1651,11 +1645,9 @@ describe("miscellaneous options", () => {
     );
     try {
       // Correct hash — should process (raw:1 to avoid ffmpeg)
-      const res = await request(app)
-        .get(
-          `/insecure/hs:sha256:${hash}/raw:1/plain/https://example.com/photo.jpg`,
-        )
-        .buffer(true);
+      const res = await request(app).get(
+        `/insecure/hs:sha256:${hash}/raw:1/plain/https://example.com/photo.jpg`,
+      );
       expect(res.status).toBe(200);
     } finally {
       globalThis.fetch = originalFetch;
@@ -1781,9 +1773,9 @@ describe("security limits", () => {
 
   it("allows result within max_result_dimension", async () => {
     setupSpawnMock();
-    const res = await request(app)
-      .get("/insecure/mrd:2000/w:1000/plain/https://example.com/photo.jpg")
-      .buffer(true);
+    const res = await request(app).get(
+      "/insecure/mrd:2000/w:1000/plain/https://example.com/photo.jpg",
+    );
     expect(res.status).toBe(200);
   });
 

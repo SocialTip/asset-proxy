@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
-import { SERVICE_URL, URL_CONFIG } from "./setup.js";
+import { SERVICE_URL, URL_CONFIG, h2cFetch as fetch } from "./setup.js";
 
 export const SOURCE_URL = "http://file-server/test-image.png";
 

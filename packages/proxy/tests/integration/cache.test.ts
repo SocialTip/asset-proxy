@@ -1,7 +1,7 @@
 import { Storage } from "@google-cloud/storage";
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
-import { CACHE_PROXY_URL, URL_CONFIG } from "./setup.js";
+import { CACHE_PROXY_URL, URL_CONFIG, h2cFetch as fetch } from "./setup.js";
 import { SOURCE_URL, toPng } from "./helpers.js";
 import { VIDEO_SOURCE_URL } from "./video-helpers.js";
 
@@ -231,7 +231,7 @@ describe("cache proxy", () => {
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.headers.get("content-type")).toMatchInlineSnapshot(
-      `"text/html; charset=utf-8"`,
+      `"text/plain; charset=utf-8"`,
     );
     expect(await res.text()).toMatchInlineSnapshot(`"Unhandled error"`);
 

@@ -10,7 +10,7 @@ import {
   VIDEO_SOURCE_URL,
   SERVICE_URL,
 } from "./video-helpers.js";
-import { URL_CONFIG } from "./setup.js";
+import { URL_CONFIG, h2cFetch as fetch } from "./setup.js";
 
 describe("video resize", () => {
   it("resizes to 128x128 fill with framerate and cut", async () => {

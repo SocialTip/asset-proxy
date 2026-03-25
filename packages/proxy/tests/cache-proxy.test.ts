@@ -1,5 +1,5 @@
 import { Readable, Writable } from "node:stream";
-import request from "supertest";
+import { request } from "./setup.js";
 
 const storedContent = Buffer.from("0123456789abcdef");
 
@@ -63,6 +63,9 @@ vi.mock("@/logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+const mockH2cFetch = vi.fn();
+vi.mock("@/h2c-fetch.js", () => ({ h2cFetch: mockH2cFetch }));
+
 const { createCacheProxyApp } = await import("@/cache-proxy.js");
 
 describe("cache proxy inflight coalescing", () => {
@@ -76,23 +79,14 @@ describe("cache proxy inflight coalescing", () => {
   });
 
   it("range request waits for inflight cache write then serves from cache", async () => {
-    const upstreamBody = new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode("0123456789abcdef"));
-        controller.close();
-      },
+    mockH2cFetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: new Headers({ "content-type": "video/mp4" }),
+      body: Readable.from([Buffer.from("0123456789abcdef")]),
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(upstreamBody, {
-          status: 200,
-          headers: { "content-type": "video/mp4" },
-        }),
-      ),
-    );
 
-    const app = createCacheProxyApp();
+    const app = await createCacheProxyApp();
 
     const firstRequest = request(app)
       .get("/some/video/path")
@@ -121,7 +115,5 @@ describe("cache proxy inflight coalescing", () => {
       `bytes 0-3/${storedContent.length}`,
     );
     expect(rangeRes.headers["content-length"]).toBe("4");
-
-    vi.unstubAllGlobals();
   });
 });

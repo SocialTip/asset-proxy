@@ -4,7 +4,13 @@ import { Readable } from "node:stream";
 import { promisify } from "node:util";
 import contentDisposition from "content-disposition";
 import { Storage } from "@google-cloud/storage";
-import express from "express";
+import Fastify from "fastify";
+import type {
+  FastifyReply,
+  FastifyRequest,
+  RouteGenericInterface,
+} from "fastify";
+import type { Http2Server } from "node:http2";
 import {
   HTTPError,
   isImageUrl,
@@ -34,7 +40,7 @@ const CONTENT_TYPES: Record<string, string> = {
 
 const gcs = new Storage();
 
-export const app = express();
+export const app = Fastify({ http2: true });
 
 function assertOriginAllowed(sourceUrl: string): void {
   const { ALLOWED_ORIGINS } = env;
@@ -238,8 +244,11 @@ const FORMAT_EXTENSIONS: Record<string, string> = {
   gif: ".gif",
 };
 
+type AppRequest = FastifyRequest<RouteGenericInterface, Http2Server>;
+type AppReply = FastifyReply<RouteGenericInterface, Http2Server>;
+
 function setContentDisposition(
-  res: express.Response,
+  reply: AppReply,
   parsed: ReturnType<typeof parseProcessingUrl>,
   outputFormat?: string,
 ): void {
@@ -252,16 +261,16 @@ function setContentDisposition(
     filename = `image${FORMAT_EXTENSIONS[outputFormat] ?? ""}`;
   }
   const type = parsed.returnAttachment ? "attachment" : "inline";
-  res.set(
+  reply.header(
     "Content-Disposition",
     contentDisposition(filename ?? undefined, { type }),
   );
 }
 
-async function handleRequest(req: express.Request, res: express.Response) {
+async function handleRequest(request: AppRequest, reply: AppReply) {
   const span = tracer.startSpan("asset-proxy.request");
   try {
-    const pathAfterSignature = verifySignature(req.path, {
+    const pathAfterSignature = verifySignature(request.url.split("?")[0], {
       signingKey: env.SIGNING_KEY,
       signingSalt: env.SIGNING_SALT,
     });
@@ -307,9 +316,9 @@ async function handleRequest(req: express.Request, res: express.Response) {
     await checkSourceLimits(sourceUrl, parsed);
 
     try {
-      await processAndRespond(req, res, parsed, sourceUrl);
+      await processAndRespond(reply, parsed, sourceUrl);
     } catch (err) {
-      if (parsed.fallbackImageUrl && !res.headersSent) {
+      if (parsed.fallbackImageUrl && !reply.sent) {
         const fallbackUrl = Buffer.from(
           parsed.fallbackImageUrl,
           "base64url",
@@ -319,8 +328,7 @@ async function handleRequest(req: express.Request, res: express.Response) {
           fallbackUrl,
           error: err instanceof Error ? err.message : String(err),
         });
-        res.redirect(302, fallbackUrl);
-        return;
+        return reply.redirect(fallbackUrl, 302);
       }
       throw err;
     }
@@ -333,8 +341,7 @@ async function handleRequest(req: express.Request, res: express.Response) {
 }
 
 async function processAndRespond(
-  req: express.Request,
-  res: express.Response,
+  reply: AppReply,
   parsed: ReturnType<typeof parseProcessingUrl>,
   sourceUrl: string,
 ): Promise<void> {
@@ -346,17 +353,18 @@ async function processAndRespond(
       });
     }
     const contentType = response.headers.get("content-type");
-    if (contentType) res.set("Content-Type", contentType);
-    res.set("Cache-Control", env.CACHE_CONTROL);
-    setContentDisposition(res, parsed);
+    if (contentType) reply.header("Content-Type", contentType);
+    reply.header("Cache-Control", env.CACHE_CONTROL);
+    setContentDisposition(reply, parsed);
+    const contentLength = response.headers.get("content-length");
+    if (contentLength) reply.header("Content-Length", contentLength);
     const responseSpan = tracer.startSpan("response.stream");
     const raw = Readable.fromWeb(
       response.body as import("node:stream/web").ReadableStream,
     );
-    raw.pipe(res);
     raw.on("end", () => responseSpan.end());
     raw.on("error", () => responseSpan.end());
-    return;
+    return reply.send(raw);
   }
 
   if (isImageUrl(parsed)) {
@@ -365,10 +373,10 @@ async function processAndRespond(
         processImage(sourceUrl, parsed),
       );
       const contentType = CONTENT_TYPES[result.outputFormat] || "image/jpeg";
-      res.set("Content-Type", contentType);
-      res.set("Cache-Control", env.CACHE_CONTROL);
-      setContentDisposition(res, parsed, result.outputFormat);
-      res.send(result.buffer);
+      reply.header("Content-Type", contentType);
+      reply.header("Cache-Control", env.CACHE_CONTROL);
+      setContentDisposition(reply, parsed, result.outputFormat);
+      return reply.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
       logger.error("Error processing image", {
@@ -392,10 +400,10 @@ async function processAndRespond(
       }
 
       const contentType = CONTENT_TYPES[result.outputFormat] || "video/mp4";
-      res.set("Content-Type", contentType);
-      res.set("Cache-Control", env.CACHE_CONTROL);
-      setContentDisposition(res, parsed, result.outputFormat);
-      Readable.from(result.buffer).pipe(res);
+      reply.header("Content-Type", contentType);
+      reply.header("Cache-Control", env.CACHE_CONTROL);
+      setContentDisposition(reply, parsed, result.outputFormat);
+      return reply.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
       logger.error("Error processing video", {
@@ -409,54 +417,53 @@ async function processAndRespond(
   }
 }
 
-app.get("/info/:signature/*rest", handleInfoRequest);
+app.get("/info/:signature/*", async (request, reply) =>
+  handleInfoRequest(request, reply),
+);
 
-app.get("/:signature/*rest", handleRequest);
+app.get("/:signature/*", async (request, reply) =>
+  handleRequest(request, reply),
+);
 
-app.get("/health", (_req, res) => {
-  res.send("ok");
+app.get("/health", async (_request, reply) => {
+  return reply.send("ok");
 });
 
-// Error-handling middleware (4 params required for Express to recognise it)
-app.use(
-  (
-    err: unknown,
-    _req: express.Request,
-    res: express.Response,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _next: express.NextFunction,
-  ) => {
-    const status = err instanceof HTTPError ? err.status : 500;
-    const message =
-      err instanceof Error ? err.message : "Internal server error";
+app.setErrorHandler((err: Error, _request, reply) => {
+  const status = err instanceof HTTPError ? err.status : 500;
+  const message = err.message ?? "Internal server error";
 
-    logger.error("Request error", { error: message, status });
+  logger.error("Request error", { error: message, status });
 
-    if (!res.headersSent) {
-      res.status(status).send(message);
-    }
-  },
-);
+  if (!reply.sent) {
+    reply.code(status).send(message);
+  }
+});
 
 async function start() {
   if (isCacheMode(envSwitched)) {
     const cacheEnv = envSwitched;
     const { createCacheProxyApp } = await import("./cache-proxy.js");
-    const cacheApp = createCacheProxyApp();
-    cacheApp.listen(cacheEnv.PORT, () => {
-      logger.info(`asset-proxy (cache mode) listening on :${cacheEnv.PORT}`, {
-        version: process.env.BUILD_VERSION ?? "<unset>",
-        forwardUrl: cacheEnv.FORWARD_URL,
-      });
+    const cacheApp = await createCacheProxyApp();
+    await cacheApp.listen({ port: cacheEnv.PORT, host: "0.0.0.0" });
+    logger.info(`asset-proxy (cache mode) listening on :${cacheEnv.PORT}`, {
+      version: process.env.BUILD_VERSION ?? "<unset>",
+      forwardUrl: cacheEnv.FORWARD_URL,
     });
     return;
   }
 
   await gpuReady;
-  app.listen(env.PORT, () => {
-    logger.info(`asset-proxy listening on :${env.PORT}`, {
-      version: process.env.BUILD_VERSION ?? "<unset>",
+  try {
+    await app.listen({ port: env.PORT, host: "0.0.0.0" });
+  } catch (err) {
+    logger.error("Server error", {
+      error: err instanceof Error ? err.message : String(err),
     });
+    return;
+  }
+  logger.info(`asset-proxy listening on :${env.PORT}`, {
+    version: process.env.BUILD_VERSION ?? "<unset>",
   });
 }
 

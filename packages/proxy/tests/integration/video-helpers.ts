@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
-import { SERVICE_URL, URL_CONFIG } from "./setup.js";
+import { SERVICE_URL, URL_CONFIG, h2cFetch as fetch } from "./setup.js";
 
 export const VIDEO_SOURCE_URL = "http://file-server/test-video.mp4";
 

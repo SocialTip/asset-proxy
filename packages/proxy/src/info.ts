@@ -1,7 +1,12 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
-import express from "express";
+import type {
+  FastifyRequest,
+  FastifyReply,
+  RouteGenericInterface,
+} from "fastify";
+import type { Http2Server } from "node:http2";
 import { encode as blurhashEncode } from "blurhash";
 import sharp from "sharp";
 import {
@@ -551,10 +556,10 @@ async function probeMetadata(
 }
 
 export async function handleInfoRequest(
-  req: express.Request,
-  res: express.Response,
+  req: FastifyRequest<RouteGenericInterface, Http2Server>,
+  reply: FastifyReply<RouteGenericInterface, Http2Server>,
 ) {
-  const infoPath = req.path.replace(/^\/info/, "");
+  const infoPath = req.url.split("?")[0].replace(/^\/info/, "");
 
   const pathAfterSignature = verifySignature(infoPath, {
     signingKey: env.SIGNING_KEY,
@@ -617,8 +622,8 @@ export async function handleInfoRequest(
     }
   }
 
-  res.set("Cache-Control", env.CACHE_CONTROL);
-  res.json(metadata);
+  reply.header("Cache-Control", env.CACHE_CONTROL);
+  return reply.send(metadata);
 }
 
 function assertOriginAllowed(sourceUrl: string): void {

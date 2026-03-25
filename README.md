@@ -140,7 +140,7 @@ This repository is a pnpm monorepo with three packages:
 | -------------------------------------- | ------------------------ | --------- | ---------------------------------------------------------------------------------- |
 | `@socialtip/asset-proxy-url-parser`    | `packages/url-parser`    | Yes       | Shared URL schema, parsing, signature verification/generation, and encryption      |
 | `@socialtip/asset-proxy-url-generator` | `packages/url-generator` | Yes       | Generates asset-proxy-compatible URL paths with encryption and signing             |
-| `proxy`                                | `packages/proxy`         | No        | The image/video processing service (Express + ffmpeg + sharp), deployed via Docker |
+| `proxy`                                | `packages/proxy`         | No        | The image/video processing service (Fastify + ffmpeg + sharp), deployed via Docker |
 
 ## Development
 
@@ -186,6 +186,19 @@ See [docs/Testing.md](docs/Testing.md) for full testing documentation, including
 ## Environment variables
 
 See [docs/Configuration.md](docs/Configuration.md) for the full list of environment variables.
+
+## HTTP/2
+
+The proxy serves over cleartext HTTP/2 (h2c). This is required for deploying on Cloud Run with end-to-end HTTP/2 enabled, which avoids two limitations of HTTP/1.1 on Cloud Run:
+
+- **Response size limit** — Cloud Run buffers HTTP/1.1 responses and rejects any that exceed 32 MB. HTTP/2 responses are streamed through without a size limit, so large video and image responses are delivered without issue.
+- **CDN cache hits** — Cloud Run's built-in load balancer CDN only caches responses that include a `Content-Length` header. HTTP/1.1 streamed responses use `Transfer-Encoding: chunked` which omits `Content-Length` and therefore bypasses the CDN cache. HTTP/2 does not use chunked encoding, so the proxy always sets `Content-Length` and responses are cacheable at the CDN layer.
+
+The health check endpoint also speaks h2c. When testing locally with curl, use `--http2-prior-knowledge`:
+
+```bash
+curl --http2-prior-knowledge http://localhost:8080/health
+```
 
 ## Health check
 
