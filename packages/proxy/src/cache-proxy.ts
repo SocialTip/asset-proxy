@@ -20,6 +20,32 @@ function cacheKey(requestPath: string): string {
   return requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
 }
 
+function parseRangeHeader(
+  header: string,
+  fileSize: number,
+): { start: number; end: number } | null {
+  const match = header.match(/^bytes=(\d*)-(\d*)$/);
+  if (!match) return null;
+
+  let start: number;
+  let end: number;
+
+  if (match[1] === "" && match[2] !== "") {
+    const suffix = Number(match[2]);
+    start = Math.max(0, fileSize - suffix);
+    end = fileSize - 1;
+  } else if (match[2] === "") {
+    start = Number(match[1]);
+    end = fileSize - 1;
+  } else {
+    start = Number(match[1]);
+    end = Math.min(Number(match[2]), fileSize - 1);
+  }
+
+  if (start > end || start >= fileSize) return null;
+  return { start, end };
+}
+
 export function createCacheProxyApp(): express.Express {
   const gcs = new Storage({
     apiEndpoint: process.env.GCS_API_ENDPOINT || undefined,
@@ -46,16 +72,45 @@ export function createCacheProxyApp(): express.Express {
           const [metadata] = await file.getMetadata();
           const contentType =
             (metadata.contentType as string) ?? "application/octet-stream";
+          const fileSize = Number(metadata.size);
+
           res.set("Content-Type", contentType);
           res.set("Cache-Control", env.CACHE_CONTROL);
-          file.createReadStream().pipe(res);
+          res.set("Accept-Ranges", "bytes");
+
+          const rangeHeader = req.headers.range;
+          if (rangeHeader && fileSize > 0) {
+            const range = parseRangeHeader(rangeHeader, fileSize);
+            if (range) {
+              res.status(206);
+              res.set(
+                "Content-Range",
+                `bytes ${range.start}-${range.end}/${fileSize}`,
+              );
+              res.set("Content-Length", String(range.end - range.start + 1));
+              file
+                .createReadStream({ start: range.start, end: range.end })
+                .pipe(res);
+            } else {
+              res.status(416);
+              res.set("Content-Range", `bytes */${fileSize}`);
+              res.end();
+            }
+          } else {
+            if (fileSize > 0) res.set("Content-Length", String(fileSize));
+            file.createReadStream().pipe(res);
+          }
           return;
         }
 
         const forwardUrl = `${env.FORWARD_URL}${req.originalUrl}`;
         const headers: Record<string, string> = {};
         for (const [key, value] of Object.entries(req.headers)) {
-          if (typeof value === "string" && !HOP_BY_HOP.has(key.toLowerCase())) {
+          if (
+            typeof value === "string" &&
+            !HOP_BY_HOP.has(key.toLowerCase()) &&
+            key.toLowerCase() !== "range"
+          ) {
             headers[key] = value;
           }
         }
