@@ -4,3 +4,4 @@ coverage
 .env
 .DS_Store
 test-plans
+package-lock.json
