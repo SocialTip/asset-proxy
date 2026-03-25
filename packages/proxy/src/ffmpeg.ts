@@ -140,26 +140,53 @@ function rejectImageOnlyOptions(parsed: ParsedUrl) {
 export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
-): Promise<Readable> {
+): Promise<{ buffer: Buffer; outputFormat: string }> {
   rejectImageOnlyOptions(parsed);
 
-  return runFfmpeg(
-    buildVideoArgs(sourceUrl, {
-      resizingType: parsed.resize?.type,
-      resizingAlgorithm: parsed.resizingAlgorithm,
-      cropAspectRatio: parsed.cropAspectRatio,
-      width: parsed.resize?.width ?? 0,
-      height: parsed.resize?.height ?? 0,
-      flip: parsed.flip,
-      framerate: parsed.framerate,
-      cut: parsed.cut,
-      quality: parsed.formatQuality?.[parsed.outputFormat] ?? parsed.quality,
-      maxBytes: parsed.maxBytes,
-      mute: parsed.mute,
-      outputFormat: parsed.outputFormat,
-      gpu: await gpuReady,
-    }),
-  );
+  const params = {
+    resizingType: parsed.resize?.type,
+    resizingAlgorithm: parsed.resizingAlgorithm,
+    cropAspectRatio: parsed.cropAspectRatio,
+    width: parsed.resize?.width ?? 0,
+    height: parsed.resize?.height ?? 0,
+    flip: parsed.flip,
+    framerate: parsed.framerate,
+    cut: parsed.cut,
+    quality: parsed.formatQuality?.[parsed.outputFormat] ?? parsed.quality,
+    maxBytes: parsed.maxBytes,
+    mute: parsed.mute,
+    outputFormat: parsed.outputFormat,
+    gpu: await gpuReady,
+  };
+
+  if (parsed.outputFormat === "mp4") {
+    // MP4 is written to a temp file so ffmpeg can place the moov atom at the
+    // start (faststart). This trades higher initial latency on cache misses
+    // for immediate progressive playback in browsers.
+    const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
+    const outPath = join(dir, "output.mp4");
+    const args = buildVideoArgs(sourceUrl, params, { outputPath: outPath });
+    const stream = runFfmpeg(args);
+    await new Promise<void>((resolve, reject) => {
+      stream.on("end", resolve);
+      stream.on("error", reject);
+      stream.resume();
+    });
+    const buffer = await readFile(outPath);
+    await rm(dir, { recursive: true, force: true });
+    return { buffer, outputFormat: parsed.outputFormat };
+  }
+
+  // WebM and other formats stream via pipe (no moov atom concern).
+  const args = buildVideoArgs(sourceUrl, params);
+  const stream = runFfmpeg(args);
+  const buffer = await new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+  return { buffer, outputFormat: parsed.outputFormat };
 }
 
 /** Encode a buffer into a specific format with optional quality using sharp. */
@@ -936,6 +963,7 @@ export interface VideoParams {
 export function buildVideoArgs(
   sourceUrl: string,
   params: VideoParams,
+  opts?: { outputPath?: string },
 ): string[] {
   const {
     resizingType,
@@ -1052,7 +1080,7 @@ export function buildVideoArgs(
       args.push("-c:a", "libopus");
     }
     if (maxBytes) args.push("-fs", String(maxBytes));
-    args.push("-f", "webm", "pipe:1");
+    args.push("-f", "webm", opts?.outputPath ?? "pipe:1");
   } else {
     if (gpu) {
       args.push("-c:v", "h264_nvenc", "-preset", "p4", "-tune", "hq");
@@ -1072,9 +1100,9 @@ export function buildVideoArgs(
     } else {
       args.push("-c:a", "copy");
     }
-    args.push("-movflags", "frag_keyframe+empty_moov+faststart");
+    args.push("-movflags", "+faststart");
     if (maxBytes) args.push("-fs", String(maxBytes));
-    args.push("-f", "mp4", "pipe:1");
+    args.push("-f", "mp4", opts?.outputPath ?? "pipe:1");
   }
 
   return args;

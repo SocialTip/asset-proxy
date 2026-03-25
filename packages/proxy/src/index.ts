@@ -385,38 +385,17 @@ async function processAndRespond(
         processVideo(sourceUrl, parsed),
       );
 
-      // Wait for first data chunk before sending headers, so that ffmpeg
-      // failures result in a proper error status instead of an empty 200.
-      const firstChunk = await new Promise<Buffer>((resolve, reject) => {
-        result.once("data", (chunk: Buffer) => resolve(chunk));
-        result.once("error", reject);
-        result.once("end", () =>
-          reject(
-            new HTTPError("Video processing produced no output", {
-              code: "INTERNAL_SERVER_ERROR",
-            }),
-          ),
-        );
-      });
+      if (!result.buffer.length) {
+        throw new HTTPError("Video processing produced no output", {
+          code: "INTERNAL_SERVER_ERROR",
+        });
+      }
 
-      const contentType = CONTENT_TYPES[parsed.outputFormat] || "video/mp4";
+      const contentType = CONTENT_TYPES[result.outputFormat] || "video/mp4";
       res.set("Content-Type", contentType);
       res.set("Cache-Control", env.CACHE_CONTROL);
-      setContentDisposition(res, parsed, parsed.outputFormat);
-      const responseSpan = tracer.startSpan("response.stream");
-      res.write(firstChunk);
-      result.pipe(res);
-
-      await new Promise<void>((resolve, reject) => {
-        result.on("end", () => {
-          responseSpan.end();
-          resolve();
-        });
-        result.on("error", (err) => {
-          responseSpan.end();
-          reject(err);
-        });
-      });
+      setContentDisposition(res, parsed, result.outputFormat);
+      res.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
       logger.error("Error processing video", {

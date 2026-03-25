@@ -101,7 +101,10 @@ async function videoArgs(path: string): Promise<string[]> {
   // processVideo is async (awaits gpuReady), so we need to await it starting
   // We don't await the full result since it would try to read the stream
   await processVideo(parsed.sourceUrl, parsed as never).catch(() => {});
-  return mockSpawn.mock.calls.at(-1)![1] as string[];
+  const args = mockSpawn.mock.calls.at(-1)![1] as string[];
+  return args.map((a) =>
+    /asset-proxy-.*\/output\.\w+$/.test(a) ? "<tempfile>" : a,
+  );
 }
 
 const SRC = "https://example.com/photo.jpg";
@@ -621,10 +624,10 @@ describe("video ffmpeg args", () => {
         "-c:a",
         "copy",
         "-movflags",
-        "frag_keyframe+empty_moov+faststart",
+        "+faststart",
         "-f",
         "mp4",
-        "pipe:1",
+        "<tempfile>",
       ]
     `);
   });
@@ -632,30 +635,30 @@ describe("video ffmpeg args", () => {
   it("resize with framerate and cut", async () => {
     expect(await videoArgs(vplain("/rs:force:480:360/fr:30/ct:10")))
       .toMatchInlineSnapshot(`
-      [
-        "-hide_banner",
-        "-y",
-        "-i",
-        "https://example.com/video.mp4",
-        "-vf",
-        "scale=480:360",
-        "-t",
-        "10",
-        "-r",
-        "30",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "fast",
-        "-c:a",
-        "copy",
-        "-movflags",
-        "frag_keyframe+empty_moov+faststart",
-        "-f",
-        "mp4",
-        "pipe:1",
-      ]
-    `);
+        [
+          "-hide_banner",
+          "-y",
+          "-i",
+          "https://example.com/video.mp4",
+          "-vf",
+          "scale=480:360",
+          "-t",
+          "10",
+          "-r",
+          "30",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "fast",
+          "-c:a",
+          "copy",
+          "-movflags",
+          "+faststart",
+          "-f",
+          "mp4",
+          "<tempfile>",
+        ]
+      `);
   });
 
   it("resize fill (CPU)", async () => {
@@ -674,10 +677,10 @@ describe("video ffmpeg args", () => {
         "-c:a",
         "copy",
         "-movflags",
-        "frag_keyframe+empty_moov+faststart",
+        "+faststart",
         "-f",
         "mp4",
-        "pipe:1",
+        "<tempfile>",
       ]
     `);
   });
@@ -706,26 +709,26 @@ describe("video ffmpeg args", () => {
   it("crop_aspect_ratio with resize", async () => {
     expect(await videoArgs(vplain("/rs:force:480:360/car:16:9")))
       .toMatchInlineSnapshot(`
-      [
-        "-hide_banner",
-        "-y",
-        "-i",
-        "https://example.com/video.mp4",
-        "-vf",
-        "crop='if(gt(dar\\,1.7777777777777777)\\,ih*1.7777777777777777\\,iw)':'if(gt(dar\\,1.7777777777777777)\\,ih\\,iw/1.7777777777777777)',scale=480:360",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "fast",
-        "-c:a",
-        "copy",
-        "-movflags",
-        "frag_keyframe+empty_moov+faststart",
-        "-f",
-        "mp4",
-        "pipe:1",
-      ]
-    `);
+        [
+          "-hide_banner",
+          "-y",
+          "-i",
+          "https://example.com/video.mp4",
+          "-vf",
+          "crop='if(gt(dar\\,1.7777777777777777)\\,ih*1.7777777777777777\\,iw)':'if(gt(dar\\,1.7777777777777777)\\,ih\\,iw/1.7777777777777777)',scale=480:360",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "fast",
+          "-c:a",
+          "copy",
+          "-movflags",
+          "+faststart",
+          "-f",
+          "mp4",
+          "<tempfile>",
+        ]
+      `);
   });
   it("mute strips audio from mp4", async () => {
     const args = await videoArgs(vplain("/rs:force:480:360/mu:1"));
@@ -788,7 +791,7 @@ describe("video ffmpeg args (GPU)", () => {
             "-c:a",
             "copy",
             "-movflags",
-            "frag_keyframe+empty_moov+faststart",
+            "+faststart",
             "-f",
             "mp4",
             "pipe:1",
@@ -818,7 +821,7 @@ describe("video ffmpeg args (GPU)", () => {
             "-c:a",
             "copy",
             "-movflags",
-            "frag_keyframe+empty_moov+faststart",
+            "+faststart",
             "-f",
             "mp4",
             "pipe:1",
@@ -848,7 +851,7 @@ describe("video ffmpeg args (GPU)", () => {
             "-c:a",
             "copy",
             "-movflags",
-            "frag_keyframe+empty_moov+faststart",
+            "+faststart",
             "-f",
             "mp4",
             "pipe:1",
@@ -859,32 +862,32 @@ describe("video ffmpeg args (GPU)", () => {
       it("fit with only width", () => {
         expect(gpuVideoArgs({ resizingType: "fit", width: 480, height: 0 }))
           .toMatchInlineSnapshot(`
-          [
-            "-hide_banner",
-            "-y",
-            "-hwaccel",
-            "cuda",
-            "-hwaccel_output_format",
-            "cuda",
-            "-i",
-            "https://example.com/video.mp4",
-            "-vf",
-            "scale_cuda=w='min(480,iw*min(480/iw\\,99999/ih))':h='min(99999,ih*min(480/iw\\,99999/ih))'",
-            "-c:v",
-            "h264_nvenc",
-            "-preset",
-            "p4",
-            "-tune",
-            "hq",
-            "-c:a",
-            "copy",
-            "-movflags",
-            "frag_keyframe+empty_moov+faststart",
-            "-f",
-            "mp4",
-            "pipe:1",
-          ]
-        `);
+            [
+              "-hide_banner",
+              "-y",
+              "-hwaccel",
+              "cuda",
+              "-hwaccel_output_format",
+              "cuda",
+              "-i",
+              "https://example.com/video.mp4",
+              "-vf",
+              "scale_cuda=w='min(480,iw*min(480/iw\\,99999/ih))':h='min(99999,ih*min(480/iw\\,99999/ih))'",
+              "-c:v",
+              "h264_nvenc",
+              "-preset",
+              "p4",
+              "-tune",
+              "hq",
+              "-c:a",
+              "copy",
+              "-movflags",
+              "+faststart",
+              "-f",
+              "mp4",
+              "pipe:1",
+            ]
+          `);
       });
     });
 
@@ -894,32 +897,32 @@ describe("video ffmpeg args (GPU)", () => {
       it("fit", () => {
         expect(gpuVideoArgs({ resizingType: "fit", resizingAlgorithm: scaler }))
           .toMatchInlineSnapshot(`
-          [
-            "-hide_banner",
-            "-y",
-            "-hwaccel",
-            "cuda",
-            "-hwaccel_output_format",
-            "cuda",
-            "-i",
-            "https://example.com/video.mp4",
-            "-vf",
-            "scale_cuda=w='min(480,iw*min(480/iw\\,360/ih))':h='min(360,ih*min(480/iw\\,360/ih))'",
-            "-c:v",
-            "h264_nvenc",
-            "-preset",
-            "p4",
-            "-tune",
-            "hq",
-            "-c:a",
-            "copy",
-            "-movflags",
-            "frag_keyframe+empty_moov+faststart",
-            "-f",
-            "mp4",
-            "pipe:1",
-          ]
-        `);
+            [
+              "-hide_banner",
+              "-y",
+              "-hwaccel",
+              "cuda",
+              "-hwaccel_output_format",
+              "cuda",
+              "-i",
+              "https://example.com/video.mp4",
+              "-vf",
+              "scale_cuda=w='min(480,iw*min(480/iw\\,360/ih))':h='min(360,ih*min(480/iw\\,360/ih))'",
+              "-c:v",
+              "h264_nvenc",
+              "-preset",
+              "p4",
+              "-tune",
+              "hq",
+              "-c:a",
+              "copy",
+              "-movflags",
+              "+faststart",
+              "-f",
+              "mp4",
+              "pipe:1",
+            ]
+          `);
       });
 
       it("fill", () => {
@@ -946,7 +949,7 @@ describe("video ffmpeg args (GPU)", () => {
             "-c:a",
             "copy",
             "-movflags",
-            "frag_keyframe+empty_moov+faststart",
+            "+faststart",
             "-f",
             "mp4",
             "pipe:1",
@@ -978,7 +981,7 @@ describe("video ffmpeg args (GPU)", () => {
             "-c:a",
             "copy",
             "-movflags",
-            "frag_keyframe+empty_moov+faststart",
+            "+faststart",
             "-f",
             "mp4",
             "pipe:1",
@@ -993,32 +996,32 @@ describe("video ffmpeg args (GPU)", () => {
       it("fit", () => {
         expect(gpuVideoArgs({ resizingType: "fit", resizingAlgorithm: scaler }))
           .toMatchInlineSnapshot(`
-          [
-            "-hide_banner",
-            "-y",
-            "-hwaccel",
-            "cuda",
-            "-hwaccel_output_format",
-            "cuda",
-            "-i",
-            "https://example.com/video.mp4",
-            "-vf",
-            "scale_npp=w='min(480,iw*min(480/iw\\,360/ih))':h='min(360,ih*min(480/iw\\,360/ih))'",
-            "-c:v",
-            "h264_nvenc",
-            "-preset",
-            "p4",
-            "-tune",
-            "hq",
-            "-c:a",
-            "copy",
-            "-movflags",
-            "frag_keyframe+empty_moov+faststart",
-            "-f",
-            "mp4",
-            "pipe:1",
-          ]
-        `);
+            [
+              "-hide_banner",
+              "-y",
+              "-hwaccel",
+              "cuda",
+              "-hwaccel_output_format",
+              "cuda",
+              "-i",
+              "https://example.com/video.mp4",
+              "-vf",
+              "scale_npp=w='min(480,iw*min(480/iw\\,360/ih))':h='min(360,ih*min(480/iw\\,360/ih))'",
+              "-c:v",
+              "h264_nvenc",
+              "-preset",
+              "p4",
+              "-tune",
+              "hq",
+              "-c:a",
+              "copy",
+              "-movflags",
+              "+faststart",
+              "-f",
+              "mp4",
+              "pipe:1",
+            ]
+          `);
       });
 
       it("fill", () => {
@@ -1045,7 +1048,7 @@ describe("video ffmpeg args (GPU)", () => {
             "-c:a",
             "copy",
             "-movflags",
-            "frag_keyframe+empty_moov+faststart",
+            "+faststart",
             "-f",
             "mp4",
             "pipe:1",
@@ -1077,7 +1080,7 @@ describe("video ffmpeg args (GPU)", () => {
             "-c:a",
             "copy",
             "-movflags",
-            "frag_keyframe+empty_moov+faststart",
+            "+faststart",
             "-f",
             "mp4",
             "pipe:1",
@@ -1116,7 +1119,7 @@ describe("video ffmpeg args (GPU)", () => {
             "-c:a",
             "copy",
             "-movflags",
-            "frag_keyframe+empty_moov+faststart",
+            "+faststart",
             "-f",
             "mp4",
             "pipe:1",
