@@ -1,6 +1,7 @@
 services:
   asset-proxy:
     build: .
+    init: true
     environment:
       - SKIP_GPU=1
       - SOURCE_URL_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
@@ -9,38 +10,59 @@ services:
       - ALLOWED_ORIGINS=http://file-server
       - BEST_FORMAT_MAX_RESOLUTION=0.005
       - STORAGE_EMULATOR_HOST=http://fake-gcs:4443
+      - NODE_V8_COVERAGE
     ports:
       - "8080:8080"
     volumes:
       - ./packages/proxy/src:/app/packages/proxy/src:ro
+      - ./packages/proxy/dist:/app/packages/proxy/dist:ro
       - ./packages/url-parser/src:/app/packages/url-parser/src:ro
       - ./packages/url-parser/dist:/app/packages/url-parser/dist:ro
       - ./packages/proxy/package.json:/app/packages/proxy/package.json:ro
       - ./packages/url-parser/package.json:/app/packages/url-parser/package.json:ro
       - ./package.json:/app/package.json:ro
+      - ./.coverage-docker/asset-proxy:/coverage
     command:
-      ["pnpm", "--filter", "proxy", "exec", "tsx", "--watch", "src/index.ts"]
+      - sh
+      - -c
+      - |
+        if [ -n "$$NODE_V8_COVERAGE" ]; then
+          exec node packages/proxy/dist/index.js
+        else
+          exec pnpm --filter proxy exec tsx --watch src/index.ts
+        fi
     depends_on:
       - file-server
       - fake-gcs
 
   cache-proxy:
     build: .
+    init: true
     environment:
       - FORWARD_URL=http://asset-proxy:8080
       - CACHE_BUCKET=test-cache
       - GCS_API_ENDPOINT=http://fake-gcs:4443
+      - NODE_V8_COVERAGE
     ports:
       - "8081:8080"
     volumes:
       - ./packages/proxy/src:/app/packages/proxy/src:ro
+      - ./packages/proxy/dist:/app/packages/proxy/dist:ro
       - ./packages/url-parser/src:/app/packages/url-parser/src:ro
       - ./packages/url-parser/dist:/app/packages/url-parser/dist:ro
       - ./packages/proxy/package.json:/app/packages/proxy/package.json:ro
       - ./packages/url-parser/package.json:/app/packages/url-parser/package.json:ro
       - ./package.json:/app/package.json:ro
+      - ./.coverage-docker/cache-proxy:/coverage
     command:
-      ["pnpm", "--filter", "proxy", "exec", "tsx", "--watch", "src/index.ts"]
+      - sh
+      - -c
+      - |
+        if [ -n "$$NODE_V8_COVERAGE" ]; then
+          exec node packages/proxy/dist/index.js
+        else
+          exec pnpm --filter proxy exec tsx --watch src/index.ts
+        fi
     depends_on:
       - asset-proxy
       - fake-gcs

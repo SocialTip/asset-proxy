@@ -1,6 +1,8 @@
 node_modules
 dist
 coverage
+.coverage-*
 .env
+.idea
 .DS_Store
 test-plans

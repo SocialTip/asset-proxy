@@ -89,12 +89,16 @@ jobs:
             -H 'Content-Type: application/json' -d '{"name":"test-cache"}'
 
       - name: Start asset-proxy (processing mode)
-        run: nohup pnpm --filter proxy exec tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
+        run: nohup node packages/proxy/dist/index.js > /tmp/asset-proxy.log 2>&1 &
         env:
           SKIP_GPU: "1"
           SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          SIGNING_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+          SIGNING_SALT: "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe"
           ALLOWED_ORIGINS: "http://file-server"
+          BEST_FORMAT_MAX_RESOLUTION: "0.005"
           STORAGE_EMULATOR_HOST: "http://localhost:4443"
+          NODE_V8_COVERAGE: /tmp/coverage-asset-proxy
 
       - name: Wait for asset-proxy
         id: wait
@@ -105,12 +109,13 @@ jobs:
         run: tail -100 /tmp/asset-proxy.log
 
       - name: Start cache-proxy
-        run: nohup pnpm --filter proxy exec tsx src/index.ts > /tmp/cache-proxy.log 2>&1 &
+        run: nohup node packages/proxy/dist/index.js > /tmp/cache-proxy.log 2>&1 &
         env:
           PORT: "8081"
           FORWARD_URL: "http://localhost:8080"
           CACHE_BUCKET: "test-cache"
           GCS_API_ENDPOINT: "http://localhost:4443"
+          NODE_V8_COVERAGE: /tmp/coverage-cache-proxy
 
       - name: Wait for cache-proxy
         id: wait-cache
@@ -122,11 +127,37 @@ jobs:
 
       - name: Run tests
         id: tests
-        run: pnpm -w run test --coverage
+        run: pnpm -w run test --coverage --coverage.reporter=json
 
       - name: Update snapshots
         if: failure() && steps.tests.outcome == 'failure'
         run: pnpm -w run test --update
+
+      - name: Collect and merge coverage
+        if: always() && steps.tests.outcome != 'skipped'
+        run: |
+          # Stop proxy processes so Node flushes NODE_V8_COVERAGE data
+          kill $(lsof -ti :8080) $(lsof -ti :8081) 2>/dev/null || true
+          sleep 2
+
+          # Collect raw V8 coverage from both proxies
+          mkdir -p .coverage-server
+          cp /tmp/coverage-asset-proxy/*.json .coverage-server/ 2>/dev/null || true
+          cp /tmp/coverage-cache-proxy/*.json .coverage-server/ 2>/dev/null || true
+
+          # Convert server-side V8 coverage to istanbul json
+          if compgen -G ".coverage-server/*.json" > /dev/null; then
+            pnpm exec c8 report \
+              --src . \
+              --include 'packages/*/dist/**' \
+              --temp-directory .coverage-server \
+              --reporter json --reports-dir .coverage-server/out
+          fi
+
+          # Merge vitest + server-side coverage into final report
+          node scripts/merge-coverage.mjs \
+            coverage/coverage-final.json \
+            .coverage-server/out/coverage-final.json
 
       - name: Check for snapshot changes
         if: always() && github.event_name == 'pull_request'
@@ -177,7 +208,7 @@ jobs:
       - uses: codecov/codecov-action@v5
         if: always()
         with:
-          files: coverage/clover.xml
+          files: coverage/lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Print asset-proxy logs

@@ -44,6 +44,7 @@ export default defineConfig({
       provider: "v8",
       include: ["packages/*/src/**"],
       exclude: ["**/*.astro"],
+      reporter: ["text", "json", "lcov"],
     },
   },
 });
