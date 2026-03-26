@@ -15,7 +15,7 @@ export const URL_CONFIG: UrlGeneratorConfig = {
     "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
 };
 
-export function h2cFetch(
+export function h2Fetch(
   url: string | URL,
   init?: { headers?: Record<string, string> },
 ): Promise<Response> {
@@ -52,7 +52,7 @@ export function h2cFetch(
 
 beforeAll(async () => {
   try {
-    const res = await h2cFetch(`${SERVICE_URL}/health`);
+    const res = await h2Fetch(`${SERVICE_URL}/health`);
     if (res.ok) return;
   } catch {
     // not reachable

@@ -4,7 +4,7 @@ import { resolve, dirname } from "node:path";
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 import { SOURCE_URL } from "./helpers.js";
-import { SERVICE_URL, URL_CONFIG, h2cFetch as fetch } from "./setup.js";
+import { SERVICE_URL, URL_CONFIG, h2Fetch as fetch } from "./setup.js";
 
 const fixturesDir = resolve(
   dirname(fileURLToPath(import.meta.url)),
