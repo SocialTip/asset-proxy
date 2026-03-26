@@ -89,7 +89,7 @@ jobs:
             -H 'Content-Type: application/json' -d '{"name":"test-cache"}'
 
       - name: Start asset-proxy (processing mode)
-        run: nohup node packages/proxy/dist/index.js > /tmp/asset-proxy.log 2>&1 &
+        run: cd packages/proxy && nohup node --conditions source --import tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
           HEALTH_PORT: "8082"
           SKIP_GPU: "1"
@@ -110,7 +110,7 @@ jobs:
         run: tail -100 /tmp/asset-proxy.log
 
       - name: Start cache-proxy
-        run: nohup node packages/proxy/dist/index.js > /tmp/cache-proxy.log 2>&1 &
+        run: cd packages/proxy && nohup node --conditions source --import tsx src/index.ts > /tmp/cache-proxy.log 2>&1 &
         env:
           HEALTH_PORT: "8083"
           PORT: "8081"
@@ -142,13 +142,29 @@ jobs:
           kill $(lsof -ti :8080) $(lsof -ti :8081) 2>/dev/null || true
           sleep 2
 
+          # Save vitest lcov before merge overwrites it
+          cp coverage/lcov.info .coverage-raw/vitest-lcov.info
+
           # Collect raw V8 coverage from both proxies
           mkdir -p .coverage-raw/server
           cp /tmp/coverage-asset-proxy/*.json .coverage-raw/server/ 2>/dev/null || true
           cp /tmp/coverage-cache-proxy/*.json .coverage-raw/server/ 2>/dev/null || true
 
-          # Merge all raw V8 coverage into a single report
-          node scripts/merge-coverage.mjs .coverage-raw/vitest .coverage-raw/server
+          # Convert server V8 data to lcov via c8 (server uses tsx with
+          # --conditions source, so V8 data has src/ URLs)
+          if compgen -G ".coverage-raw/server/*.json" > /dev/null; then
+            pnpm exec c8 report \
+              --src . \
+              --include 'packages/*/src/**' \
+              --exclude '**/__mocks__/**' \
+              --temp-directory .coverage-raw/server \
+              --reporter lcov --reports-dir .coverage-server-report
+          fi
+
+          # Merge vitest + server lcov (max count per line, regenerates HTML)
+          node scripts/merge-coverage.mjs \
+            .coverage-raw/vitest-lcov.info \
+            .coverage-server-report/lcov.info
 
       - name: Check for snapshot changes
         if: always() && github.event_name == 'pull_request'
