@@ -30,6 +30,7 @@ export function h2cFetch(
           responseHeaders.set(k, String(v));
         }
       }
+      req.on("end", () => client.close());
       resolve({
         status,
         ok: status >= 200 && status < 300,
@@ -37,7 +38,6 @@ export function h2cFetch(
         body: req,
       });
     });
-    req.on("end", () => client.close());
     req.on("error", (err) => {
       client.close();
       reject(err);
