@@ -17,6 +17,7 @@ import {
   isVideoUrl,
   parseProcessingUrl,
   verifySignature,
+  type ImageUrl,
 } from "@socialtip/asset-proxy-url-parser";
 import { type ProcessingEnv, env as envSwitched, isCacheMode } from "./env.js";
 import { startHealthServer } from "./health-server.js";
@@ -370,15 +371,26 @@ async function processAndRespond(
     return reply.send(raw);
   }
 
-  if (isImageUrl(parsed)) {
+  // best format on a video source: extract the first frame and select the best image format
+  const treatAsImageUrl =
+    parsed.bestFormat && isVideoUrl(parsed)
+      ? ({
+          ...parsed,
+          outputFormat: "jpg" as const,
+          videoThumbnailSecond: parsed.videoThumbnailSecond ?? 0,
+        } satisfies ImageUrl)
+      : isImageUrl(parsed)
+        ? parsed
+        : undefined;
+  if (treatAsImageUrl) {
     try {
       const result = await withSpan("processImage", {}, () =>
-        processImage(sourceUrl, parsed),
+        processImage(sourceUrl, treatAsImageUrl),
       );
       const contentType = CONTENT_TYPES[result.outputFormat] || "image/jpeg";
       reply.header("Content-Type", contentType);
       reply.header("Cache-Control", env.CACHE_CONTROL);
-      setContentDisposition(reply, parsed, result.outputFormat);
+      setContentDisposition(reply, treatAsImageUrl, result.outputFormat);
       return reply.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;

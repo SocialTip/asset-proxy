@@ -205,6 +205,17 @@ describe("generateUrl", () => {
     expect(parsed.sourceUrl).toBe(SRC);
   });
 
+  it("generates best format URL for a video source", () => {
+    const url = generateUrl({
+      sourceUrl: "https://example.com/clip.mp4",
+      bestFormat: true,
+      resize: { type: "fill", width: 360, height: 640 },
+    });
+    expect(url).toMatchInlineSnapshot(
+      `"/insecure/f:best/rs:fill:360:640/plain/https://example.com/clip.mp4"`,
+    );
+  });
+
   it("generates skip_processing option", () => {
     const url = generateUrl({
       sourceUrl: SRC,

@@ -91,6 +91,21 @@ describe("video thumbnails", () => {
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
 
+  it("f:best on a video source extracts first frame as image", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/f:best/w:128/plain/${VIDEO_URL}`,
+    );
+    const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    const contentType = res.headers.get("content-type");
+    expect(contentType).toMatch(/^image\//);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(128);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
   it("vta extendFrame pads to exact dimensions", async () => {
     const url = videoUrlWithFormat("/vta:0.2:100:3:320:180:1", "gif");
     const res = await fetch(url);
