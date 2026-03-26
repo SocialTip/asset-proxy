@@ -8,10 +8,10 @@ See also: [Image Processing](Image.md), [Metadata](Metadata.md)
 
 Append a format suffix to the source URL to choose the output format:
 
-| Format | Suffix  | Notes                    |
-| ------ | ------- | ------------------------ |
+| Format | Suffix  | Notes                                                        |
+| ------ | ------- | ------------------------------------------------------------ |
 | MP4    | `@mp4`  | H.264 video, audio copied through. Default for video output. |
-| WebM   | `@webm` | VP9 video, Opus audio    |
+| WebM   | `@webm` | AV1 video, Opus audio                                        |
 
 You can also extract a still image from a video by using an image format suffix (`@jpg`, `@png`, etc.). See [Video Thumbnail Second](#video-thumbnail-second--video_thumbnail_secondseconds-shorthand-vts) for controlling which frame is extracted.
 
