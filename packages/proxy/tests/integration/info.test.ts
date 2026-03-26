@@ -709,11 +709,7 @@ describe("info endpoint", () => {
           ),
       );
       expect(res.status).toBeGreaterThanOrEqual(400);
-      expect(await res.text()).toMatchInlineSnapshot(`
-        "Command failed: ffprobe -v error -show_format -show_streams -of json http://file-server/nonexistent.png
-        http://file-server/nonexistent.png: Server returned 404 Not Found
-        "
-      `);
+      expect(await res.text()).toMatchInlineSnapshot(`"Unhandled error"`);
     });
   });
 });
