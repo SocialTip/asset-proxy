@@ -23,7 +23,12 @@ import { startHealthServer } from "./health-server.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 
 const env = envSwitched as ProcessingEnv;
-import { gpuReady, processImage, processVideo } from "./ffmpeg.js";
+import {
+  gpuReady,
+  processImage,
+  processVideo,
+  type VideoResult,
+} from "./ffmpeg.js";
 import { handleInfoRequest } from "./info.js";
 import { logger } from "./logger.js";
 import { recordException, tracer, withSpan } from "./tracing.js";
@@ -392,20 +397,24 @@ async function processAndRespond(
     }
   } else if (isVideoUrl(parsed)) {
     try {
-      const result = await withSpan("processVideo", {}, () =>
+      const result: VideoResult = await withSpan("processVideo", {}, () =>
         processVideo(sourceUrl, parsed),
       );
+
+      const contentType = CONTENT_TYPES[result.outputFormat] || "video/mp4";
+      reply.header("Content-Type", contentType);
+      reply.header("Cache-Control", env.CACHE_CONTROL);
+      setContentDisposition(reply, parsed, result.outputFormat);
+
+      if (result.stream) {
+        return reply.send(result.stream);
+      }
 
       if (!result.buffer.length) {
         throw new HTTPError("Video processing produced no output", {
           code: "INTERNAL_SERVER_ERROR",
         });
       }
-
-      const contentType = CONTENT_TYPES[result.outputFormat] || "video/mp4";
-      reply.header("Content-Type", contentType);
-      reply.header("Cache-Control", env.CACHE_CONTROL);
-      setContentDisposition(reply, parsed, result.outputFormat);
       return reply.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
