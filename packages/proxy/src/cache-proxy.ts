@@ -120,6 +120,7 @@ export async function createCacheProxyApp() {
     for (const [key, value] of Object.entries(request.headers)) {
       if (
         typeof value === "string" &&
+        !key.startsWith(":") &&
         !HOP_BY_HOP.has(key.toLowerCase()) &&
         key.toLowerCase() !== "range"
       ) {
