@@ -1,6 +1,11 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 
+process.env.NODE_EXTRA_CA_CERTS ??= resolve(
+  __dirname,
+  "packages/proxy/tests/fixtures/certs/cert.pem",
+);
+
 const packageAliases = {
   "@socialtip/asset-proxy-url-parser": resolve(
     __dirname,
