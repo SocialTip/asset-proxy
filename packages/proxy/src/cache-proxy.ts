@@ -181,7 +181,7 @@ export async function createCacheProxyApp() {
     const { span } = request.opentelemetry();
     if (span) recordException(span, error);
     if (!reply.sent) {
-      reply.code(500).send("Unhandled error");
+      return reply.code(500).send("Unhandled error");
     }
   });
 

@@ -72,8 +72,8 @@ importers:
   packages/proxy:
     dependencies:
       "@fastify/otel":
-        specifier: ^0.17.1
-        version: 0.17.1(@opentelemetry/api@1.9.0)
+        specifier: ^0.18.0
+        version: 0.18.0(@opentelemetry/api@1.9.0)
       "@google-cloud/storage":
         specifier: ^7.19.0
         version: 7.19.0
@@ -867,10 +867,10 @@ packages:
         integrity: sha512-OA3KGBCy6KtIvLf8DINC5880o5iBlDX4SxzLQS8HorJAbqluzLRn80UXU0bxZn7UOFhFgpRJDasfwn9nG4FG4A==,
       }
 
-  "@fastify/otel@0.17.1":
+  "@fastify/otel@0.18.0":
     resolution:
       {
-        integrity: sha512-K4wyxfUZx2ux5o+b6BtTqouYFVILohLZmSbA2tKUueJstNcBnoGPVhllCaOvbQ3ZrXdUxUC/fyrSWSCqHhdOPg==,
+        integrity: sha512-3TASCATfw+ctICSb4ymrv7iCm0qJ0N9CarB+CZ7zIJ7KqNbwI5JjyDL1/sxoC0ccTO1Zyd1iQ+oqncPg5FJXaA==,
       }
     peerDependencies:
       "@opentelemetry/api": ^1.9.0
@@ -7070,7 +7070,7 @@ snapshots:
     dependencies:
       dequal: 2.0.3
 
-  "@fastify/otel@0.17.1(@opentelemetry/api@1.9.0)":
+  "@fastify/otel@0.18.0(@opentelemetry/api@1.9.0)":
     dependencies:
       "@opentelemetry/api": 1.9.0
       "@opentelemetry/core": 2.6.0(@opentelemetry/api@1.9.0)

@@ -445,7 +445,7 @@ app.setErrorHandler((cause: Error, request, reply) => {
   const { span } = request.opentelemetry();
   if (span) recordException(span, error);
   if (!reply.sent) {
-    reply.code(status).send(message);
+    return reply.code(status).send(message);
   }
 });
 
