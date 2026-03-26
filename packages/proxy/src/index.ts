@@ -432,12 +432,18 @@ app.get("/health", async (_request, reply) => {
   return reply.send("ok");
 });
 
-app.setErrorHandler((err: Error, _request, reply) => {
-  const status = err instanceof HTTPError ? err.status : 500;
-  const message = err.message ?? "Internal server error";
+app.setErrorHandler((cause: Error, request, reply) => {
+  const status = cause instanceof HTTPError ? cause.status : 500;
+  const message =
+    cause instanceof HTTPError ? cause.message : "Unhandled error";
 
-  logger.error("Request error", { error: message, status });
-
+  const error = new Error("Processor error", { cause });
+  logger.error("Processor error", {
+    message: cause instanceof Error ? cause.message : undefined,
+    cause,
+  });
+  const { span } = request.opentelemetry();
+  if (span) recordException(span, error);
   if (!reply.sent) {
     reply.code(status).send(message);
   }
