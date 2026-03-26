@@ -117,9 +117,8 @@ for (const [path, file] of files) {
     fc.f[id] = fn.count;
   }
 
-  let bi = 0;
   for (const [key, count] of file.branches) {
-    const [ln, blockId, branchId] = key.split(",");
+    const [ln, blockId] = key.split(",");
     const bKey = String(blockId);
     if (!fc.branchMap[bKey]) {
       fc.branchMap[bKey] = {
