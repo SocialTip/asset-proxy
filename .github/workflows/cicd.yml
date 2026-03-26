@@ -129,7 +129,7 @@ jobs:
 
       - name: Run tests
         id: tests
-        run: pnpm -w run test --coverage --coverage.reporter=json
+        run: pnpm -w run test --coverage
 
       - name: Update snapshots
         if: failure() && steps.tests.outcome == 'failure'
@@ -143,23 +143,12 @@ jobs:
           sleep 2
 
           # Collect raw V8 coverage from both proxies
-          mkdir -p .coverage-server
-          cp /tmp/coverage-asset-proxy/*.json .coverage-server/ 2>/dev/null || true
-          cp /tmp/coverage-cache-proxy/*.json .coverage-server/ 2>/dev/null || true
+          mkdir -p .coverage-raw/server
+          cp /tmp/coverage-asset-proxy/*.json .coverage-raw/server/ 2>/dev/null || true
+          cp /tmp/coverage-cache-proxy/*.json .coverage-raw/server/ 2>/dev/null || true
 
-          # Convert server-side V8 coverage to istanbul json
-          if compgen -G ".coverage-server/*.json" > /dev/null; then
-            pnpm exec c8 report \
-              --src . \
-              --include 'packages/*/dist/**' \
-              --temp-directory .coverage-server \
-              --reporter json --reports-dir .coverage-server/out
-          fi
-
-          # Merge vitest + server-side coverage into final report
-          node scripts/merge-coverage.mjs \
-            coverage/coverage-final.json \
-            .coverage-server/out/coverage-final.json
+          # Merge all raw V8 coverage into a single report
+          node scripts/merge-coverage.mjs .coverage-raw/vitest .coverage-raw/server
 
       - name: Check for snapshot changes
         if: always() && github.event_name == 'pull_request'

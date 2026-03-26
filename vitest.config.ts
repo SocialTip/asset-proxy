@@ -41,10 +41,10 @@ export default defineConfig({
     printConsoleTrace: false,
     silent: "passed-only",
     coverage: {
-      provider: "v8",
+      provider: "custom",
+      customProviderModule: "vitest-monocart-coverage",
       include: ["packages/*/src/**"],
       exclude: ["**/*.astro"],
-      reporter: ["text", "json", "lcov"],
     },
   },
 });
