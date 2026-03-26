@@ -1,7 +1,7 @@
 import { Storage } from "@google-cloud/storage";
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
-import { CACHE_PROXY_URL, URL_CONFIG, h2cFetch as fetch } from "./setup.js";
+import { CACHE_PROXY_URL, URL_CONFIG, h2Fetch as fetch } from "./setup.js";
 import { SOURCE_URL, toPng } from "./helpers.js";
 import { VIDEO_SOURCE_URL } from "./video-helpers.js";
 

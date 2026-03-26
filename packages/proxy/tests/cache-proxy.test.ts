@@ -68,8 +68,8 @@ vi.mock("@/logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-const mockH2cFetch = vi.fn();
-vi.mock("@/h2c-fetch.js", () => ({ h2cFetch: mockH2cFetch }));
+const mockH2Fetch = vi.fn();
+vi.mock("@/h2-fetch.js", () => ({ h2Fetch: mockH2Fetch }));
 
 const { createCacheProxyApp } = await import("@/cache-proxy.js");
 
@@ -84,7 +84,7 @@ describe("cache proxy inflight coalescing", () => {
   });
 
   it("range request waits for inflight cache write then serves from cache", async () => {
-    mockH2cFetch.mockResolvedValue({
+    mockH2Fetch.mockResolvedValue({
       status: 200,
       ok: true,
       headers: new Headers({ "content-type": "video/mp4" }),

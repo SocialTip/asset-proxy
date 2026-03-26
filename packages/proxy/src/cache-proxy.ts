@@ -8,7 +8,7 @@ import Fastify, {
 import type { Http2Server } from "node:http2";
 import parseRange from "range-parser";
 import { type CacheEnv, env as envSwitched } from "./env.js";
-import { h2cFetch } from "./h2c-fetch.js";
+import { h2Fetch } from "./h2-fetch.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 import { logger } from "./logger.js";
 import { tracer, recordException } from "./tracing.js";
@@ -127,7 +127,7 @@ export async function createCacheProxyApp() {
       }
     }
 
-    const upstream = await h2cFetch(forwardUrl, { headers });
+    const upstream = await h2Fetch(forwardUrl, { headers });
 
     reply.code(upstream.status);
     for (const [key, value] of upstream.headers) {

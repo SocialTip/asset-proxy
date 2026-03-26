@@ -1,5 +1,6 @@
 import http2 from "node:http2";
 import { Readable } from "node:stream";
+import { Agent } from "undici";
 
 export interface H2Response {
   status: number;
@@ -8,7 +9,9 @@ export interface H2Response {
   body: Readable | null;
 }
 
-export function h2cFetch(
+const h2Agent = new Agent({ allowH2: true });
+
+function h2cFetchInternal(
   url: string,
   opts: { headers?: Record<string, string> } = {},
 ): Promise<H2Response> {
@@ -44,4 +47,32 @@ export function h2cFetch(
     });
     req.end();
   });
+}
+
+async function h2FetchInternal(
+  url: string,
+  opts: { headers?: Record<string, string> } = {},
+): Promise<H2Response> {
+  const res = await fetch(url, {
+    headers: opts.headers,
+    dispatcher: h2Agent,
+  } as RequestInit);
+  return {
+    status: res.status,
+    ok: res.ok,
+    headers: res.headers,
+    body: res.body
+      ? Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0])
+      : null,
+  };
+}
+
+/** Fetches a URL over HTTP/2. Uses h2c (cleartext) for `http://` URLs and h2 over TLS (via undici) for `https://` URLs. Returns a streaming response with a Node Readable body. */
+export function h2Fetch(
+  url: string,
+  opts: { headers?: Record<string, string> } = {},
+): Promise<H2Response> {
+  const protocol = new URL(url).protocol;
+  if (protocol === "http:") return h2cFetchInternal(url, opts);
+  return h2FetchInternal(url, opts);
 }
