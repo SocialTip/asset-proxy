@@ -16,4 +16,4 @@
 ## PR etiquette
 
 - Prefer not to amend commits which are already pushed to a repo. Prefer to amend commits when not yet pushed AND the change is a fix to the existing commit.
-- Always ask the user before pushing.
+- DO NOT, UNDER ANY CIRCUMSTANCES, push to ANY branch without asking the user first. Even if the user approves a push in a session, DO NOT push again without asking.
