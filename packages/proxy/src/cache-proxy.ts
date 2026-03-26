@@ -11,7 +11,7 @@ import { type CacheEnv, env as envSwitched } from "./env.js";
 import { h2cFetch } from "./h2c-fetch.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 import { logger } from "./logger.js";
-import { tracer } from "./tracing.js";
+import { tracer, recordException } from "./tracing.js";
 
 const env = envSwitched as CacheEnv;
 
@@ -171,11 +171,16 @@ export async function createCacheProxyApp() {
     return reply.send(clientStream);
   });
 
-  app.setErrorHandler((err: Error, _request, reply) => {
-    const message = err.message ?? "Internal server error";
-    logger.error("Cache proxy error", { error: message });
+  app.setErrorHandler((cause: Error, request, reply) => {
+    const error = new Error("Cache proxy error", { cause });
+    logger.error("Cache proxy error", {
+      message: cause instanceof Error ? cause.message : undefined,
+      cause,
+    });
+    const { span } = request.opentelemetry();
+    if (span) recordException(span, error);
     if (!reply.sent) {
-      reply.code(500).send(message);
+      reply.code(500).send("Unhandled error");
     }
   });
 
