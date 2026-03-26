@@ -213,7 +213,7 @@ jobs:
         run: exit 1
 
       - uses: codecov/codecov-action@v5
-        if: always()
+        if: always() && steps.tests.outcome != 'skipped'
         with:
           files: coverage/lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
