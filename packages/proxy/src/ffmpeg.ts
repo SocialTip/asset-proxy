@@ -1051,6 +1051,17 @@ export function buildVideoArgs(
   }
 
   if (outputFormat === "webm") {
+    // AV1 encoders require even dimensions for YUV 4:2:0. When aspect-ratio
+    // preserving scale modes produce odd widths/heights, trim to even.
+    const vfIdx = args.lastIndexOf("-vf");
+    if (vfIdx !== -1) {
+      args[vfIdx + 1] += ",crop=trunc(iw/2)*2:trunc(ih/2)*2";
+    } else {
+      args.push("-vf", "crop=trunc(iw/2)*2:trunc(ih/2)*2");
+    }
+  }
+
+  if (outputFormat === "webm") {
     if (gpu) {
       args.push("-c:v", "av1_nvenc", "-preset", "p4", "-tune", "hq");
       if (quality !== undefined) {
