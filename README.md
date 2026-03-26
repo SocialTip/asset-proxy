@@ -76,7 +76,7 @@ When `FORWARD_URL` is **not** set, the proxy runs in its standard processing mod
 
 ### Cache proxy mode
 
-When `FORWARD_URL` is set (e.g. `FORWARD_URL=http://asset-proxy:8080`), the proxy runs as a lightweight cache layer in front of a processing instance. `CACHE_BUCKET` must also be set in this mode.
+When `FORWARD_URL` is set (e.g. `FORWARD_URL=http://asset-proxy:8080`), the proxy runs as a lightweight cache layer in front of a processing instance. `CACHE_BUCKET` must also be set in this mode. `FORWARD_URL` must use `http://` as the cache proxy connects via h2c (cleartext HTTP/2).
 
 On each request the cache proxy:
 

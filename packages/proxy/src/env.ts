@@ -157,8 +157,14 @@ const processingModeSchema = z
 const cacheModeSchema = z.object({
   ...commonFields,
 
-  /** URL of the processing proxy to forward cache misses to. */
-  FORWARD_URL: z.string().url(),
+  /** URL of the processing proxy to forward cache misses to. Must be http:// as the cache proxy connects via h2c (cleartext HTTP/2). */
+  FORWARD_URL: z
+    .string()
+    .url()
+    .refine((url) => new URL(url).protocol === "http:", {
+      message:
+        "FORWARD_URL must use http:// — the cache proxy connects via h2c (cleartext HTTP/2)",
+    }),
 
   /** GCS bucket name for the cache. */
   CACHE_BUCKET: z.string(),
