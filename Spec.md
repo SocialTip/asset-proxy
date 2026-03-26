@@ -87,7 +87,7 @@ Cuts the video to the first N seconds. When omitted, the full duration is preser
 Video output is limited to:
 
 - **MP4** — H.264 or H.265 encoding
-- **WebM** — VP9 encoding
+- **WebM** — AV1 encoding (NVENC on GPU, SVT-AV1 on CPU)
 
 The output format is specified via the `@<extension>` suffix on the URL (e.g. `@mp4`, `@webm`). When omitted, the default is MP4 with H.264.
 
