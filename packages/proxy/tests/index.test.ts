@@ -696,7 +696,9 @@ describe("video ffmpeg args", () => {
         "-vf",
         "scale=480:360",
         "-c:v",
-        "libvpx-vp9",
+        "libsvtav1",
+        "-preset",
+        "8",
         "-c:a",
         "libopus",
         "-f",
@@ -730,6 +732,16 @@ describe("video ffmpeg args", () => {
         ]
       `);
   });
+  it("webm quality uses libsvtav1 -crf", async () => {
+    const args = await videoArgs(vplain("/rs:force:480:360/q:75") + "@webm");
+    const crfIdx = args.indexOf("-crf");
+    expect(crfIdx).toBeGreaterThan(-1);
+    // 75/100 quality → CRF 16 (Math.round(63 - 0.75 * 63))
+    expect(args[crfIdx + 1]).toBe("16");
+    expect(args).toContain("libsvtav1");
+    expect(args).not.toContain("-b:v");
+  });
+
   it("mute strips audio from mp4", async () => {
     const args = await videoArgs(vplain("/rs:force:480:360/mu:1"));
     expect(args).toContain("-an");
@@ -752,6 +764,8 @@ describe("video ffmpeg args (GPU)", () => {
     height?: number;
     framerate?: number;
     cut?: number;
+    quality?: number;
+    mute?: boolean;
     outputFormat?: string;
   }): string[] {
     return buildVideoArgs("https://example.com/video.mp4", {
@@ -762,6 +776,8 @@ describe("video ffmpeg args (GPU)", () => {
       height: opts.height ?? 360,
       framerate: opts.framerate,
       cut: opts.cut,
+      quality: opts.quality,
+      mute: opts.mute,
       outputFormat: (opts.outputFormat ?? "mp4") as never,
       gpu: true,
     });
@@ -1140,7 +1156,7 @@ describe("video ffmpeg args (GPU)", () => {
     ).toThrow("not supported with GPU acceleration");
   });
 
-  it("GPU webm output downloads frames to CPU for libvpx-vp9", () => {
+  it("GPU webm output uses av1_nvenc", () => {
     expect(gpuVideoArgs({ resizingType: "force", outputFormat: "webm" }))
       .toMatchInlineSnapshot(`
       [
@@ -1153,9 +1169,13 @@ describe("video ffmpeg args (GPU)", () => {
         "-i",
         "https://example.com/video.mp4",
         "-vf",
-        "scale_cuda=480:360,hwdownload,format=nv12",
+        "scale_cuda=480:360",
         "-c:v",
-        "libvpx-vp9",
+        "av1_nvenc",
+        "-preset",
+        "p4",
+        "-tune",
+        "hq",
         "-c:a",
         "libopus",
         "-f",
@@ -1165,7 +1185,7 @@ describe("video ffmpeg args (GPU)", () => {
     `);
   });
 
-  it("GPU webm with scale_cuda appends hwdownload", () => {
+  it("GPU webm with scale_cuda fill", () => {
     expect(
       gpuVideoArgs({
         resizingType: "fill",
@@ -1183,9 +1203,13 @@ describe("video ffmpeg args (GPU)", () => {
         "-i",
         "https://example.com/video.mp4",
         "-vf",
-        "scale_cuda=w='max(480,iw*max(480/iw\\,360/ih))':h='max(360,ih*max(480/iw\\,360/ih))',hwdownload,format=nv12,crop=480:360",
+        "scale_cuda=w='max(480,iw*max(480/iw\\,360/ih))':h='max(360,ih*max(480/iw\\,360/ih))',hwdownload,format=nv12,crop=480:360,hwupload_cuda",
         "-c:v",
-        "libvpx-vp9",
+        "av1_nvenc",
+        "-preset",
+        "p4",
+        "-tune",
+        "hq",
         "-c:a",
         "libopus",
         "-f",
@@ -1193,6 +1217,21 @@ describe("video ffmpeg args (GPU)", () => {
         "pipe:1",
       ]
     `);
+  });
+
+  it("GPU webm with quality uses -cq", () => {
+    const args = gpuVideoArgs({ outputFormat: "webm", quality: 75 });
+    const cqIdx = args.indexOf("-cq");
+    expect(cqIdx).toBeGreaterThan(-1);
+    // 75/100 quality → CQ 13 (Math.round(51 - 0.75 * 51))
+    expect(args[cqIdx + 1]).toBe("13");
+  });
+
+  it("GPU webm mute strips audio", () => {
+    const args = gpuVideoArgs({ outputFormat: "webm", mute: true });
+    expect(args).toContain("-an");
+    expect(args).not.toContain("-c:a");
+    expect(args).toContain("av1_nvenc");
   });
 });
 

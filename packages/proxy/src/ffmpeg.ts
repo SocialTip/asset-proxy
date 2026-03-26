@@ -1044,21 +1044,6 @@ export function buildVideoArgs(
     }
   }
 
-  // For CPU-based encoders (e.g. libvpx-vp9 for WebM), download frames from GPU to CPU
-  if (gpu && outputFormat === "webm") {
-    const vfIdx = args.lastIndexOf("-vf");
-    if (vfIdx !== -1) {
-      let vf = args[vfIdx + 1];
-      vf = vf.replace(/,hwupload_cuda$/, "");
-      if (!vf.includes("hwdownload")) {
-        vf += ",hwdownload,format=nv12";
-      }
-      args[vfIdx + 1] = vf;
-    } else {
-      args.push("-vf", "hwdownload,format=nv12");
-    }
-  }
-
   if (cut !== undefined) {
     args.push("-t", String(cut));
   }
@@ -1068,11 +1053,18 @@ export function buildVideoArgs(
   }
 
   if (outputFormat === "webm") {
-    args.push("-c:v", "libvpx-vp9");
-    if (quality !== undefined) {
-      // libvpx-vp9 CRF: 0-63 (0=best), map 1-100 → 63-0
-      args.push("-crf", String(Math.round(63 - (quality / 100) * 63)));
-      args.push("-b:v", "0");
+    if (gpu) {
+      args.push("-c:v", "av1_nvenc", "-preset", "p4", "-tune", "hq");
+      if (quality !== undefined) {
+        // NVENC CQ: 0-51 (0=best), map 1-100 → 51-0
+        args.push("-cq", String(Math.round(51 - (quality / 100) * 51)));
+      }
+    } else {
+      args.push("-c:v", "libsvtav1", "-preset", "8");
+      if (quality !== undefined) {
+        // SVT-AV1 CRF: 0-63 (0=best), map 1-100 → 63-0
+        args.push("-crf", String(Math.round(63 - (quality / 100) * 63)));
+      }
     }
     if (params.mute) {
       args.push("-an");
