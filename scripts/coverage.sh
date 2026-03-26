@@ -8,7 +8,7 @@ set -euo pipefail
 REPO_ROOT=$(pwd)
 
 rm -rf coverage .coverage-raw .coverage-docker .coverage-server-report
-mkdir -p .coverage-docker/asset-proxy .coverage-docker/cache-proxy .coverage-raw
+mkdir -p .coverage-docker/asset-proxy .coverage-docker/cache-proxy
 
 # (Re)start containers in coverage mode — runs tsx with --conditions source
 # so all packages resolve to src/ TypeScript, matching vitest's resolution.
@@ -18,6 +18,7 @@ NODE_V8_COVERAGE=/coverage docker compose up -d --wait asset-proxy cache-proxy
 pnpm exec vitest run --coverage "$@"
 
 # Save vitest's lcov before the merge overwrites coverage/.
+mkdir -p .coverage-raw
 cp coverage/lcov.info .coverage-raw/vitest-lcov.info
 
 # Stop containers so Node flushes NODE_V8_COVERAGE data to the mounted volumes.
