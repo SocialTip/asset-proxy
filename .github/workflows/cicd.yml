@@ -8,7 +8,7 @@ on:
   pull_request:
 
 concurrency:
-  group: cicd-${{ github.sha }}
+  group: cicd-${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -89,7 +89,7 @@ jobs:
             -H 'Content-Type: application/json' -d '{"name":"test-cache"}'
 
       - name: Start asset-proxy (processing mode)
-        run: nohup node packages/proxy/dist/index.js > /tmp/asset-proxy.log 2>&1 &
+        run: cd packages/proxy && nohup node --conditions source --import tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
           HEALTH_PORT: "8082"
           SKIP_GPU: "1"
@@ -110,7 +110,7 @@ jobs:
         run: tail -100 /tmp/asset-proxy.log
 
       - name: Start cache-proxy
-        run: nohup node packages/proxy/dist/index.js > /tmp/cache-proxy.log 2>&1 &
+        run: cd packages/proxy && nohup node --conditions source --import tsx src/index.ts > /tmp/cache-proxy.log 2>&1 &
         env:
           HEALTH_PORT: "8083"
           PORT: "8081"
@@ -129,7 +129,7 @@ jobs:
 
       - name: Run tests
         id: tests
-        run: pnpm -w run test --coverage --coverage.reporter=json
+        run: pnpm -w run test --coverage
 
       - name: Update snapshots
         if: failure() && steps.tests.outcome == 'failure'
@@ -142,24 +142,29 @@ jobs:
           kill $(lsof -ti :8080) $(lsof -ti :8081) 2>/dev/null || true
           sleep 2
 
-          # Collect raw V8 coverage from both proxies
-          mkdir -p .coverage-server
-          cp /tmp/coverage-asset-proxy/*.json .coverage-server/ 2>/dev/null || true
-          cp /tmp/coverage-cache-proxy/*.json .coverage-server/ 2>/dev/null || true
+          # Save vitest lcov before merge overwrites it
+          mkdir -p .coverage-raw/server
+          cp coverage/lcov.info .coverage-raw/vitest-lcov.info
 
-          # Convert server-side V8 coverage to istanbul json
-          if compgen -G ".coverage-server/*.json" > /dev/null; then
+          # Collect raw V8 coverage from both proxies
+          cp /tmp/coverage-asset-proxy/*.json .coverage-raw/server/ 2>/dev/null || true
+          cp /tmp/coverage-cache-proxy/*.json .coverage-raw/server/ 2>/dev/null || true
+
+          # Convert server V8 data to lcov via c8 (server uses tsx with
+          # --conditions source, so V8 data has src/ URLs)
+          if compgen -G ".coverage-raw/server/*.json" > /dev/null; then
             pnpm exec c8 report \
               --src . \
-              --include 'packages/*/dist/**' \
-              --temp-directory .coverage-server \
-              --reporter json --reports-dir .coverage-server/out
+              --include 'packages/*/src/**' \
+              --exclude '**/__mocks__/**' \
+              --temp-directory .coverage-raw/server \
+              --reporter lcov --reports-dir .coverage-server-report
           fi
 
-          # Merge vitest + server-side coverage into final report
+          # Merge vitest + server lcov (max count per line, regenerates HTML)
           node scripts/merge-coverage.mjs \
-            coverage/coverage-final.json \
-            .coverage-server/out/coverage-final.json
+            .coverage-raw/vitest-lcov.info \
+            .coverage-server-report/lcov.info
 
       - name: Check for snapshot changes
         if: always() && github.event_name == 'pull_request'
@@ -196,7 +201,7 @@ jobs:
           echo "created=true" >> "$GITHUB_OUTPUT"
 
       - name: Delete stale snapshot branch
-        if: always() && steps.snapshots.outputs.changed != 'true' && github.event_name == 'pull_request'
+        if: always() && !cancelled() && steps.snapshots.outputs.changed != 'true' && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -208,7 +213,7 @@ jobs:
         run: exit 1
 
       - uses: codecov/codecov-action@v5
-        if: always()
+        if: always() && !cancelled() && steps.tests.outcome != 'skipped'
         with:
           files: coverage/lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}

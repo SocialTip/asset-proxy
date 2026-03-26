@@ -1,6 +1,17 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 
+const packageAliases = {
+  "@socialtip/asset-proxy-url-parser": resolve(
+    __dirname,
+    "packages/url-parser/src/index.ts",
+  ),
+  "@socialtip/asset-proxy-url-generator": resolve(
+    __dirname,
+    "packages/url-generator/src/index.ts",
+  ),
+};
+
 export default defineConfig({
   test: {
     projects: [
@@ -8,7 +19,10 @@ export default defineConfig({
       "packages/url-generator",
       {
         resolve: {
-          alias: { "@": resolve(__dirname, "packages/proxy/src") },
+          alias: {
+            "@": resolve(__dirname, "packages/proxy/src"),
+            ...packageAliases,
+          },
         },
         test: {
           name: "proxy:unit",
@@ -22,7 +36,10 @@ export default defineConfig({
       },
       {
         resolve: {
-          alias: { "@": resolve(__dirname, "packages/proxy/src") },
+          alias: {
+            "@": resolve(__dirname, "packages/proxy/src"),
+            ...packageAliases,
+          },
         },
         test: {
           name: "proxy:integration",
@@ -43,8 +60,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["packages/*/src/**"],
-      exclude: ["**/*.astro"],
-      reporter: ["text", "json", "lcov"],
+      exclude: ["**/*.astro", "**/__mocks__/**"],
+      reporter: ["text", "lcov"],
     },
   },
 });

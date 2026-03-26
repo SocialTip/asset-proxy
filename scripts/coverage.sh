@@ -2,47 +2,50 @@
 set -euo pipefail
 
 # Collect coverage from both vitest (unit + integration tests) and the Docker
-# containers that serve integration requests. Produces a single merged report.
+# containers that serve integration requests. Produces separate lcov reports
+# from each source and merges them by taking the max count per line.
 
 REPO_ROOT=$(pwd)
 
-rm -rf coverage .coverage-docker .coverage-server
+rm -rf coverage .coverage-raw .coverage-docker .coverage-server-report
 mkdir -p .coverage-docker/asset-proxy .coverage-docker/cache-proxy
 
-# Build proxy so the Docker containers can run compiled JS with source maps.
-pnpm -w run build
-
-# (Re)start containers in coverage mode — runs built JS instead of tsx --watch.
+# (Re)start containers in coverage mode — runs tsx with --conditions source
+# so all packages resolve to src/ TypeScript, matching vitest's resolution.
 NODE_V8_COVERAGE=/coverage docker compose up -d --wait asset-proxy cache-proxy
 
-# Run all tests with vitest's built-in coverage. The json reporter writes
-# coverage/coverage-final.json; we suppress text output since the merge
-# script produces its own combined text report at the end.
-pnpm exec vitest run --coverage --coverage.reporter=json "$@"
+# Run all tests with vitest's built-in v8 coverage.
+pnpm exec vitest run --coverage "$@"
+
+# Save vitest's lcov before the merge overwrites coverage/.
+mkdir -p .coverage-raw
+cp coverage/lcov.info .coverage-raw/vitest-lcov.info
 
 # Stop containers so Node flushes NODE_V8_COVERAGE data to the mounted volumes.
 docker compose stop asset-proxy cache-proxy
 
-# Process server-side V8 coverage: remap container paths to host paths so c8
-# can locate the source files and their source maps.
-mkdir -p .coverage-server
-cp .coverage-docker/asset-proxy/*.json .coverage-server/ 2>/dev/null || true
-cp .coverage-docker/cache-proxy/*.json .coverage-server/ 2>/dev/null || true
+# Collect server-side V8 coverage and remap container paths to host paths.
+mkdir -p .coverage-raw/server
+cp .coverage-docker/asset-proxy/*.json .coverage-raw/server/ 2>/dev/null || true
+cp .coverage-docker/cache-proxy/*.json .coverage-raw/server/ 2>/dev/null || true
 
-if compgen -G ".coverage-server/*.json" > /dev/null; then
-  sed -i '' "s|file:///app/|file://${REPO_ROOT}/|g" .coverage-server/*.json
+if compgen -G ".coverage-raw/server/*.json" > /dev/null; then
+  sed -i '' "s|file:///app/|file://${REPO_ROOT}/|g" .coverage-raw/server/*.json
 
+  # Convert server V8 data to lcov via c8. The V8 data has src/ URLs (tsx
+  # loaded source directly) so c8 can read the .ts files from disk.
   pnpm exec c8 report \
     --src "$REPO_ROOT" \
-    --include 'packages/*/dist/**' \
-    --temp-directory .coverage-server \
-    --reporter json --reports-dir .coverage-server/out
+    --include 'packages/*/src/**' \
+    --exclude '**/__mocks__/**' \
+    --temp-directory .coverage-raw/server \
+    --reporter lcov --reports-dir .coverage-server-report
 fi
 
-# Merge vitest and server-side coverage into a single report (text + lcov).
+# Merge vitest + server lcov (max count per line, regenerates HTML report).
 node scripts/merge-coverage.mjs \
-  coverage/coverage-final.json \
-  .coverage-server/out/coverage-final.json
+  .coverage-raw/vitest-lcov.info \
+  .coverage-server-report/lcov.info
 
 echo ""
 echo "Coverage report written to coverage/"

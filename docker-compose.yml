@@ -29,7 +29,7 @@ services:
       - -c
       - |
         if [ -n "$$NODE_V8_COVERAGE" ]; then
-          exec node packages/proxy/dist/index.js
+          cd packages/proxy && exec node --conditions source --import tsx src/index.ts
         else
           exec pnpm --filter proxy exec tsx --watch src/index.ts
         fi
@@ -63,7 +63,7 @@ services:
       - -c
       - |
         if [ -n "$$NODE_V8_COVERAGE" ]; then
-          exec node packages/proxy/dist/index.js
+          cd packages/proxy && exec node --conditions source --import tsx src/index.ts
         else
           exec pnpm --filter proxy exec tsx --watch src/index.ts
         fi

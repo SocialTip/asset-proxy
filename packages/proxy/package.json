@@ -36,7 +36,6 @@
     "@types/jest-image-snapshot": "^6.4.1",
     "@types/node": "^25.5.0",
     "@types/range-parser": "^1.2.7",
-    "@vitest/coverage-v8": "^4.1.0",
     "jest-image-snapshot": "^6.5.2",
     "sharp": "^0.34.5",
     "tsx": "^4.21.0",
