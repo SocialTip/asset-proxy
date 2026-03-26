@@ -119,4 +119,42 @@ describe("cache proxy inflight coalescing", () => {
     expect(Buffer.from(secondRes.body).toString()).toBe("0123456789abcdef");
     expect(mockH2Fetch).toHaveBeenCalledTimes(1);
   });
+
+  it("range request waits for inflight cache write then serves from cache", async () => {
+    mockH2Fetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: new Headers({ "content-type": "video/mp4" }),
+      body: Readable.from([Buffer.from("0123456789abcdef")]),
+    });
+
+    const app = await createCacheProxyApp();
+
+    const firstRequest = request(app)
+      .get("/some/video/path")
+      .then((res) => res);
+
+    await cacheWriteStarted;
+
+    const rangeRequest = request(app)
+      .get("/some/video/path")
+      .set("Range", "bytes=0-3")
+      .then((res) => res);
+
+    await new Promise((r) => setTimeout(r, 10));
+
+    finishCacheStream();
+
+    const [firstRes, rangeRes] = await Promise.all([
+      firstRequest,
+      rangeRequest,
+    ]);
+
+    expect(firstRes.status).toBe(200);
+    expect(rangeRes.status).toBe(206);
+    expect(rangeRes.headers["content-range"]).toBe(
+      `bytes 0-3/${storedContent.length}`,
+    );
+    expect(rangeRes.headers["content-length"]).toBe("4");
+  });
 });

@@ -75,7 +75,10 @@ export async function createCacheProxyApp() {
     apiEndpoint: process.env.GCS_API_ENDPOINT || undefined,
   });
   const cacheBucket = gcs.bucket(env.CACHE_BUCKET);
-  const inflight = new Map<string, InflightStream>();
+  const inflight = new Map<
+    string,
+    { stream: InflightStream; cacheWrite: Promise<void> }
+  >();
   const app = Fastify({ http2: true });
   await app.register(fastifyOtelInstrumentation.plugin());
 
@@ -149,9 +152,13 @@ export async function createCacheProxyApp() {
 
     const pending = inflight.get(key);
     if (pending) {
-      reply.code(pending.status);
-      for (const [h, v] of pending.responseHeaders) reply.header(h, v);
-      return reply.send(pending.subscribe());
+      if (request.headers.range) {
+        await pending.cacheWrite.catch(() => {});
+      } else {
+        reply.code(pending.stream.status);
+        for (const [h, v] of pending.stream.responseHeaders) reply.header(h, v);
+        return reply.send(pending.stream.subscribe());
+      }
     }
 
     const [exists] = await file.exists();
@@ -199,12 +206,11 @@ export async function createCacheProxyApp() {
       if (!HOP_BY_HOP.has(h.toLowerCase())) responseHeaders.push([h, v]);
     }
     const mux = new InflightStream(source, responseHeaders, upstream.status);
-    inflight.set(key, mux);
-
     const cacheWrite = new Promise<void>((resolve, reject) => {
       cacheStream.on("finish", resolve);
       cacheStream.on("error", reject);
     });
+    inflight.set(key, { stream: mux, cacheWrite });
     source.pipe(cacheStream);
     cacheWrite
       .catch((err) => {

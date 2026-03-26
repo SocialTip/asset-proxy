@@ -1059,9 +1059,7 @@ export function buildVideoArgs(
     } else {
       args.push("-vf", "crop=trunc(iw/2)*2:trunc(ih/2)*2");
     }
-  }
 
-  if (outputFormat === "webm") {
     if (gpu) {
       args.push("-c:v", "av1_nvenc", "-preset", "p4", "-tune", "hq");
       if (quality !== undefined) {
