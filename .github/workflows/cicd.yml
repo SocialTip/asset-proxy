@@ -143,10 +143,10 @@ jobs:
           sleep 2
 
           # Save vitest lcov before merge overwrites it
+          mkdir -p .coverage-raw/server
           cp coverage/lcov.info .coverage-raw/vitest-lcov.info
 
           # Collect raw V8 coverage from both proxies
-          mkdir -p .coverage-raw/server
           cp /tmp/coverage-asset-proxy/*.json .coverage-raw/server/ 2>/dev/null || true
           cp /tmp/coverage-cache-proxy/*.json .coverage-raw/server/ 2>/dev/null || true
 
