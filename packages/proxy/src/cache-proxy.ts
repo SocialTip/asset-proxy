@@ -1,4 +1,4 @@
-import { PassThrough } from "node:stream";
+import { PassThrough, type Readable } from "node:stream";
 import { Storage } from "@google-cloud/storage";
 import Fastify, {
   type FastifyReply,
@@ -14,6 +14,47 @@ import { logger } from "./logger.js";
 import { tracer, recordException } from "./tracing.js";
 
 const env = envSwitched as CacheEnv;
+
+class InflightStream {
+  private readonly source: Readable;
+  private readonly buffer: Buffer[] = [];
+  private ended = false;
+  private error: Error | null = null;
+  readonly responseHeaders: [string, string][];
+  readonly status: number;
+
+  constructor(
+    source: Readable,
+    responseHeaders: [string, string][],
+    status: number,
+  ) {
+    this.source = source;
+    this.responseHeaders = responseHeaders;
+    this.status = status;
+    source.on("data", (chunk: Buffer) => this.buffer.push(chunk));
+    source.on("end", () => {
+      this.ended = true;
+    });
+    source.on("error", (err) => {
+      this.error = err;
+    });
+  }
+
+  subscribe(): PassThrough {
+    const pt = new PassThrough();
+    if (this.error) {
+      pt.destroy(this.error);
+      return pt;
+    }
+    for (const chunk of this.buffer) pt.write(chunk);
+    if (this.ended) {
+      pt.end();
+    } else {
+      this.source.pipe(pt, { end: true });
+    }
+    return pt;
+  }
+}
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -34,7 +75,7 @@ export async function createCacheProxyApp() {
     apiEndpoint: process.env.GCS_API_ENDPOINT || undefined,
   });
   const cacheBucket = gcs.bucket(env.CACHE_BUCKET);
-  const inflight = new Map<string, Promise<void>>();
+  const inflight = new Map<string, InflightStream>();
   const app = Fastify({ http2: true });
   await app.register(fastifyOtelInstrumentation.plugin());
 
@@ -107,9 +148,12 @@ export async function createCacheProxyApp() {
     const file = cacheBucket.file(key);
 
     const pending = inflight.get(key);
-    await pending?.catch(() => {
-      // Cache write failed — fall through to fetch from upstream.
-    });
+    if (pending) {
+      reply.code(pending.status);
+      for (const [h, v] of pending.responseHeaders) reply.header(h, v);
+      return reply.send(pending.subscribe());
+    }
+
     const [exists] = await file.exists();
     if (exists) {
       return serveFromCache(request, reply, file);
@@ -146,16 +190,22 @@ export async function createCacheProxyApp() {
     const contentType =
       upstream.headers.get("content-type") ?? "application/octet-stream";
     const source = upstream.body;
-    const clientStream = new PassThrough();
     const cacheStream = cacheBucket
       .file(key)
       .createWriteStream({ contentType, resumable: false });
+
+    const responseHeaders: [string, string][] = [];
+    for (const [h, v] of upstream.headers) {
+      if (!HOP_BY_HOP.has(h.toLowerCase())) responseHeaders.push([h, v]);
+    }
+    const mux = new InflightStream(source, responseHeaders, upstream.status);
+    inflight.set(key, mux);
 
     const cacheWrite = new Promise<void>((resolve, reject) => {
       cacheStream.on("finish", resolve);
       cacheStream.on("error", reject);
     });
-    inflight.set(key, cacheWrite);
+    source.pipe(cacheStream);
     cacheWrite
       .catch((err) => {
         logger.warn("Failed to write to cache bucket", {
@@ -167,9 +217,7 @@ export async function createCacheProxyApp() {
         inflight.delete(key);
       });
 
-    source.pipe(clientStream);
-    source.pipe(cacheStream);
-    return reply.send(clientStream);
+    return reply.send(mux.subscribe());
   });
 
   app.setErrorHandler((cause: Error, request, reply) => {
