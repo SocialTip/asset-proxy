@@ -8,14 +8,14 @@ See also: [Video Processing](Video.md), [Metadata](Metadata.md)
 
 Append a format suffix to the source URL to choose the output format:
 
-| Format  | Suffix  | Notes                    |
-| ------- | ------- | ------------------------ |
-| JPEG    | `@jpg`  | Default for image output |
-| PNG     | `@png`  |                          |
-| WebP    | `@webp` |                          |
-| AVIF    | `@avif` |                          |
-| GIF     | `@gif`  |                          |
-| Auto    | `@best` | See [Best Format](#best-format--formatbest-or-best) |
+| Format | Suffix  | Notes                                               |
+| ------ | ------- | --------------------------------------------------- |
+| JPEG   | `@jpg`  | Default for image output                            |
+| PNG    | `@png`  |                                                     |
+| WebP   | `@webp` |                                                     |
+| AVIF   | `@avif` |                                                     |
+| GIF    | `@gif`  |                                                     |
+| Auto   | `@best` | See [Best Format](#best-format--formatbest-or-best) |
 
 **Examples:**
 
@@ -232,6 +232,8 @@ Automatically select the most efficient image format. The service analyses image
 - **High complexity** (entropy at or above threshold): candidates are JPEG, WebP, and AVIF
 
 When `BEST_FORMAT_BY_DEFAULT` is enabled, best format selection is used automatically whenever no explicit output format is specified. Quality and format-specific quality (`q`, `fq`) settings are respected during the comparison.
+
+When the source is a video, best format extracts the first frame (equivalent to `vts:0`) and selects the best image format for it. A custom frame can be chosen by also specifying `vts`.
 
 Example: `/_/w:300/plain/https://example.com/photo.jpg@best`
 

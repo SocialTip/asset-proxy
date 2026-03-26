@@ -8,12 +8,12 @@ See also: [Image Processing](Image.md), [Metadata](Metadata.md)
 
 Append a format suffix to the source URL to choose the output format:
 
-| Format | Suffix  | Notes                    |
-| ------ | ------- | ------------------------ |
+| Format | Suffix  | Notes                                                        |
+| ------ | ------- | ------------------------------------------------------------ |
 | MP4    | `@mp4`  | H.264 video, audio copied through. Default for video output. |
-| WebM   | `@webm` | VP9 video, Opus audio    |
+| WebM   | `@webm` | VP9 video, Opus audio                                        |
 
-You can also extract a still image from a video by using an image format suffix (`@jpg`, `@png`, etc.). See [Video Thumbnail Second](#video-thumbnail-second--video_thumbnail_secondseconds-shorthand-vts) for controlling which frame is extracted.
+You can also extract a still image from a video by using an image format suffix (`@jpg`, `@png`, etc.). See [Video Thumbnail Second](#video-thumbnail-second--video_thumbnail_secondseconds-shorthand-vts) for controlling which frame is extracted. Using `@best` or `f:best` on a video source extracts the first frame (equivalent to `vts:0`) and selects the best image format for it; a custom frame can be chosen by also specifying `vts`.
 
 **Examples:**
 
@@ -21,6 +21,7 @@ You can also extract a still image from a video by using an image format suffix 
 /_/resize:fill:480:360/plain/https://example.com/my-video.mp4
 /_/resize:fill:480:360/fr:30/ct:10/plain/https://example.com/my-video.mp4@webm
 /_/vts:5/plain/https://example.com/my-video.mp4@jpg
+/_/f:best/w:300/plain/https://example.com/my-video.mp4
 ```
 
 ## Processing options
