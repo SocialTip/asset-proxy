@@ -14,7 +14,7 @@ export function h2cFetch(
 ): Promise<H2Response> {
   const parsed = new URL(url);
   return new Promise((resolve, reject) => {
-    const client = http2.connect(`http://${parsed.host}`);
+    const client = http2.connect(parsed.origin);
     client.on("error", reject);
     const reqHeaders: http2.OutgoingHttpHeaders = {
       ":path": parsed.pathname + parsed.search,
@@ -30,6 +30,8 @@ export function h2cFetch(
           responseHeaders.set(k, String(v));
         }
       }
+      req.on("end", () => client.close());
+      req.on("error", () => client.close());
       resolve({
         status,
         ok: status >= 200 && status < 300,
