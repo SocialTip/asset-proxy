@@ -83,6 +83,43 @@ describe("cache proxy inflight coalescing", () => {
     mockCreateReadStream.mockClear();
   });
 
+  it("concurrent request receives the inflight stream instead of waiting for cache", async () => {
+    mockH2Fetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: new Headers({ "content-type": "video/mp4" }),
+      body: Readable.from([Buffer.from("0123456789abcdef")]),
+    });
+
+    const app = await createCacheProxyApp();
+
+    const firstRequest = request(app)
+      .get("/some/video/path")
+      .then((res) => res);
+
+    await cacheWriteStarted;
+
+    const secondRequest = request(app)
+      .get("/some/video/path")
+      .then((res) => res);
+
+    // Let the second request handler start before completing the cache write.
+    await new Promise((r) => setTimeout(r, 10));
+
+    finishCacheStream();
+
+    const [firstRes, secondRes] = await Promise.all([
+      firstRequest,
+      secondRequest,
+    ]);
+
+    expect(firstRes.status).toBe(200);
+    expect(secondRes.status).toBe(200);
+    expect(secondRes.headers["content-type"]).toBe("video/mp4");
+    expect(Buffer.from(secondRes.body).toString()).toBe("0123456789abcdef");
+    expect(mockH2Fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("range request waits for inflight cache write then serves from cache", async () => {
     mockH2Fetch.mockResolvedValue({
       status: 200,
@@ -104,7 +141,6 @@ describe("cache proxy inflight coalescing", () => {
       .set("Range", "bytes=0-3")
       .then((res) => res);
 
-    // Let the range request handler start before completing the cache write.
     await new Promise((r) => setTimeout(r, 10));
 
     finishCacheStream();

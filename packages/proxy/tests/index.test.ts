@@ -694,7 +694,7 @@ describe("video ffmpeg args", () => {
         "-i",
         "https://example.com/video.mp4",
         "-vf",
-        "scale=480:360",
+        "scale=480:360,crop=trunc(iw/2)*2:trunc(ih/2)*2",
         "-c:v",
         "libsvtav1",
         "-preset",
@@ -1169,7 +1169,7 @@ describe("video ffmpeg args (GPU)", () => {
         "-i",
         "https://example.com/video.mp4",
         "-vf",
-        "scale_cuda=480:360",
+        "scale_cuda=480:360,crop=trunc(iw/2)*2:trunc(ih/2)*2",
         "-c:v",
         "av1_nvenc",
         "-preset",
@@ -1203,7 +1203,7 @@ describe("video ffmpeg args (GPU)", () => {
         "-i",
         "https://example.com/video.mp4",
         "-vf",
-        "scale_cuda=w='max(480,iw*max(480/iw\\,360/ih))':h='max(360,ih*max(480/iw\\,360/ih))',hwdownload,format=nv12,crop=480:360,hwupload_cuda",
+        "scale_cuda=w='max(480,iw*max(480/iw\\,360/ih))':h='max(360,ih*max(480/iw\\,360/ih))',hwdownload,format=nv12,crop=480:360,hwupload_cuda,crop=trunc(iw/2)*2:trunc(ih/2)*2",
         "-c:v",
         "av1_nvenc",
         "-preset",
@@ -1529,13 +1529,34 @@ describe("url parsing", () => {
     expect(result.outputFormat).toBe("jpg");
   });
 
-  it("f:best does not override outputFormat to a concrete format", () => {
-    const result = parseProcessingUrl(
-      "/f:best/plain/https://example.com/video.mp4",
+  it.each(["mp4", "webm"])(
+    "f:best argument resolves to mp4 for video (source format %s) output",
+    (sourceFormat) => {
+      const result = parseProcessingUrl(
+        `/f:best/rs:fit:360:640/plain/https://example.com/video.${sourceFormat}`,
+      );
+      expect(result.bestFormat).toBe(true);
+      expect(result.outputFormat).toBe("mp4");
+    },
+  );
+
+  it.each(["mp4", "webm"])(
+    "@best suffix resolves to mp4 for video (source format %s) output",
+    (sourceFormat) => {
+      const result = parseProcessingUrl(
+        `/rs:fit:360:640/plain/https://example.com/video.${sourceFormat}@best`,
+      );
+      expect(result.bestFormat).toBe(true);
+      expect(result.outputFormat).toBe("mp4");
+    },
+  );
+
+  it("rejects f:* combined with @* suffix", () => {
+    expect(() =>
+      parseProcessingUrl("/f:webp/plain/https://example.com/photo.jpg@png"),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: Cannot specify both format option (f:webp) and format suffix (@png)]`,
     );
-    expect(result.bestFormat).toBe(true);
-    // Source is a video, no explicit image format → defaults to mp4
-    expect(result.outputFormat).toBe("mp4");
   });
 });
 

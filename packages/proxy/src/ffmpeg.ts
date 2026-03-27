@@ -137,10 +137,14 @@ function rejectImageOnlyOptions(parsed: ParsedUrl) {
   }
 }
 
+export type VideoResult =
+  | { buffer: Buffer; stream?: undefined; outputFormat: string }
+  | { stream: Readable; buffer?: undefined; outputFormat: string };
+
 export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
-): Promise<{ buffer: Buffer; outputFormat: string }> {
+): Promise<VideoResult> {
   rejectImageOnlyOptions(parsed);
 
   const params = {
@@ -177,16 +181,10 @@ export async function processVideo(
     return { buffer, outputFormat: parsed.outputFormat };
   }
 
-  // WebM and other formats stream via pipe (no moov atom concern).
+  // WebM streams directly from ffmpeg — no moov atom concern, so we can pipe
+  // to the response immediately for lower TTFB.
   const args = buildVideoArgs(sourceUrl, params);
-  const stream = runFfmpeg(args);
-  const buffer = await new Promise<Buffer>((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-    stream.on("end", () => resolve(Buffer.concat(chunks)));
-    stream.on("error", reject);
-  });
-  return { buffer, outputFormat: parsed.outputFormat };
+  return { stream: runFfmpeg(args), outputFormat: parsed.outputFormat };
 }
 
 /** Encode a buffer into a specific format with optional quality using sharp. */
@@ -1053,6 +1051,15 @@ export function buildVideoArgs(
   }
 
   if (outputFormat === "webm") {
+    // AV1 encoders require even dimensions for YUV 4:2:0. When aspect-ratio
+    // preserving scale modes produce odd widths/heights, trim to even.
+    const vfIdx = args.lastIndexOf("-vf");
+    if (vfIdx !== -1) {
+      args[vfIdx + 1] += ",crop=trunc(iw/2)*2:trunc(ih/2)*2";
+    } else {
+      args.push("-vf", "crop=trunc(iw/2)*2:trunc(ih/2)*2");
+    }
+
     if (gpu) {
       args.push("-c:v", "av1_nvenc", "-preset", "p4", "-tune", "hq");
       if (quality !== undefined) {
