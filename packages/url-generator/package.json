@@ -1,6 +1,6 @@
 {
   "name": "@socialtip/asset-proxy-url-generator",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Generate asset-proxy-compatible URL paths with optional encryption and signing",
   "type": "module",
   "main": "dist/index.js",
@@ -33,8 +33,5 @@
     "type": "git",
     "url": "https://github.com/SocialTip/asset-proxy.git",
     "directory": "packages/url-generator"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
   }
 }
