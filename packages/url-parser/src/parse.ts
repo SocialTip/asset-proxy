@@ -1338,6 +1338,13 @@ export function parseProcessingUrl(
 
   const parsedOptions = optionsSchema.parse(raw);
 
+  if (parsedOptions.formatOverride && hasFormatSuffix) {
+    throw new HTTPError(
+      `Cannot specify both format option (f:${parsedOptions.formatOverride}) and format suffix (@${format})`,
+      { code: "BAD_REQUEST" },
+    );
+  }
+
   if (parsedOptions.formatOverride) {
     format = parsedOptions.formatOverride;
   }
@@ -1354,6 +1361,15 @@ export function parseProcessingUrl(
     ) {
       format = "jpg";
     }
+  }
+
+  // best format for video always resolves to mp4: WebM/AV1 has better
+  // compression but Apple devices lack reliable WebM playback support.
+  if (
+    (parsedOptions.bestFormat || bestFormatSuffix) &&
+    VIDEO_FORMATS.has(format)
+  ) {
+    format = "mp4";
   }
 
   const parsed = parsedUrlSchema.parse({

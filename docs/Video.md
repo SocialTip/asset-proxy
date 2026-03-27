@@ -13,6 +13,8 @@ Append a format suffix to the source URL to choose the output format:
 | MP4    | `@mp4`  | H.264 video, audio copied through. Default for video output. |
 | WebM   | `@webm` | AV1 video, Opus audio                                        |
 
+`format:best` (or `@best`) always resolves to MP4 for video output. While WebM with AV1 offers better compression and streaming characteristics, Apple devices lack reliable WebM playback support, making MP4 with H.264 the safest choice for broad compatibility.
+
 You can also extract a still image from a video by using an image format suffix (`@jpg`, `@png`, etc.). See [Video Thumbnail Second](#video-thumbnail-second--video_thumbnail_secondseconds-shorthand-vts) for controlling which frame is extracted.
 
 **Examples:**

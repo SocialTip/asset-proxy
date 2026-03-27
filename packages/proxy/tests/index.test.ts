@@ -1529,13 +1529,34 @@ describe("url parsing", () => {
     expect(result.outputFormat).toBe("jpg");
   });
 
-  it("f:best does not override outputFormat to a concrete format", () => {
-    const result = parseProcessingUrl(
-      "/f:best/plain/https://example.com/video.mp4",
+  it.each(["mp4", "webm"])(
+    "f:best argument resolves to mp4 for video (source format %s) output",
+    (sourceFormat) => {
+      const result = parseProcessingUrl(
+        `/f:best/rs:fit:360:640/plain/https://example.com/video.${sourceFormat}`,
+      );
+      expect(result.bestFormat).toBe(true);
+      expect(result.outputFormat).toBe("mp4");
+    },
+  );
+
+  it.each(["mp4", "webm"])(
+    "@best suffix resolves to mp4 for video (source format %s) output",
+    (sourceFormat) => {
+      const result = parseProcessingUrl(
+        `/rs:fit:360:640/plain/https://example.com/video.${sourceFormat}@best`,
+      );
+      expect(result.bestFormat).toBe(true);
+      expect(result.outputFormat).toBe("mp4");
+    },
+  );
+
+  it("rejects f:* combined with @* suffix", () => {
+    expect(() =>
+      parseProcessingUrl("/f:webp/plain/https://example.com/photo.jpg@png"),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: Cannot specify both format option (f:webp) and format suffix (@png)]`,
     );
-    expect(result.bestFormat).toBe(true);
-    // Source is a video, no explicit image format → defaults to mp4
-    expect(result.outputFormat).toBe("mp4");
   });
 });
 
