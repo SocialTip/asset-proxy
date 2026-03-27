@@ -1144,8 +1144,81 @@ describe("video ffmpeg args (GPU)", () => {
       });
     });
 
-    // TODO: support cuvid as a GPU scaler (uses decoder-level -resize flag, see ST-2602)
-    it.todo("cuvid");
+    describe("cuvid", () => {
+      const scaler = { mode: "gpu", scaler: "cuvid" };
+
+      it("force", () => {
+        expect(
+          gpuVideoArgs({ resizingType: "force", resizingAlgorithm: scaler }),
+        ).toMatchInlineSnapshot(`
+          [
+            "-hide_banner",
+            "-y",
+            "-hwaccel",
+            "cuvid",
+            "-hwaccel_output_format",
+            "cuda",
+            "-resize",
+            "480x360",
+            "-i",
+            "https://example.com/video.mp4",
+            "-c:v",
+            "h264_nvenc",
+            "-preset",
+            "p4",
+            "-tune",
+            "hq",
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
+            "-f",
+            "mp4",
+            "pipe:1",
+          ]
+        `);
+      });
+
+      it("rejects non-force resize types", () => {
+        expect(() =>
+          gpuVideoArgs({ resizingType: "fit", resizingAlgorithm: scaler }),
+        ).toThrow("cuvid scaler only supports 'force' resize type");
+      });
+
+      it("no resize uses cuvid hwaccel without -resize", () => {
+        expect(
+          gpuVideoArgs({
+            resizingAlgorithm: scaler,
+            width: 0,
+            height: 0,
+          }),
+        ).toMatchInlineSnapshot(`
+          [
+            "-hide_banner",
+            "-y",
+            "-hwaccel",
+            "cuvid",
+            "-hwaccel_output_format",
+            "cuda",
+            "-i",
+            "https://example.com/video.mp4",
+            "-c:v",
+            "h264_nvenc",
+            "-preset",
+            "p4",
+            "-tune",
+            "hq",
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
+            "-f",
+            "mp4",
+            "pipe:1",
+          ]
+        `);
+      });
+    });
   });
 
   it("rejects CPU resizing algorithm with GPU", () => {

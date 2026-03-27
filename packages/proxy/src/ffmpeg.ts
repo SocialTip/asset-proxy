@@ -993,18 +993,40 @@ export function buildVideoArgs(
   const hasResize = width > 0 || height > 0;
 
   if (gpu) {
-    args.push("-hwaccel", "cuda", "-hwaccel_output_format", "cuda");
-
     if (resizingAlgorithm?.mode === "cpu") {
       throw new HTTPError(
         "CPU resizing algorithms are not supported with GPU acceleration — use gpu:scale_cuda or gpu:scale_npp, or disable GPU",
         { code: "BAD_REQUEST" },
       );
+    }
+
+    const scaler: ResizingAlgorithm =
+      resizingAlgorithm?.mode === "gpu"
+        ? resizingAlgorithm
+        : { mode: "gpu", scaler: "scale_cuda" };
+    const isCuvid = scaler.mode === "gpu" && scaler.scaler === "cuvid";
+
+    if (isCuvid) {
+      args.push("-hwaccel", "cuvid", "-hwaccel_output_format", "cuda");
+    } else {
+      args.push("-hwaccel", "cuda", "-hwaccel_output_format", "cuda");
+    }
+
+    if (isCuvid && hasResize) {
+      const effectiveType = resizingType ?? "fit";
+      if (effectiveType !== "force") {
+        throw new HTTPError(
+          `cuvid scaler only supports 'force' resize type (got '${effectiveType}') — use scale_cuda or scale_npp for aspect-ratio-aware resizing`,
+          { code: "BAD_REQUEST" },
+        );
+      }
+      args.push("-resize", `${width}x${height}`);
+      args.push("-i", sourceUrl);
+      const extra = [...preFilters, ...postFilters];
+      if (extra.length > 0) {
+        args.push("-vf", extra.join(","));
+      }
     } else if (hasResize) {
-      const scaler: ResizingAlgorithm =
-        resizingAlgorithm?.mode === "gpu"
-          ? resizingAlgorithm
-          : { mode: "gpu", scaler: "scale_cuda" };
       args.push("-i", sourceUrl);
       const scaleFilter = buildScaleFilter({
         resizingType: resizingType ?? "fit",

@@ -12,8 +12,7 @@ const cpuAlgorithms = [
   "lanczos2",
   "lanczos3",
 ] as const;
-// TODO: support "cuvid" as a third GPU scaler option (uses decoder-level resize via -resize flag)
-const gpuScalers = ["scale_cuda", "scale_npp"] as const;
+const gpuScalers = ["scale_cuda", "scale_npp", "cuvid"] as const;
 type CpuAlgorithm = (typeof cpuAlgorithms)[number];
 type GpuScaler = (typeof gpuScalers)[number];
 
@@ -59,7 +58,7 @@ const zResizingAlgorithm = z.string().transform((v): ResizingAlgorithm => {
       }
       if (scaler !== "scale_npp") {
         throw new HTTPError(
-          "Interpolation algorithm is only supported with scale_npp",
+          `Interpolation algorithm is only supported with scale_npp`,
           { code: "BAD_REQUEST" },
         );
       }
