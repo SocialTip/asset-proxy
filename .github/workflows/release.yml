@@ -1,4 +1,4 @@
-# Publishes a package to the GitHub Packages registry when a version tag is pushed. Triggered automatically by tag pushes matching @socialtip/asset-proxy-*@*. Detects which package the tag belongs to, verifies the version matches package.json, builds the package, and publishes. Tags are created by the Publish workflow (publish.yml). See docs/Release.md for the full process.
+# Publishes a package to npm when a version tag is pushed. Triggered automatically by tag pushes matching @socialtip/asset-proxy-*@*. Detects which package the tag belongs to, verifies the version matches package.json, builds the package, and publishes. Tags are created by the Publish workflow (publish.yml). See docs/Release.md for the full process.
 
 name: Release
 run-name: "Release: ${{ github.ref_name }}"
@@ -14,7 +14,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
       contents: read
-      packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +24,7 @@ jobs:
         with:
           node-version-file: .tool-versions
           cache: pnpm
-          registry-url: "https://npm.pkg.github.com"
+          registry-url: "https://registry.npmjs.org"
 
       - run: pnpm install --frozen-lockfile
 
@@ -49,9 +49,7 @@ jobs:
 
       - run: pnpm -w run build
 
-      - name: Publish to GitHub Packages
-        run: pnpm --filter ${{ steps.detect.outputs.package }} publish --access restricted --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
+      - name: Publish to npm
+        run: pnpm --filter ${{ steps.detect.outputs.package }} publish --access public --no-git-checks --provenance
 
       - run: echo "::notice::Published ${{ steps.detect.outputs.tag }}"
