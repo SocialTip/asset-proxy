@@ -1,3 +1,7 @@
+## 0.4.0
+
+- chore: publish packages to npm instead of GitHub Packages
+
 ## 0.3.0
 
 - feat(astro): read config from astro.config automatically

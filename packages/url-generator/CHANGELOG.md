@@ -1,3 +1,8 @@
+## 0.6.0
+
+- chore: publish packages to npm instead of GitHub Packages
+- refactor: use tsx with source export conditions for server coverage
+
 ## 0.5.0
 
 - fix: include info options in signature computation in generateInfoUrl
