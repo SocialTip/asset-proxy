@@ -1,3 +1,10 @@
+## 0.6.0
+
+- chore: publish packages to npm instead of GitHub Packages
+- feat: format:best always resolves to MP4 for video output
+- refactor: use tsx with source export conditions for server coverage
+- refactor: replace custom coverage merge with monocart-coverage-reports
+
 ## 0.5.0
 
 - fix: use scale_cuda for GPU video resize instead of cuvid -resize
