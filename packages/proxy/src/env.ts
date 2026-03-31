@@ -37,6 +37,9 @@ const processingModeSchema = z
     /** Maximum number of concurrent GPU (NVENC) ffmpeg processes. Defaults to 1. */
     GPU_CONCURRENCY: z.coerce.number().int().positive().default(1),
 
+    /** Milliseconds to wait for a GPU slot before returning HTTP 429. Defaults to 5000. */
+    GPU_ACQUIRE_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
+
     /** Hex-encoded HMAC-SHA256 key for verifying URL signatures.
      *  When set, all requests must be signed. */
     SIGNING_KEY: z

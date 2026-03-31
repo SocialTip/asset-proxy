@@ -147,6 +147,40 @@ export type VideoResult =
   | { buffer: Buffer; stream?: undefined; outputFormat: string }
   | { stream: Readable; buffer?: undefined; outputFormat: string };
 
+const gpuAcquireTimeoutMs =
+  isCacheMode(envSwitched) || env.SKIP_GPU ? 0 : env.GPU_ACQUIRE_TIMEOUT_MS;
+
+/** Acquire a GPU concurrency slot, returning a release function. Throws HTTP 429 if the slot cannot be acquired within the timeout. */
+async function acquireGpuSlot(): Promise<() => void> {
+  let releaseGpu: (() => void) | undefined;
+  const acquired = new Promise<void>((resolve) => {
+    gpuLimit!(
+      () =>
+        new Promise<void>((release) => {
+          releaseGpu = release;
+          resolve();
+        }),
+    );
+  });
+
+  const retryAfterSeconds = 5;
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(
+      () =>
+        reject(
+          new HTTPError("GPU busy, try again later", {
+            code: "TOO_MANY_REQUESTS",
+            headers: { "Retry-After": String(retryAfterSeconds) },
+          }),
+        ),
+      gpuAcquireTimeoutMs,
+    );
+  });
+
+  await Promise.race([acquired, timeout]);
+  return releaseGpu!;
+}
+
 export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
@@ -189,26 +223,25 @@ export async function processVideo(
       return { buffer, outputFormat: parsed.outputFormat } as const;
     };
 
-    return useGpu && gpuLimit ? gpuLimit(processMp4) : processMp4();
+    if (useGpu && gpuLimit) {
+      const release = await acquireGpuSlot();
+      try {
+        return await processMp4();
+      } finally {
+        release();
+      }
+    }
+    return processMp4();
   }
 
   // WebM streams directly from ffmpeg — no moov atom concern, so we can pipe
   // to the response immediately for lower TTFB. For GPU requests, hold a
   // concurrency slot until the stream closes.
   if (useGpu && gpuLimit) {
-    let releaseGpu: (() => void) | undefined;
-    await new Promise<void>((resolve) => {
-      gpuLimit!(
-        () =>
-          new Promise<void>((release) => {
-            releaseGpu = release;
-            resolve();
-          }),
-      );
-    });
+    const release = await acquireGpuSlot();
     const args = buildVideoArgs(sourceUrl, params);
     const stream = runFfmpeg(args);
-    stream.on("close", () => releaseGpu?.());
+    stream.on("close", release);
     return { stream, outputFormat: parsed.outputFormat };
   }
 
