@@ -179,7 +179,11 @@ Generate an animated gif or webp from video frames. Step is the interval in seco
 
 ## GPU acceleration
 
-Video processing supports optional NVIDIA GPU acceleration. Set `SKIP_GPU=1` to fall back to CPU encoding. When GPU is available, specify a GPU scaler via the `resizing_algorithm` option to use GPU-accelerated resize — see [Resizing Algorithm](#resizing-algorithm--resizing_algorithmalgorithm-shorthand-ra).
+Video processing supports optional NVIDIA GPU acceleration via NVENC. GPU is only used for video outputs (MP4/WebM). Image outputs — including video thumbnails extracted with `vts` — are always processed on CPU regardless of GPU availability.
+
+Set `SKIP_GPU=1` to fall back to CPU encoding for all video output. When GPU is available, specify a GPU scaler via the `resizing_algorithm` option to use GPU-accelerated resize — see [Resizing Algorithm](#resizing-algorithm--resizing_algorithmalgorithm-shorthand-ra).
+
+`GPU_CONCURRENCY` (default `1`) controls the maximum number of concurrent GPU ffmpeg processes. NVIDIA consumer cards typically support 3–5 concurrent NVENC sessions; increase this value based on your hardware. Requests that exceed the limit will queue until a slot becomes available.
 
 ## Not implemented
 

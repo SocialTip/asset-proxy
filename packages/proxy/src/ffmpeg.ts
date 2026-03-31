@@ -1,3 +1,4 @@
+import pLimit from "p-limit";
 import assert from "node:assert";
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -75,6 +76,11 @@ export const gpuReady: Promise<boolean> =
         });
       });
 
+const gpuLimit =
+  isCacheMode(envSwitched) || env.SKIP_GPU
+    ? undefined
+    : pLimit(env.GPU_CONCURRENCY);
+
 /** Options that are only supported for image processing, not video. */
 const IMAGE_ONLY_OPTIONS: [keyof ParsedUrl, string][] = [
   ["trim", "trim"],
@@ -147,6 +153,7 @@ export async function processVideo(
 ): Promise<VideoResult> {
   rejectImageOnlyOptions(parsed);
 
+  const useGpu = await gpuReady;
   const params = {
     resizingType: parsed.resize?.type,
     resizingAlgorithm: parsed.resizingAlgorithm,
@@ -160,29 +167,51 @@ export async function processVideo(
     maxBytes: parsed.maxBytes,
     mute: parsed.mute,
     outputFormat: parsed.outputFormat,
-    gpu: await gpuReady,
+    gpu: useGpu,
   };
 
   if (parsed.outputFormat === "mp4") {
-    // MP4 is written to a temp file so ffmpeg can place the moov atom at the
-    // start (faststart). This trades higher initial latency on cache misses
-    // for immediate progressive playback in browsers.
-    const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
-    const outPath = join(dir, "output.mp4");
-    const args = buildVideoArgs(sourceUrl, params, { outputPath: outPath });
-    const stream = runFfmpeg(args);
-    await new Promise<void>((resolve, reject) => {
-      stream.on("end", resolve);
-      stream.on("error", reject);
-      stream.resume();
-    });
-    const buffer = await readFile(outPath);
-    await rm(dir, { recursive: true, force: true });
-    return { buffer, outputFormat: parsed.outputFormat };
+    const processMp4 = async () => {
+      // MP4 is written to a temp file so ffmpeg can place the moov atom at the
+      // start (faststart). This trades higher initial latency on cache misses
+      // for immediate progressive playback in browsers.
+      const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
+      const outPath = join(dir, "output.mp4");
+      const args = buildVideoArgs(sourceUrl, params, { outputPath: outPath });
+      const stream = runFfmpeg(args);
+      await new Promise<void>((resolve, reject) => {
+        stream.on("end", resolve);
+        stream.on("error", reject);
+        stream.resume();
+      });
+      const buffer = await readFile(outPath);
+      await rm(dir, { recursive: true, force: true });
+      return { buffer, outputFormat: parsed.outputFormat } as const;
+    };
+
+    return useGpu && gpuLimit ? gpuLimit(processMp4) : processMp4();
   }
 
   // WebM streams directly from ffmpeg — no moov atom concern, so we can pipe
-  // to the response immediately for lower TTFB.
+  // to the response immediately for lower TTFB. For GPU requests, hold a
+  // concurrency slot until the stream closes.
+  if (useGpu && gpuLimit) {
+    let releaseGpu: (() => void) | undefined;
+    await new Promise<void>((resolve) => {
+      gpuLimit!(
+        () =>
+          new Promise<void>((release) => {
+            releaseGpu = release;
+            resolve();
+          }),
+      );
+    });
+    const args = buildVideoArgs(sourceUrl, params);
+    const stream = runFfmpeg(args);
+    stream.on("close", () => releaseGpu?.());
+    return { stream, outputFormat: parsed.outputFormat };
+  }
+
   const args = buildVideoArgs(sourceUrl, params);
   return { stream: runFfmpeg(args), outputFormat: parsed.outputFormat };
 }
