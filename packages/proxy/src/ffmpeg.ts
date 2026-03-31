@@ -91,14 +91,15 @@ export const gpuReady: Promise<boolean> =
  * return { stream };
  * ```
  */
-const acquireGpuLock: (() => Promise<Disposable>) | undefined = (() => {
-  if (isCacheMode(envSwitched) || env.SKIP_GPU) return undefined;
-  const concurrencyLimit = env.GPU_CONCURRENCY;
+const acquireGpuLock: () => Promise<Disposable> = (() => {
+  const concurrencyLimit =
+    isCacheMode(envSwitched) || env.SKIP_GPU ? 0 : env.GPU_CONCURRENCY;
   const timeoutMs = env.GPU_ACQUIRE_TIMEOUT_MS;
   const locks = new Set<Promise<void>>();
 
   return async () => {
     const acquire = async (): Promise<Disposable> => {
+      if (concurrencyLimit <= 0) return { [Symbol.dispose]() {} };
       while (locks.size >= concurrencyLimit)
         await Promise.race([...locks.values()]);
       let dispose: () => void = () => {};
@@ -219,7 +220,7 @@ export async function processVideo(
   };
 
   if (parsed.outputFormat === "mp4") {
-    if (useGpu && acquireGpuLock) {
+    if (useGpu) {
       using _lock = await acquireGpuLock();
       return await processMp4(sourceUrl, params, parsed.outputFormat);
     }
@@ -229,7 +230,7 @@ export async function processVideo(
   // WebM streams directly from ffmpeg — no moov atom concern, so we can pipe
   // to the response immediately for lower TTFB. For GPU requests, hold a
   // concurrency slot until the stream closes.
-  if (useGpu && acquireGpuLock) {
+  if (useGpu) {
     const lock = await acquireGpuLock();
     const args = buildVideoArgs(sourceUrl, params);
     const stream = runFfmpeg(args);
