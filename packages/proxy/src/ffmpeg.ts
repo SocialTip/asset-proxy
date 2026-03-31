@@ -1,4 +1,3 @@
-import pLimit from "p-limit";
 import assert from "node:assert";
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -76,10 +75,59 @@ export const gpuReady: Promise<boolean> =
         });
       });
 
-const gpuLimit =
-  isCacheMode(envSwitched) || env.SKIP_GPU
-    ? undefined
-    : pLimit(env.GPU_CONCURRENCY);
+/** Acquire a lock on the GPU. Concurrency is limited by the `GPU_CONCURRENCY` env var. Returns a `Disposable` so it can be used with `using` for automatic release, or disposed manually for streaming responses. Throws HTTP 429 with a `Retry-After` header if the lock cannot be acquired within `GPU_ACQUIRE_TIMEOUT_MS` milliseconds. `undefined` when GPU is disabled (cache mode or `SKIP_GPU=1`).
+ *
+ * ```typescript
+ * // Buffered output (MP4): automatic release via `using`
+ * {
+ *   using _lock = await acquireGpuLock();
+ *   return await encodeMp4(...);
+ * }
+ *
+ * // Streaming output (WebM): manual release on stream close
+ * const lock = await acquireGpuLock();
+ * const stream = runFfmpeg(args);
+ * stream.on("close", () => lock[Symbol.dispose]());
+ * return { stream };
+ * ```
+ */
+const acquireGpuLock: (() => Promise<Disposable>) | undefined = (() => {
+  if (isCacheMode(envSwitched) || env.SKIP_GPU) return undefined;
+  const concurrencyLimit = env.GPU_CONCURRENCY;
+  const timeoutMs = env.GPU_ACQUIRE_TIMEOUT_MS;
+  const locks = new Set<Promise<void>>();
+
+  return async () => {
+    const acquire = async (): Promise<Disposable> => {
+      while (locks.size >= concurrencyLimit)
+        await Promise.race([...locks.values()]);
+      let dispose: () => void = () => {};
+      const lock = new Promise<void>((r) => {
+        dispose = () => {
+          locks.delete(lock);
+          r();
+        };
+      });
+      locks.add(lock);
+      return { [Symbol.dispose]: dispose };
+    };
+
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(
+        () =>
+          reject(
+            new HTTPError("GPU busy, try again later", {
+              code: "TOO_MANY_REQUESTS",
+              headers: { "Retry-After": "5" },
+            }),
+          ),
+        timeoutMs,
+      );
+    });
+
+    return Promise.race([acquire(), timeout]);
+  };
+})();
 
 /** Options that are only supported for image processing, not video. */
 const IMAGE_ONLY_OPTIONS: [keyof ParsedUrl, string][] = [
@@ -147,40 +195,6 @@ export type VideoResult =
   | { buffer: Buffer; stream?: undefined; outputFormat: string }
   | { stream: Readable; buffer?: undefined; outputFormat: string };
 
-const gpuAcquireTimeoutMs =
-  isCacheMode(envSwitched) || env.SKIP_GPU ? 0 : env.GPU_ACQUIRE_TIMEOUT_MS;
-
-/** Acquire a GPU concurrency slot, returning a release function. Throws HTTP 429 if the slot cannot be acquired within the timeout. */
-async function acquireGpuSlot(): Promise<() => void> {
-  let releaseGpu: (() => void) | undefined;
-  const acquired = new Promise<void>((resolve) => {
-    gpuLimit!(
-      () =>
-        new Promise<void>((release) => {
-          releaseGpu = release;
-          resolve();
-        }),
-    );
-  });
-
-  const retryAfterSeconds = 5;
-  const timeout = new Promise<never>((_, reject) => {
-    setTimeout(
-      () =>
-        reject(
-          new HTTPError("GPU busy, try again later", {
-            code: "TOO_MANY_REQUESTS",
-            headers: { "Retry-After": String(retryAfterSeconds) },
-          }),
-        ),
-      gpuAcquireTimeoutMs,
-    );
-  });
-
-  await Promise.race([acquired, timeout]);
-  return releaseGpu!;
-}
-
 export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
@@ -205,48 +219,48 @@ export async function processVideo(
   };
 
   if (parsed.outputFormat === "mp4") {
-    const processMp4 = async () => {
-      // MP4 is written to a temp file so ffmpeg can place the moov atom at the
-      // start (faststart). This trades higher initial latency on cache misses
-      // for immediate progressive playback in browsers.
-      const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
-      const outPath = join(dir, "output.mp4");
-      const args = buildVideoArgs(sourceUrl, params, { outputPath: outPath });
-      const stream = runFfmpeg(args);
-      await new Promise<void>((resolve, reject) => {
-        stream.on("end", resolve);
-        stream.on("error", reject);
-        stream.resume();
-      });
-      const buffer = await readFile(outPath);
-      await rm(dir, { recursive: true, force: true });
-      return { buffer, outputFormat: parsed.outputFormat } as const;
-    };
-
-    if (useGpu && gpuLimit) {
-      const release = await acquireGpuSlot();
-      try {
-        return await processMp4();
-      } finally {
-        release();
-      }
+    if (useGpu && acquireGpuLock) {
+      using _lock = await acquireGpuLock();
+      return await processMp4(sourceUrl, params, parsed.outputFormat);
     }
-    return processMp4();
+    return await processMp4(sourceUrl, params, parsed.outputFormat);
   }
 
   // WebM streams directly from ffmpeg — no moov atom concern, so we can pipe
   // to the response immediately for lower TTFB. For GPU requests, hold a
   // concurrency slot until the stream closes.
-  if (useGpu && gpuLimit) {
-    const release = await acquireGpuSlot();
+  if (useGpu && acquireGpuLock) {
+    const lock = await acquireGpuLock();
     const args = buildVideoArgs(sourceUrl, params);
     const stream = runFfmpeg(args);
-    stream.on("close", release);
+    stream.on("close", () => lock[Symbol.dispose]());
     return { stream, outputFormat: parsed.outputFormat };
   }
 
   const args = buildVideoArgs(sourceUrl, params);
   return { stream: runFfmpeg(args), outputFormat: parsed.outputFormat };
+}
+
+async function processMp4(
+  sourceUrl: string,
+  params: VideoParams,
+  outputFormat: string,
+) {
+  // MP4 is written to a temp file so ffmpeg can place the moov atom at the
+  // start (faststart). This trades higher initial latency on cache misses
+  // for immediate progressive playback in browsers.
+  const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
+  const outPath = join(dir, "output.mp4");
+  const args = buildVideoArgs(sourceUrl, params, { outputPath: outPath });
+  const stream = runFfmpeg(args);
+  await new Promise<void>((resolve, reject) => {
+    stream.on("end", resolve);
+    stream.on("error", reject);
+    stream.resume();
+  });
+  const buffer = await readFile(outPath);
+  await rm(dir, { recursive: true, force: true });
+  return { buffer, outputFormat } as const;
 }
 
 /** Encode a buffer into a specific format with optional quality using sharp. */

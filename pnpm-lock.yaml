@@ -116,9 +116,6 @@ importers:
       fastify:
         specifier: ^5.8.4
         version: 5.8.4
-      p-limit:
-        specifier: ^7.3.0
-        version: 7.3.0
       range-parser:
         specifier: ^1.2.1
         version: 1.2.1
@@ -5297,13 +5294,6 @@ packages:
       }
     engines: { node: ">=18" }
 
-  p-limit@7.3.0:
-    resolution:
-      {
-        integrity: sha512-7cIXg/Z0M5WZRblrsOla88S4wAK+zOQQWeBYfV3qJuJXMr+LnbYjaadrFaS0JILfEDPVqHyKnZ1Z/1d6J9VVUw==,
-      }
-    engines: { node: ">=20" }
-
   p-locate@5.0.0:
     resolution:
       {
@@ -10215,10 +10205,6 @@ snapshots:
       yocto-queue: 0.1.0
 
   p-limit@6.2.0:
-    dependencies:
-      yocto-queue: 1.2.2
-
-  p-limit@7.3.0:
     dependencies:
       yocto-queue: 1.2.2
 

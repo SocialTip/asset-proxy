@@ -31,6 +31,8 @@ ENV SKIP_GPU=
 # Maximum concurrent GPU (NVENC) ffmpeg processes. Increase based on your
 # GPU's NVENC session limit (consumer NVIDIA cards typically allow 3–5).
 ENV GPU_CONCURRENCY=1
+# Milliseconds to wait for a GPU slot before returning HTTP 429.
+ENV GPU_ACQUIRE_TIMEOUT_MS=5000
 ENV CACHE_BUCKET=
 ENV FORWARD_URL=
 ENV BEST_FORMAT_COMPLEXITY_THRESHOLD=5.5
