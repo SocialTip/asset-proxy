@@ -24,7 +24,13 @@ ENV NODE_VERSION=24.13.0
 ENV FFMPEG_VERSION=7.0
 ENV FFMPEG_RELEASE=autobuild-2024-08-31-12-50
 ENV FFMPEG_BUILD=n7.0.2-6-g7e69129d2f
+# GPU is only used for video outputs (MP4/WebM). Image outputs — including
+# video thumbnails extracted with vts — are always processed on CPU.
+# Set SKIP_GPU=1 to fall back to CPU encoding for all video output.
 ENV SKIP_GPU=
+# Maximum concurrent GPU (NVENC) ffmpeg processes. Increase based on your
+# GPU's NVENC session limit (consumer NVIDIA cards typically allow 3–5).
+ENV GPU_CONCURRENCY=1
 ENV CACHE_BUCKET=
 ENV FORWARD_URL=
 ENV BEST_FORMAT_COMPLEXITY_THRESHOLD=5.5
