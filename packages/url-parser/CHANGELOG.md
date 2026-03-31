@@ -1,3 +1,7 @@
+## 0.6.2
+
+- feat: return 429 with Retry-After when GPU slot cannot be acquired within 5s
+
 ## 0.6.0
 
 - chore: publish packages to npm instead of GitHub Packages
