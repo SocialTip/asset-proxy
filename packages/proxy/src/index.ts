@@ -454,6 +454,11 @@ app.setErrorHandler((cause: Error, request, reply) => {
   const { span } = request.opentelemetry();
   if (span) recordException(span, error);
   if (!reply.sent) {
+    if (cause instanceof HTTPError && cause.headers) {
+      for (const [k, v] of Object.entries(cause.headers)) {
+        reply.header(k, v);
+      }
+    }
     return reply.code(status).send(message);
   }
 });
