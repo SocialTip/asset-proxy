@@ -53,7 +53,7 @@ Controls the scaling algorithm. Supports CPU and GPU modes:
 
 **CPU algorithms** (for video thumbnails): `nearest`, `linear`, `cubic`, `lanczos2`, `lanczos3`. Example: `ra:lanczos3`.
 
-**GPU scalers** (video processing with GPU acceleration only): `gpu:scale_cuda`, `gpu:scale_npp`. The `scale_npp` scaler also supports an interpolation algorithm suffix: `gpu:scale_npp:cubic`, `gpu:scale_npp:lanczos3`, etc. Available `scale_npp` interpolation algorithms: `nearest`, `linear`, `cubic`, `lanczos2`, `lanczos3`.
+**GPU scalers** (video processing with GPU acceleration only): `gpu:scale_cuda`, `gpu:scale_npp`, `gpu:cuvid`. The `scale_npp` scaler also supports an interpolation algorithm suffix: `gpu:scale_npp:cubic`, `gpu:scale_npp:lanczos3`, etc. Available `scale_npp` interpolation algorithms: `nearest`, `linear`, `cubic`, `lanczos2`, `lanczos3`. The `cuvid` scaler uses the decoder-level `-resize` flag instead of a filter-based scaler, which may offer better performance for simple resize operations. Note: `cuvid` only supports `force` resize type (no aspect-ratio-aware resizing).
 
 ### Min Width / Min Height — `min_width:<w>` (`mw`) / `min_height:<h>` (`mh`)
 
