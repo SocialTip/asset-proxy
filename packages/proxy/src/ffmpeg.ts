@@ -98,10 +98,14 @@ const acquireGpuLock: () => Promise<Disposable> = (() => {
   const locks = new Set<Promise<void>>();
 
   return async () => {
+    let timedOut = false;
+
     const acquire = async (): Promise<Disposable> => {
-      if (concurrencyLimit <= 0) return { [Symbol.dispose]() {} };
-      while (locks.size >= concurrencyLimit)
+      while (locks.size >= concurrencyLimit) {
         await Promise.race([...locks.values()]);
+        if (timedOut) return { [Symbol.dispose]() {} };
+      }
+      if (timedOut) return { [Symbol.dispose]() {} };
       let dispose: () => void = () => {};
       const lock = new Promise<void>((r) => {
         dispose = () => {
@@ -114,16 +118,15 @@ const acquireGpuLock: () => Promise<Disposable> = (() => {
     };
 
     const timeout = new Promise<never>((_, reject) => {
-      setTimeout(
-        () =>
-          reject(
-            new HTTPError("GPU busy, try again later", {
-              code: "TOO_MANY_REQUESTS",
-              headers: { "Retry-After": "5" },
-            }),
-          ),
-        timeoutMs,
-      );
+      setTimeout(() => {
+        timedOut = true;
+        reject(
+          new HTTPError("GPU busy, try again later", {
+            code: "TOO_MANY_REQUESTS",
+            headers: { "Retry-After": "5" },
+          }),
+        );
+      }, timeoutMs);
     });
 
     return Promise.race([acquire(), timeout]);

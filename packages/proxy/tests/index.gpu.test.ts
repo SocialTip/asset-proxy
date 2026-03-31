@@ -102,9 +102,22 @@ describe("GPU concurrency limit", () => {
     expect(second.payload).toBe("GPU busy, try again later");
     expect(second.headers["retry-after"]).toBe("5");
 
-    // Clean up first request
+    // Release the first request's GPU slot and wait for it to complete
     for (const proc of encodeProcs) proc.finish(0);
-    encodeProcs.length = 0;
     await first.catch(() => {});
+    encodeProcs.length = 0;
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Retry — the slot is now free so this should succeed (not 429).
+    // Auto-finish the encode once it starts so the stream completes.
+    const retryPromise = app.inject({
+      method: "GET",
+      url: "/insecure/w:480/plain/https://example.com/video.mp4@webm",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    for (const proc of encodeProcs) proc.finish(0);
+    const retry = await retryPromise;
+
+    expect(retry.statusCode).not.toBe(429);
   });
 });
