@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { PassThrough, type Readable } from "node:stream";
 import sharp from "sharp";
 import { type ProcessingEnv, env as envSwitched, isCacheMode } from "./env.js";
+import { FifoSemaphore } from "./fifo-semaphore.js";
 
 const env = envSwitched as ProcessingEnv;
 import {
@@ -95,31 +96,17 @@ const acquireGpuLock: () => Promise<Disposable> = (() => {
   const concurrencyLimit =
     isCacheMode(envSwitched) || env.SKIP_GPU ? 0 : env.GPU_CONCURRENCY;
   const timeoutMs = env.GPU_ACQUIRE_TIMEOUT_MS;
-  const locks = new Set<Promise<void>>();
+  const semaphore = new FifoSemaphore(concurrencyLimit);
 
   return async () => {
-    let timedOut = false;
-
-    const acquire = async (): Promise<Disposable> => {
-      while (locks.size >= concurrencyLimit) {
-        await Promise.race([...locks.values()]);
-        if (timedOut) return { [Symbol.dispose]() {} };
-      }
-      if (timedOut) return { [Symbol.dispose]() {} };
-      let dispose: () => void = () => {};
-      const lock = new Promise<void>((r) => {
-        dispose = () => {
-          locks.delete(lock);
-          r();
-        };
-      });
-      locks.add(lock);
-      return { [Symbol.dispose]: dispose };
-    };
+    const result = semaphore.acquire();
+    if (result.acquired) {
+      return { [Symbol.dispose]: result.release };
+    }
 
     const timeout = new Promise<never>((_, reject) => {
       setTimeout(() => {
-        timedOut = true;
+        result.cancel();
         reject(
           new HTTPError("GPU busy, try again later", {
             code: "TOO_MANY_REQUESTS",
@@ -129,7 +116,10 @@ const acquireGpuLock: () => Promise<Disposable> = (() => {
       }, timeoutMs);
     });
 
-    return Promise.race([acquire(), timeout]);
+    return Promise.race([
+      result.waiter.then((release) => ({ [Symbol.dispose]: release })),
+      timeout,
+    ]);
   };
 })();
 
