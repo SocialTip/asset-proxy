@@ -823,6 +823,13 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     }
   }
 
+  if (data.extend_aspect_ratio?.enabled && !resize) {
+    throw new HTTPError(
+      "extend_aspect_ratio requires resize dimensions to derive the target aspect ratio",
+      { code: "BAD_REQUEST" },
+    );
+  }
+
   return {
     resize,
     resizingAlgorithm: data.resizing_algorithm,

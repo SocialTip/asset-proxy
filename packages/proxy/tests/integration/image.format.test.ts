@@ -40,6 +40,23 @@ describe("image padding and background", () => {
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
 
+  it("extend aspect ratio without resize returns an error", async () => {
+    const url = `${SERVICE_URL}${generateUrl(
+      {
+        sourceUrl: TRANSPARENT_URL,
+        background: { r: 255, g: 255, b: 255 },
+        extendAspectRatio: { enabled: true, gravity: "ce" },
+        outputFormat: "webp",
+      },
+      URL_CONFIG,
+    )}`;
+    const res = await fetch(url);
+    expect(res.status).toBe(400);
+    await expect(res.text()).resolves.toMatchInlineSnapshot(
+      `"extend_aspect_ratio requires resize dimensions to derive the target aspect ratio"`,
+    );
+  });
+
   it("extend with background alpha 50%", async () => {
     const buffer = await fetchImage(
       "/rs:fit:200:200/ex:1/bg:0000ff/bga:0.5/f:png",
