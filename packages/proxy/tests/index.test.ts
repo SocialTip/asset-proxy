@@ -393,7 +393,7 @@ describe("image ffmpeg args", () => {
         "-i",
         "https://example.com/photo.jpg",
         "-vf",
-        "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease,pad=iw+20:ih+20:10:10:#ff0000",
+        "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease,format=rgba,geq=r='r(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':g='g(X,Y)*alpha(X,Y)/255+0*(255-alpha(X,Y))/255':b='b(X,Y)*alpha(X,Y)/255+0*(255-alpha(X,Y))/255':a='255',pad=iw+20:ih+20:10:10:#ff0000",
         "-map_metadata",
         "-1",
         "-frames:v",
