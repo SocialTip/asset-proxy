@@ -56,6 +56,10 @@ export class FifoSemaphore {
   ):
     | { acquired: true; release: () => void }
     | { acquired: false; waiter: Promise<() => void>; cancel: () => void } {
+    if (this.#locks.has(key) || this.#queue.some((e) => e.key === key)) {
+      throw new Error(`Duplicate semaphore acquire for key: ${key}`);
+    }
+
     if (this.#active < this.#limit) {
       this.#active++;
       this.#locks.set(key, Date.now());
