@@ -1,5 +1,8 @@
 import { Storage } from "@google-cloud/storage";
-import { generateUrl } from "@socialtip/asset-proxy-url-generator";
+import {
+  generateUrl,
+  generateInfoUrl,
+} from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 import { CACHE_PROXY_URL, URL_CONFIG, h2Fetch as fetch } from "./setup.js";
 import { SOURCE_URL, toPng } from "./helpers.js";
@@ -226,6 +229,48 @@ describe("cache proxy", () => {
     const res = await fetch(`${CACHE_PROXY_URL}/`);
     expect(await res.text()).toMatchInlineSnapshot(`""`);
     expect(res.status).toBe(404);
+  });
+
+  it("caches video info response", async () => {
+    const urlPath = generateInfoUrl(
+      { sourceUrl: VIDEO_SOURCE_URL },
+      URL_CONFIG,
+    );
+    expect(urlPath).toMatchInlineSnapshot(
+      `"/info/PGumTR96fYEVXnZcOEksMsWN3EGbc0cvUJTc3dayMCs/enc/N2NhNmFkMmYzOTFhNWJlMG-aK85gpH2N6VXLBfdqOMaeRyBpwhFQE9cJlUg88UAo_oU1deehUVUo4kSOlAitLA"`,
+    );
+    const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/application\/json/);
+    expect(res.headers.get("cache-control")).toEqual(
+      "public, max-age=31536000, immutable",
+    );
+    const body = await res.json();
+    expect(body).toMatchObject({
+      duration: expect.any(Number),
+      video_meta: expect.objectContaining({ codec: expect.any(String) }),
+    });
+    expect(body).toMatchInlineSnapshot(`
+      {
+        "duration": 0.9,
+        "format": "mov",
+        "height": 852,
+        "mime_type": "video/quicktime",
+        "orientation": 1,
+        "size": 137586,
+        "video_meta": {
+          "bitrate": 1213324,
+          "codec": "h264",
+          "framerate": 30,
+        },
+        "width": 480,
+      }
+    `);
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
+    expect(JSON.parse(cachedBuffer.toString())).toEqual(body);
   });
 
   it("does not cache error responses", async () => {
