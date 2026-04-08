@@ -12,6 +12,7 @@ import {
 import { URL_CONFIG, h2Fetch as fetch } from "./setup.js";
 
 const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
+const TRANSPARENT_URL = "http://file-server/test-image-transparent.png";
 
 describe("image padding and background", () => {
   it("adds uniform padding", async () => {
@@ -25,6 +26,61 @@ describe("image padding and background", () => {
   it("adds padding with background colour", async () => {
     const buffer = await fetchImage("/w:100/pd:20/bg:ff0000");
     expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("extend aspect ratio with background, padding, and resize on transparent source", async () => {
+    const buffer = await fetchImageFrom(
+      "/bg:255:255:255/exar:1:no/f:webp/g:no/pd:83:83:83:83/rs:fit:400:400",
+      TRANSPARENT_URL,
+    );
+    const meta = await sharp(buffer).metadata();
+    expect(meta.format).toBe("webp");
+    expect(meta.width).toBe(566);
+    expect(meta.height).toBe(566);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("extend aspect ratio with padding but no background keeps transparency", async () => {
+    const buffer = await fetchImageFrom(
+      "/exar:1:no/f:png/g:no/pd:83:83:83:83/rs:fit:400:400",
+      TRANSPARENT_URL,
+    );
+    const meta = await sharp(buffer).metadata();
+    expect(meta.format).toBe("png");
+    expect(meta.width).toBe(566);
+    expect(meta.height).toBe(566);
+    expect(meta.channels).toBe(4);
+    expect(meta.hasAlpha).toBe(true);
+    // Check that extended/padded area is transparent
+    const { data, info } = await sharp(buffer)
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const px = (x: number, y: number) => {
+      const i = (y * info.width + x) * info.channels;
+      return { r: data[i], g: data[i + 1], b: data[i + 2], a: data[i + 3] };
+    };
+    // Top-left corner is in the padding area — should be fully transparent
+    expect(px(5, 5).a).toBe(0);
+    // Centre of the extended band (below the image, before padding) — should be transparent
+    expect(px(283, 450).a).toBe(0);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("extend aspect ratio without resize returns an error", async () => {
+    const url = `${SERVICE_URL}${generateUrl(
+      {
+        sourceUrl: TRANSPARENT_URL,
+        background: { r: 255, g: 255, b: 255 },
+        extendAspectRatio: { enabled: true, gravity: "ce" },
+        outputFormat: "webp",
+      },
+      URL_CONFIG,
+    )}`;
+    const res = await fetch(url);
+    expect(res.status).toBe(400);
+    await expect(res.text()).resolves.toMatchInlineSnapshot(
+      `"extend_aspect_ratio requires resize dimensions to derive the target aspect ratio"`,
+    );
   });
 
   it("extend with background alpha 50%", async () => {
