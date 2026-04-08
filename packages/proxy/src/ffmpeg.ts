@@ -1,5 +1,6 @@
 import assert from "node:assert";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -92,14 +93,14 @@ export const gpuReady: Promise<boolean> =
  * return { stream };
  * ```
  */
-const acquireGpuLock: () => Promise<Disposable> = (() => {
+const acquireGpuLock: (key: string) => Promise<Disposable> = (() => {
   const concurrencyLimit =
     isCacheMode(envSwitched) || env.SKIP_GPU ? 0 : env.GPU_CONCURRENCY;
   const timeoutMs = env.GPU_ACQUIRE_TIMEOUT_MS;
   const semaphore = new FifoSemaphore(concurrencyLimit);
 
-  return async () => {
-    const result = semaphore.acquire();
+  return async (key: string) => {
+    const result = semaphore.acquire(key);
     if (result.acquired) {
       return { [Symbol.dispose]: result.release };
     }
@@ -212,9 +213,11 @@ export async function processVideo(
     gpu: useGpu,
   };
 
+  const semKey = createHash("md5").update(JSON.stringify(parsed)).digest("hex");
+
   if (parsed.outputFormat === "mp4") {
     if (useGpu) {
-      using _lock = await acquireGpuLock();
+      using _lock = await acquireGpuLock(semKey);
       return await processMp4(sourceUrl, params, parsed.outputFormat);
     }
     return await processMp4(sourceUrl, params, parsed.outputFormat);
@@ -224,7 +227,7 @@ export async function processVideo(
   // to the response immediately for lower TTFB. For GPU requests, hold a
   // concurrency slot until the stream closes.
   if (useGpu) {
-    const lock = await acquireGpuLock();
+    const lock = await acquireGpuLock(semKey);
     const args = buildVideoArgs(sourceUrl, params);
     const stream = runFfmpeg(args);
     stream.on("close", () => lock[Symbol.dispose]());

@@ -4,8 +4,8 @@ import { FifoSemaphore } from "../src/fifo-semaphore.js";
 describe("FifoSemaphore", () => {
   it("grants permits immediately when below the limit", () => {
     const sem = new FifoSemaphore(2);
-    const a = sem.acquire();
-    const b = sem.acquire();
+    const a = sem.acquire("a");
+    const b = sem.acquire("b");
     expect(a.acquired).toBe(true);
     expect(b.acquired).toBe(true);
     expect(sem.active).toBe(2);
@@ -13,10 +13,10 @@ describe("FifoSemaphore", () => {
 
   it("queues when at the limit and grants on release", async () => {
     const sem = new FifoSemaphore(1);
-    const a = sem.acquire();
+    const a = sem.acquire("a");
     assert(a.acquired);
 
-    const b = sem.acquire();
+    const b = sem.acquire("b");
     expect(b.acquired).toBe(false);
     assert(!b.acquired);
     expect(sem.queued).toBe(1);
@@ -30,26 +30,26 @@ describe("FifoSemaphore", () => {
 
   it("grants queued permits in FIFO order", async () => {
     const sem = new FifoSemaphore(1);
-    const a = sem.acquire();
+    const a = sem.acquire("a");
     assert(a.acquired);
 
     const order: string[] = [];
 
-    const b = sem.acquire();
+    const b = sem.acquire("b");
     assert(!b.acquired);
     const bDone = b.waiter.then((release) => {
       order.push("B");
       return release;
     });
 
-    const c = sem.acquire();
+    const c = sem.acquire("c");
     assert(!c.acquired);
     const cDone = c.waiter.then((release) => {
       order.push("C");
       return release;
     });
 
-    const d = sem.acquire();
+    const d = sem.acquire("d");
     assert(!d.acquired);
     const dDone = d.waiter.then((release) => {
       order.push("D");
@@ -78,12 +78,12 @@ describe("FifoSemaphore", () => {
 
   it("cancel removes a waiter from the queue", () => {
     const sem = new FifoSemaphore(1);
-    const a = sem.acquire();
+    const a = sem.acquire("a");
     assert(a.acquired);
 
-    const b = sem.acquire();
+    const b = sem.acquire("b");
     assert(!b.acquired);
-    const c = sem.acquire();
+    const c = sem.acquire("c");
     assert(!c.acquired);
 
     expect(sem.queued).toBe(2);
@@ -106,20 +106,20 @@ describe("FifoSemaphore", () => {
 
   it("handles concurrency limit > 1", async () => {
     const sem = new FifoSemaphore(2);
-    const a = sem.acquire();
-    const b = sem.acquire();
+    const a = sem.acquire("a");
+    const b = sem.acquire("b");
     assert(a.acquired);
     assert(b.acquired);
 
     const order: string[] = [];
-    const c = sem.acquire();
+    const c = sem.acquire("c");
     assert(!c.acquired);
     const cDone = c.waiter.then((release) => {
       order.push("C");
       return release;
     });
 
-    const d = sem.acquire();
+    const d = sem.acquire("d");
     assert(!d.acquired);
     const dDone = d.waiter.then((release) => {
       order.push("D");

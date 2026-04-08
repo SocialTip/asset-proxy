@@ -95,7 +95,7 @@ describe("GPU concurrency limit", () => {
     // Second request should timeout waiting for the GPU slot (5s)
     const second = await app.inject({
       method: "GET",
-      url: "/insecure/w:480/plain/https://example.com/video.mp4@webm",
+      url: "/insecure/w:480/plain/https://example.com/video2.mp4@webm",
     });
 
     expect(second.statusCode).toBe(429);
@@ -120,5 +120,4 @@ describe("GPU concurrency limit", () => {
 
     expect(retry.statusCode).not.toBe(429);
   });
-
 });
