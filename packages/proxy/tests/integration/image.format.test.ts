@@ -40,6 +40,32 @@ describe("image padding and background", () => {
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
 
+  it("extend aspect ratio with padding but no background keeps transparency", async () => {
+    const buffer = await fetchImageFrom(
+      "/exar:1:no/f:png/g:no/pd:83:83:83:83/rs:fit:400:400",
+      TRANSPARENT_URL,
+    );
+    const meta = await sharp(buffer).metadata();
+    expect(meta.format).toBe("png");
+    expect(meta.width).toBe(566);
+    expect(meta.height).toBe(566);
+    expect(meta.channels).toBe(4);
+    expect(meta.hasAlpha).toBe(true);
+    // Check that extended/padded area is transparent
+    const { data, info } = await sharp(buffer)
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const px = (x: number, y: number) => {
+      const i = (y * info.width + x) * info.channels;
+      return { r: data[i], g: data[i + 1], b: data[i + 2], a: data[i + 3] };
+    };
+    // Top-left corner is in the padding area — should be fully transparent
+    expect(px(5, 5).a).toBe(0);
+    // Centre of the extended band (below the image, before padding) — should be transparent
+    expect(px(283, 450).a).toBe(0);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
   it("extend aspect ratio without resize returns an error", async () => {
     const url = `${SERVICE_URL}${generateUrl(
       {
