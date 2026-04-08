@@ -153,8 +153,10 @@ export async function createCacheProxyApp() {
     const pending = inflight.get(key);
     if (pending) {
       if (request.headers.range) {
+        logger.info("[cache-proxy] pending-hit-range", { key });
         await pending.cacheWrite.catch(() => {});
       } else {
+        logger.info("[cache-proxy] pending-hit", { key });
         reply.code(pending.stream.status);
         for (const [h, v] of pending.stream.responseHeaders) reply.header(h, v);
         return reply.send(pending.stream.subscribe());
@@ -163,8 +165,20 @@ export async function createCacheProxyApp() {
 
     const [exists] = await file.exists();
     if (exists) {
+      logger.info(
+        pending
+          ? "[cache-proxy] pending-fallthrough-bucket-hit"
+          : "[cache-proxy] bucket-hit",
+        { key },
+      );
       return serveFromCache(request, reply, file);
     }
+    logger.info(
+      pending
+        ? "[cache-proxy] pending-fallthrough-bucket-miss"
+        : "[cache-proxy] bucket-miss",
+      { key },
+    );
 
     const forwardUrl = `${env.FORWARD_URL}${request.url}`;
     const headers: Record<string, string> = {};
@@ -221,6 +235,7 @@ export async function createCacheProxyApp() {
       })
       .finally(() => {
         inflight.delete(key);
+        logger.info("[cache-proxy] inflight-cleanup", { key });
       });
 
     return reply.send(mux.subscribe());
