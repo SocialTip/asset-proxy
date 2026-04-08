@@ -1274,6 +1274,16 @@ function buildImageArgs(
     filters.push("format=rgba");
   }
 
+  // Flatten transparency onto background colour using alpha blending via geq.
+  // geq blends each pixel: out = fg * alpha + bg * (1 - alpha), then sets alpha to 255.
+  if (parsed.background && (parsed.backgroundAlpha ?? 1) >= 1) {
+    const { r, g, b } = parsed.background;
+    filters.push(
+      "format=rgba",
+      `geq=r='r(X,Y)*alpha(X,Y)/255+${r}*(255-alpha(X,Y))/255':g='g(X,Y)*alpha(X,Y)/255+${g}*(255-alpha(X,Y))/255':b='b(X,Y)*alpha(X,Y)/255+${b}*(255-alpha(X,Y))/255':a='255'`,
+    );
+  }
+
   // Extend — pad undersized images to fill target dimensions
   if (parsed.extend?.enabled && parsed.resize) {
     const tw = parsed.resize.width || 0;
@@ -1285,6 +1295,25 @@ function buildImageArgs(
         ? rgbToHex(parsed.background, parsed.backgroundAlpha)
         : "black@0";
       filters.push(`pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:${colour}`);
+    }
+  }
+
+  // Extend aspect ratio — pad image to match the target aspect ratio
+  if (parsed.extendAspectRatio?.enabled && parsed.resize) {
+    const tw = parsed.resize.width || 0;
+    const th = parsed.resize.height || 0;
+    if (tw > 0 && th > 0) {
+      const targetRatio = tw / th;
+      const colour = parsed.background
+        ? rgbToHex(parsed.background, parsed.backgroundAlpha)
+        : "black@0";
+      const g = parsed.extendAspectRatio.gravity;
+      // Widen: pad width to match target aspect ratio (image is too tall)
+      // Heighten: pad height to match target aspect ratio (image is too wide)
+      const padW = `max(iw\\,ceil(ih*${targetRatio}/2)*2)`;
+      const padH = `max(ih\\,ceil(iw/${targetRatio}/2)*2)`;
+      const { x, y } = gravityToPadPosition(g);
+      filters.push(`pad=${padW}:${padH}:${x}:${y}:${colour}`);
     }
   }
 
@@ -1565,6 +1594,35 @@ function gravityOffsets(
       return { x: "iw-ow", y: "ih-oh" };
     case "sowe":
       return { x: "0", y: "ih-oh" };
+    default:
+      return { x: cx, y: cy };
+  }
+}
+
+/** Return ffmpeg pad x:y offset expressions for the given compass gravity.
+ * In a pad filter x/y position the input image within the larger output. */
+function gravityToPadPosition(g: CompassGravity): { x: string; y: string } {
+  const cx = "(ow-iw)/2";
+  const cy = "(oh-ih)/2";
+  switch (g) {
+    case "ce":
+      return { x: cx, y: cy };
+    case "no":
+      return { x: cx, y: "0" };
+    case "so":
+      return { x: cx, y: "oh-ih" };
+    case "ea":
+      return { x: "ow-iw", y: cy };
+    case "we":
+      return { x: "0", y: cy };
+    case "noea":
+      return { x: "ow-iw", y: "0" };
+    case "nowe":
+      return { x: "0", y: "0" };
+    case "soea":
+      return { x: "ow-iw", y: "oh-ih" };
+    case "sowe":
+      return { x: "0", y: "oh-ih" };
     default:
       return { x: cx, y: cy };
   }

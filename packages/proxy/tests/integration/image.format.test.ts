@@ -12,6 +12,7 @@ import {
 import { URL_CONFIG, h2Fetch as fetch } from "./setup.js";
 
 const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
+const TRANSPARENT_URL = "http://file-server/test-image-transparent.png";
 
 describe("image padding and background", () => {
   it("adds uniform padding", async () => {
@@ -24,6 +25,18 @@ describe("image padding and background", () => {
 
   it("adds padding with background colour", async () => {
     const buffer = await fetchImage("/w:100/pd:20/bg:ff0000");
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("extend aspect ratio with background, padding, and resize on transparent source", async () => {
+    const buffer = await fetchImageFrom(
+      "/bg:255:255:255/exar:1:no/f:webp/g:no/pd:83:83:83:83/rs:fit:400:400",
+      TRANSPARENT_URL,
+    );
+    const meta = await sharp(buffer).metadata();
+    expect(meta.format).toBe("webp");
+    expect(meta.width).toBe(566);
+    expect(meta.height).toBe(566);
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
 
