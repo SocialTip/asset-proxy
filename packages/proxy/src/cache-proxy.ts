@@ -278,11 +278,18 @@ export async function createCacheProxyApp() {
     let cacheWriteStarted = false;
     source.once("data", () => {
       cacheWriteStarted = true;
+      logger.info("[cache-proxy] starting cache write", { key });
       const cacheStream = cacheBucket
         .file(key)
         .createWriteStream({ contentType, resumable: false });
       cacheStream.on("finish", resolveCacheWrite);
-      cacheStream.on("error", rejectCacheWrite);
+      cacheStream.on("error", (err) => {
+        logger.error("[cache-proxy] cache write stream error", {
+          key,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        rejectCacheWrite(err);
+      });
       stream.subscribe().pipe(cacheStream);
     });
     source.once("end", () => {
