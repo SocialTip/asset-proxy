@@ -54,6 +54,9 @@ class InflightStream {
       pt.end();
     } else {
       this.source.pipe(pt, { end: true });
+      this.source.on("error", (err) => {
+        if (!pt.destroyed) pt.destroy(err);
+      });
     }
     return pt;
   }
@@ -272,6 +275,7 @@ export async function createCacheProxyApp() {
     for (const [h, v] of upstream.headers) {
       if (!HOP_BY_HOP.has(h.toLowerCase())) responseHeaders.push([h, v]);
     }
+
     const stream = new InflightStream(source, responseHeaders, upstream.status);
     resolveStream(stream);
 
@@ -294,23 +298,19 @@ export async function createCacheProxyApp() {
     });
     source.once("end", () => {
       if (!cacheWriteStarted) {
-        logger.error(
-          "[cache-proxy] source ended without data, skipping cache write",
-          { key },
-        );
+        logger.error("[cache-proxy] source ended without data", { key });
         rejectCacheWrite(new Error("Source ended without data"));
       }
     });
     source.once("error", (cause) => {
-      if (!cacheWriteStarted) {
-        logger.error("[cache-proxy] source errored before data", {
-          key,
-          error: cause instanceof Error ? cause.message : String(cause),
-        });
-        rejectCacheWrite(
-          new Error("Source stream errored before data", { cause }),
-        );
-      }
+      logger.error("[cache-proxy] source stream error", {
+        key,
+        cacheWriteStarted,
+        error: cause instanceof Error ? cause.message : String(cause),
+      });
+      rejectCacheWrite(
+        cause instanceof Error ? cause : new Error(String(cause)),
+      );
     });
 
     return reply.send(stream.subscribe());

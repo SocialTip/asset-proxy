@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import { Readable, Writable } from "node:stream";
 
 import { request } from "./setup.js";
@@ -82,6 +83,7 @@ describe("cache proxy inflight coalescing", () => {
     });
     mockCreateWriteStream.mockClear();
     mockCreateReadStream.mockClear();
+    mockH2Fetch.mockReset();
   });
 
   it("concurrent request receives the inflight stream instead of waiting for cache", async () => {
@@ -118,6 +120,63 @@ describe("cache proxy inflight coalescing", () => {
     expect(secondRes.status).toBe(200);
     expect(secondRes.headers["content-type"]).toBe("video/mp4");
     expect(Buffer.from(secondRes.body).toString()).toBe("0123456789abcdef");
+    expect(mockH2Fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("source stream error after data rejects cache write for concurrent range request", async () => {
+    const source = new Readable({ read() {} });
+    mockH2Fetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: new Headers({ "content-type": "video/mp4" }),
+      body: source,
+    });
+
+    const app = await createCacheProxyApp();
+
+    const firstRequest = request(app)
+      .get("/some/video/path")
+      .then((res) => res);
+
+    // Let the route handler run (resolves h2Fetch mock, creates InflightStream,
+    // registers once("data") listener). Data must be pushed after this so the
+    // once("data") listener fires rather than being pre-buffered.
+    await new Promise((r) => setTimeout(r, 50));
+
+    source.push(Buffer.from("partial"));
+    await cacheWriteStarted;
+
+    const rangeRequest = request(app)
+      .get("/some/video/path")
+      .set("Range", "bytes=0-3")
+      .then((res) => res);
+
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Suppress uncaught exception from light-my-request — in production
+    // the stream destruction would just close the HTTP/2 connection.
+    const suppress = (err: Error) => {
+      if (err.message !== "connection reset") throw err;
+    };
+    process.on("uncaughtException", suppress);
+
+    source.destroy(new Error("connection reset"));
+
+    const [firstResult, rangeResult] = await Promise.allSettled([
+      firstRequest,
+      rangeRequest,
+    ]);
+
+    process.removeListener("uncaughtException", suppress);
+    // First request's response stream was destroyed mid-transfer.
+    expect(firstResult.status).toBe("rejected");
+    expect(
+      (firstResult as Extract<typeof firstResult, { status: "rejected" }>)
+        .reason,
+    ).toMatchInlineSnapshot(`[Error: response destroyed before completion]`);
+    // Range request gets a 500 because the cache write was rejected.
+    assert(rangeResult.status === "fulfilled");
+    expect(rangeResult.value.status).toBe(500);
     expect(mockH2Fetch).toHaveBeenCalledTimes(1);
   });
 
