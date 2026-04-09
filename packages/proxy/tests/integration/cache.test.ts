@@ -279,11 +279,7 @@ describe("cache proxy", () => {
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(res.headers.get("content-type")).toMatchInlineSnapshot(
-      `"text/plain; charset=utf-8"`,
-    );
-    expect(await res.text()).toMatchInlineSnapshot(`"Unhandled error"`);
+    expect(res.status).toBe(502);
 
     const [files] = await bucket.getFiles({ prefix: urlPath.slice(1) });
     expect(files).toHaveLength(0);

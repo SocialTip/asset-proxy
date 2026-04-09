@@ -206,6 +206,19 @@ export async function createCacheProxyApp() {
     });
     inflight.set(key, { stream: streamPromise, cacheWrite });
 
+    streamPromise.catch(() => {});
+    cacheWrite
+      .catch((err) => {
+        logger.warn("Failed to write to cache bucket", {
+          error: err instanceof Error ? err.message : String(err),
+          cacheKey: key,
+        });
+      })
+      .finally(() => {
+        logger.info("[cache-proxy] inflight-cleanup", { key });
+        inflight.delete(key);
+      });
+
     const forwardUrl = `${env.FORWARD_URL}${request.url}`;
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(request.headers)) {
@@ -226,7 +239,6 @@ export async function createCacheProxyApp() {
       });
       rejectStream(error);
       rejectCacheWrite(error);
-      inflight.delete(key);
       throw error;
     });
 
@@ -247,7 +259,6 @@ export async function createCacheProxyApp() {
       });
       rejectStream(error);
       rejectCacheWrite(error);
-      inflight.delete(key);
       throw error;
     }
 
@@ -267,17 +278,6 @@ export async function createCacheProxyApp() {
     cacheStream.on("finish", resolveCacheWrite);
     cacheStream.on("error", rejectCacheWrite);
     source.pipe(cacheStream);
-    cacheWrite
-      .catch((err) => {
-        logger.warn("Failed to write to cache bucket", {
-          error: err instanceof Error ? err.message : String(err),
-          cacheKey: key,
-        });
-      })
-      .finally(() => {
-        logger.info("[cache-proxy] inflight-cleanup", { key });
-        inflight.delete(key);
-      });
 
     return reply.send(stream.subscribe());
   });
