@@ -1,9 +1,8 @@
-## 0.6.3
+## 0.7.0
 
 - fix: lint
 - feat: validate that exar requires resize dimensions
 - feat: add cuvid GPU scaler using decoder-level resize
-- release: bump package versions
 - feat: return 429 with Retry-After when GPU slot cannot be acquired within 5s
 
 ## 0.6.2
