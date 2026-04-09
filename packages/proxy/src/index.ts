@@ -441,13 +441,17 @@ app.get("/health", async (_request, reply) => {
   return reply.send("ok");
 });
 
-app.setErrorHandler((cause: Error, request, reply) => {
+const errorHandler: Parameters<typeof app.setErrorHandler>[0] = (
+  cause,
+  request,
+  reply,
+) => {
   const status = cause instanceof HTTPError ? cause.status : 500;
   const message =
     cause instanceof HTTPError ? cause.message : "Unhandled error";
 
-  const error = new Error("Processor error", { cause });
-  logger.error("Processor error", {
+  const error = new Error("Request error", { cause });
+  logger.error("Request error", {
     message: cause instanceof Error ? cause.message : undefined,
     cause,
   });
@@ -461,7 +465,9 @@ app.setErrorHandler((cause: Error, request, reply) => {
     }
     return reply.code(status).send(message);
   }
-});
+};
+
+app.setErrorHandler(errorHandler);
 
 async function start() {
   let server: { close(): Promise<void> };
@@ -470,6 +476,7 @@ async function start() {
     const cacheEnv = envSwitched;
     const { createCacheProxyApp } = await import("./cache-proxy.js");
     const cacheApp = await createCacheProxyApp();
+    cacheApp.setErrorHandler(errorHandler);
     await cacheApp.listen({ port: cacheEnv.PORT, host: "0.0.0.0" });
     logger.info(`asset-proxy (cache mode) listening on :${cacheEnv.PORT}`, {
       version: process.env.BUILD_VERSION ?? "<unset>",
