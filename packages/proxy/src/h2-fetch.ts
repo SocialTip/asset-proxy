@@ -1,12 +1,31 @@
 import { Readable } from "node:stream";
 
+import { trace } from "@opentelemetry/api";
 import { Agent, H2CClient } from "undici";
+
+import { logger } from "./logger.js";
+import { recordException } from "./tracing.js";
 
 export interface H2Response {
   status: number;
   ok: boolean;
   headers: Headers;
   body: Readable | null;
+}
+
+function toReadable(url: string, body: ReadableStream): Readable {
+  const stream = Readable.fromWeb(
+    body as Parameters<typeof Readable.fromWeb>[0],
+  );
+  // Prevent unhandled exceptions from undici when the upstream connection
+  // drops mid-transfer. Consumers are expected to attach their own error
+  // handlers for application-level recovery.
+  stream.on("error", (cause) => {
+    logger.error("[h2-fetch] response body stream error", { url, cause });
+    const span = trace.getActiveSpan();
+    if (span) recordException(span, cause);
+  });
+  return stream;
 }
 
 const h2Agent = new Agent({ allowH2: true });
@@ -38,8 +57,6 @@ export async function h2Fetch(
     status: res.status,
     ok: res.ok,
     headers: res.headers,
-    body: res.body
-      ? Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0])
-      : null,
+    body: res.body ? toReadable(url, res.body) : null,
   };
 }
