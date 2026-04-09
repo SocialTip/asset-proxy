@@ -11,7 +11,8 @@ import { type CacheEnv, env as envSwitched } from "./env.js";
 import { h2Fetch } from "./h2-fetch.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 import { logger } from "./logger.js";
-import { tracer, recordException } from "./tracing.js";
+import { tracer } from "./tracing.js";
+import { HTTPError } from "@socialtip/asset-proxy-url-parser";
 
 const env = envSwitched as CacheEnv;
 
@@ -75,10 +76,11 @@ export async function createCacheProxyApp() {
     apiEndpoint: process.env.GCS_API_ENDPOINT || undefined,
   });
   const cacheBucket = gcs.bucket(env.CACHE_BUCKET);
-  const inflight = new Map<
-    string,
-    { stream: InflightStream; cacheWrite: Promise<void> }
-  >();
+  type InflightEntry = {
+    stream: Promise<InflightStream | null>;
+    cacheWrite: Promise<void>;
+  };
+  const inflight = new Map<string, InflightEntry>();
   const app = Fastify({ http2: true });
   await app.register(fastifyOtelInstrumentation.plugin());
 
@@ -150,35 +152,59 @@ export async function createCacheProxyApp() {
     }
     const file = cacheBucket.file(key);
 
+    const [exists] = await file.exists();
+    if (exists) {
+      logger.info("[cache-proxy] hit", { key });
+      return serveFromCache(request, reply, file);
+    }
+
     const pending = inflight.get(key);
     if (pending) {
       if (request.headers.range) {
-        logger.info("[cache-proxy] pending-hit-range", { key });
-        await pending.cacheWrite.catch(() => {});
-      } else {
-        logger.info("[cache-proxy] pending-hit", { key });
-        reply.code(pending.stream.status);
-        for (const [h, v] of pending.stream.responseHeaders) reply.header(h, v);
-        return reply.send(pending.stream.subscribe());
+        // For concurrent range requests to the same resource, we wait for the entire result to be buffered to the cache before serving it, so that we can get accurate ranges.
+        logger.info("[cache-proxy] miss-concurrent with range", { key });
+        await pending.cacheWrite;
+        logger.info("[cache-proxy] miss-concurrent with range -> serve", {
+          key,
+        });
+        return serveFromCache(request, reply, file);
       }
+      // For concurrent non-range requests to the same resource, we wait for the stream to be available and send it to each client (to save time in case the request stream starts before being fully uploaded to the cache).
+      logger.info("[cache-proxy] miss-concurrent without range", { key });
+      const res = await Promise.race([pending.stream, pending.cacheWrite]);
+      if (!(res instanceof InflightStream)) {
+        // Concurrent request to pre-cached resource - serve from cache.
+        logger.info("[cache-proxy] miss-concurrent without range -> serve", {
+          key,
+        });
+        return serveFromCache(request, reply, file);
+      }
+      logger.info("[cache-proxy] miss-concurrent without range -> stream", {
+        key,
+        status: res.status,
+      });
+      reply.code(res.status);
+      for (const [h, v] of res.responseHeaders) reply.header(h, v);
+      return reply.send(res.subscribe());
     }
 
-    const [exists] = await file.exists();
-    if (exists) {
-      logger.info(
-        pending
-          ? "[cache-proxy] pending-fallthrough-bucket-hit"
-          : "[cache-proxy] bucket-hit",
-        { key },
-      );
-      return serveFromCache(request, reply, file);
-    }
-    logger.info(
-      pending
-        ? "[cache-proxy] pending-fallthrough-bucket-miss"
-        : "[cache-proxy] bucket-miss",
-      { key },
+    logger.info("[cache-proxy] miss", { key });
+
+    let resolveStream!: (value: InflightStream | null) => void;
+    let rejectStream!: (err: Error) => void;
+    const streamPromise = new Promise<InflightStream | null>(
+      (resolve, reject) => {
+        resolveStream = resolve;
+        rejectStream = reject;
+      },
     );
+    let resolveCacheWrite!: () => void;
+    let rejectCacheWrite!: (err: Error) => void;
+    const cacheWrite = new Promise<void>((resolve, reject) => {
+      resolveCacheWrite = resolve;
+      rejectCacheWrite = reject;
+    });
+    inflight.set(key, { stream: streamPromise, cacheWrite });
 
     const forwardUrl = `${env.FORWARD_URL}${request.url}`;
     const headers: Record<string, string> = {};
@@ -193,7 +219,16 @@ export async function createCacheProxyApp() {
       }
     }
 
-    const upstream = await h2Fetch(forwardUrl, { headers });
+    const upstream = await h2Fetch(forwardUrl, { headers }).catch((cause) => {
+      logger.error("Failed to fetch from upstream", { cause, key });
+      const error = new HTTPError("Upstream request failed", {
+        code: "BAD_GATEWAY",
+      });
+      rejectStream(error);
+      rejectCacheWrite(error);
+      inflight.delete(key);
+      throw error;
+    });
 
     reply.code(upstream.status);
     for (const [key, value] of upstream.headers) {
@@ -202,10 +237,18 @@ export async function createCacheProxyApp() {
     }
 
     if (!upstream.ok || !upstream.body) {
-      if (upstream.body) {
-        return reply.send(upstream.body);
-      }
-      return reply.send();
+      logger.error("Upstream request failed or response empty", {
+        key,
+        status: upstream.status,
+        body: upstream.body,
+      });
+      const error = new HTTPError("Upstream request failed", {
+        code: "BAD_GATEWAY",
+      });
+      rejectStream(error);
+      rejectCacheWrite(error);
+      inflight.delete(key);
+      throw error;
     }
 
     const contentType =
@@ -219,12 +262,10 @@ export async function createCacheProxyApp() {
     for (const [h, v] of upstream.headers) {
       if (!HOP_BY_HOP.has(h.toLowerCase())) responseHeaders.push([h, v]);
     }
-    const mux = new InflightStream(source, responseHeaders, upstream.status);
-    const cacheWrite = new Promise<void>((resolve, reject) => {
-      cacheStream.on("finish", resolve);
-      cacheStream.on("error", reject);
-    });
-    inflight.set(key, { stream: mux, cacheWrite });
+    const stream = new InflightStream(source, responseHeaders, upstream.status);
+    resolveStream(stream);
+    cacheStream.on("finish", resolveCacheWrite);
+    cacheStream.on("error", rejectCacheWrite);
     source.pipe(cacheStream);
     cacheWrite
       .catch((err) => {
@@ -234,24 +275,11 @@ export async function createCacheProxyApp() {
         });
       })
       .finally(() => {
-        inflight.delete(key);
         logger.info("[cache-proxy] inflight-cleanup", { key });
+        inflight.delete(key);
       });
 
-    return reply.send(mux.subscribe());
-  });
-
-  app.setErrorHandler((cause: Error, request, reply) => {
-    const error = new Error("Cache proxy error", { cause });
-    logger.error("Cache proxy error", {
-      message: cause instanceof Error ? cause.message : undefined,
-      cause,
-    });
-    const { span } = request.opentelemetry();
-    if (span) recordException(span, error);
-    if (!reply.sent) {
-      return reply.code(500).send("Unhandled error");
-    }
+    return reply.send(stream.subscribe());
   });
 
   return app;
