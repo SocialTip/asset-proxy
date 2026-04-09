@@ -1,6 +1,5 @@
 import assert from "node:assert";
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -196,6 +195,7 @@ export type VideoResult =
 export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
+  key: string,
 ): Promise<VideoResult> {
   rejectImageOnlyOptions(parsed);
 
@@ -216,11 +216,9 @@ export async function processVideo(
     gpu: useGpu,
   };
 
-  const semKey = createHash("md5").update(JSON.stringify(parsed)).digest("hex");
-
   if (parsed.outputFormat === "mp4") {
     if (useGpu) {
-      using _lock = await acquireGpuLock(semKey);
+      using _lock = await acquireGpuLock(key);
       return await processMp4(sourceUrl, params, parsed.outputFormat);
     }
     return await processMp4(sourceUrl, params, parsed.outputFormat);
@@ -230,7 +228,7 @@ export async function processVideo(
   // to the response immediately for lower TTFB. For GPU requests, hold a
   // concurrency slot until the stream closes.
   if (useGpu) {
-    const lock = await acquireGpuLock(semKey);
+    const lock = await acquireGpuLock(key);
     const args = buildVideoArgs(sourceUrl, params);
     const stream = runFfmpeg(args);
     stream.on("close", () => lock[Symbol.dispose]());
