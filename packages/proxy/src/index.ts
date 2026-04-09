@@ -412,6 +412,7 @@ async function processAndRespond(
       setContentDisposition(reply, parsed, result.outputFormat);
 
       if (result.stream) {
+        logger.verbose("[processor] send video stream", { key });
         return reply.send(result.stream);
       }
 
@@ -420,6 +421,7 @@ async function processAndRespond(
           code: "INTERNAL_SERVER_ERROR",
         });
       }
+      logger.verbose("[processor] send video buffer", { key });
       return reply.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
