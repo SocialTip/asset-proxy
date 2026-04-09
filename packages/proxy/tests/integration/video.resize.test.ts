@@ -1,16 +1,18 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
+
+import { h2Fetch as fetch, URL_CONFIG } from "./setup.js";
 import {
+  extractFrame,
   fetchVideo,
   probeVideo,
-  extractFrame,
-  VIDEO_SOURCE_URL,
   SERVICE_URL,
+  VIDEO_SOURCE_URL,
 } from "./video-helpers.js";
-import { URL_CONFIG, h2Fetch as fetch } from "./setup.js";
 
 describe("video resize", () => {
   it("resizes to 128x128 fill with framerate and cut", async () => {

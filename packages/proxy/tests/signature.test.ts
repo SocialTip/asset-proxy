@@ -1,4 +1,4 @@
-import { verifySignature, sign } from "@socialtip/asset-proxy-url-parser";
+import { sign, verifySignature } from "@socialtip/asset-proxy-url-parser";
 
 const TEST_KEY = Buffer.from("736563726574", "hex"); // "secret"
 const TEST_SALT = Buffer.from("68656c6c6f", "hex"); // "hello"

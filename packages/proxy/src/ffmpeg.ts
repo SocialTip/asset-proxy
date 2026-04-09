@@ -6,15 +6,17 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, type Readable } from "node:stream";
+
 import sharp from "sharp";
-import { type ProcessingEnv, env as envSwitched, isCacheMode } from "./env.js";
+
+import { env as envSwitched, isCacheMode, type ProcessingEnv } from "./env.js";
 import { FifoSemaphore } from "./fifo-semaphore.js";
 
 const env = envSwitched as ProcessingEnv;
 import {
-  HTTPError,
   type CompassGravity,
   type Gravity,
+  HTTPError,
   type ImageFormat,
   type ImageUrl,
   type OutputFormat,
@@ -23,6 +25,7 @@ import {
   type ResizingType,
   type VideoUrl,
 } from "@socialtip/asset-proxy-url-parser";
+
 import { logger } from "./logger.js";
 import { recordException, tracer } from "./tracing.js";
 

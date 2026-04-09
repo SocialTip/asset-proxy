@@ -1,9 +1,11 @@
 import crypto from "node:crypto";
+
 import {
-  generateImageUrl,
   generateImageInfoUrl,
+  generateImageUrl,
 } from "@imgproxy/imgproxy-node";
-import { generateUrl, generateInfoUrl } from "../src/index.js";
+
+import { generateInfoUrl, generateUrl } from "../src/index.js";
 
 vi.mock("node:crypto", async (importOriginal) => {
   const actual = await importOriginal<typeof crypto>();

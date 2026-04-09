@@ -1,11 +1,12 @@
 import { Storage } from "@google-cloud/storage";
 import {
-  generateUrl,
   generateInfoUrl,
+  generateUrl,
 } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
-import { CACHE_PROXY_URL, URL_CONFIG, h2Fetch as fetch } from "./setup.js";
+
 import { SOURCE_URL, toPng } from "./helpers.js";
+import { CACHE_PROXY_URL, h2Fetch as fetch, URL_CONFIG } from "./setup.js";
 import { VIDEO_SOURCE_URL } from "./video-helpers.js";
 
 const FAKE_GCS_URL = process.env.FAKE_GCS_URL ?? "http://localhost:4443";

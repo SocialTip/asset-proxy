@@ -2,9 +2,11 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
-import { SERVICE_URL, URL_CONFIG, h2Fetch as fetch } from "./setup.js";
+
+import { h2Fetch as fetch, SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 export const VIDEO_SOURCE_URL = "http://file-server/test-video.mp4";
 

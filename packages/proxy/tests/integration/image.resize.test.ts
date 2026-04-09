@@ -1,4 +1,4 @@
-import { fetchImage, toPng, sharp } from "./helpers.js";
+import { fetchImage, sharp, toPng } from "./helpers.js";
 
 describe("image resize", () => {
   it("resize:fit scales to fit within box", async () => {

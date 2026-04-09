@@ -1,4 +1,4 @@
-import { fetchVideo, probeVideo, extractFrame } from "./video-helpers.js";
+import { extractFrame, fetchVideo, probeVideo } from "./video-helpers.js";
 
 describe("video flip", () => {
   it("flips video vertically", async () => {

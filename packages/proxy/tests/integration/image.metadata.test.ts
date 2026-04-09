@@ -2,10 +2,12 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import sharp from "sharp";
+
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
-import { SERVICE_URL, URL_CONFIG, h2Fetch as fetch } from "./setup.js";
+import sharp from "sharp";
+
+import { h2Fetch as fetch, SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 async function toPng(buffer: Buffer): Promise<Buffer> {
   return sharp(buffer).png().toBuffer();

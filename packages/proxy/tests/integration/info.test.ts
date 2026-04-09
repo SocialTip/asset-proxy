@@ -1,7 +1,8 @@
+import { generateInfoUrl } from "@socialtip/asset-proxy-url-generator";
 import { decode } from "blurhash";
 import sharp from "sharp";
-import { generateInfoUrl } from "@socialtip/asset-proxy-url-generator";
-import { SERVICE_URL, URL_CONFIG, h2Fetch as fetch } from "./setup.js";
+
+import { h2Fetch as fetch, SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 const IMAGE_URL = "http://file-server/test-image.png";
 const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";

@@ -1,7 +1,8 @@
-import { getImage } from "astro/assets";
 import type { ImageService } from "astro";
-import service from "../src/index.js";
+import { getImage } from "astro/assets";
+
 import type { AssetProxyServiceConfig } from "../src/index.js";
+import service from "../src/index.js";
 
 const BASE_URL = "https://assets.example.com";
 const SRC = "https://example.com/photo.jpg";

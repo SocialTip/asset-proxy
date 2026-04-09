@@ -1,15 +1,15 @@
-import type { ExternalImageService, ImageTransform } from "astro";
 import {
   generateUrl,
   type UrlGeneratorConfig,
   type UrlGeneratorOptions,
 } from "@socialtip/asset-proxy-url-generator";
+import type { ExternalImageService, ImageTransform } from "astro";
 
-export type {
-  UrlGeneratorOptions,
-  ParsedUrlInput,
-} from "@socialtip/asset-proxy-url-generator";
 export { getImageUrl, type GetImageUrlOptions } from "./get-image-url.js";
+export type {
+  ParsedUrlInput,
+  UrlGeneratorOptions,
+} from "@socialtip/asset-proxy-url-generator";
 
 export interface AssetProxyServiceConfig extends UrlGeneratorConfig {
   /** Base URL of the asset-proxy instance, e.g. `https://assets.example.com`. */

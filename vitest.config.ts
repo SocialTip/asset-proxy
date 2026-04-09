@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+
 import { defineConfig } from "vitest/config";
 
 process.env.NODE_EXTRA_CA_CERTS ??= resolve(

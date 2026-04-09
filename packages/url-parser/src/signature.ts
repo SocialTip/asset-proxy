@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+
 import { HTTPError } from "./error.js";
 
 export interface SignatureOptions {
