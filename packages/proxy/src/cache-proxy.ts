@@ -213,9 +213,9 @@ export async function createCacheProxyApp() {
 
     streamPromise.catch(() => {});
     cacheWrite
-      .catch((err) => {
+      .catch((cause) => {
         logger.warn("Failed to write to cache bucket", {
-          error: err instanceof Error ? err.message : String(err),
+          cause,
           cacheKey: key,
         });
       })
@@ -287,12 +287,12 @@ export async function createCacheProxyApp() {
         .file(key)
         .createWriteStream({ contentType, resumable: false });
       cacheStream.on("finish", resolveCacheWrite);
-      cacheStream.on("error", (err) => {
+      cacheStream.on("error", (cause) => {
         logger.error("[cache-proxy] cache write stream error", {
           key,
-          error: err instanceof Error ? err.message : String(err),
+          cause,
         });
-        rejectCacheWrite(err);
+        rejectCacheWrite(cause);
       });
       stream.subscribe().pipe(cacheStream);
     });
@@ -306,11 +306,9 @@ export async function createCacheProxyApp() {
       logger.error("[cache-proxy] source stream error", {
         key,
         cacheWriteStarted,
-        error: cause instanceof Error ? cause.message : String(cause),
+        cause,
       });
-      rejectCacheWrite(
-        cause instanceof Error ? cause : new Error(String(cause)),
-      );
+      rejectCacheWrite(cause);
     });
 
     return reply.send(stream.subscribe());
