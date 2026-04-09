@@ -1,6 +1,7 @@
+import { spawn } from "node:child_process";
 import { createCipheriv, randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
-import { spawn } from "node:child_process";
+
 import { request } from "./setup.js";
 
 vi.mock("node:child_process", () => ({

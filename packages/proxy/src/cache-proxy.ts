@@ -1,18 +1,20 @@
+import type { Http2Server } from "node:http2";
 import { PassThrough, type Readable } from "node:stream";
+
 import { Storage } from "@google-cloud/storage";
+import { HTTPError } from "@socialtip/asset-proxy-url-parser";
 import Fastify, {
   type FastifyReply,
   type FastifyRequest,
   type RouteGenericInterface,
 } from "fastify";
-import type { Http2Server } from "node:http2";
 import parseRange from "range-parser";
+
 import { type CacheEnv, env as envSwitched } from "./env.js";
 import { h2Fetch } from "./h2-fetch.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 import { logger } from "./logger.js";
 import { tracer } from "./tracing.js";
-import { HTTPError } from "@socialtip/asset-proxy-url-parser";
 
 const env = envSwitched as CacheEnv;
 

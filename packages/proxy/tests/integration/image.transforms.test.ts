@@ -1,4 +1,4 @@
-import { fetchImage, toPng, sharp } from "./helpers.js";
+import { fetchImage, sharp, toPng } from "./helpers.js";
 
 describe("image transforms", () => {
   it("rotates 90 degrees", async () => {

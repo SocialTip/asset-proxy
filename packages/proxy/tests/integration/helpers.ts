@@ -1,7 +1,8 @@
-import sharp from "sharp";
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
-import { SERVICE_URL, URL_CONFIG, h2Fetch as fetch } from "./setup.js";
+import sharp from "sharp";
+
+import { h2Fetch as fetch, SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 export const SOURCE_URL = "http://file-server/test-image.png";
 
@@ -36,4 +37,4 @@ export async function fetchImageWithFormat(path: string, format: string) {
   return { buffer: Buffer.from(await res.arrayBuffer()), res };
 }
 
-export { sharp, SERVICE_URL };
+export { SERVICE_URL, sharp };

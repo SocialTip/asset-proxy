@@ -1,4 +1,4 @@
-import { trace, SpanStatusCode, type Span } from "@opentelemetry/api";
+import { type Span, SpanStatusCode, trace } from "@opentelemetry/api";
 
 export const tracer = trace.getTracer("asset-proxy");
 

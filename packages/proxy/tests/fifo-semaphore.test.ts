@@ -1,4 +1,5 @@
 import assert from "node:assert";
+
 import { FifoSemaphore } from "../src/fifo-semaphore.js";
 
 describe("FifoSemaphore", () => {

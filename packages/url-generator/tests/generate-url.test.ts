@@ -1,10 +1,12 @@
-import { generateUrl } from "../src/index.js";
+import { createHmac } from "node:crypto";
+
 import {
-  parseProcessingUrl,
   decryptSourceUrl,
+  parseProcessingUrl,
   verifySignature,
 } from "@socialtip/asset-proxy-url-parser";
-import { createHmac } from "node:crypto";
+
+import { generateUrl } from "../src/index.js";
 
 const SRC = "https://example.com/photo.jpg";
 const KEY_HEX =

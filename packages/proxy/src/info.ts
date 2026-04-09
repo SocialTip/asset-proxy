@@ -1,21 +1,23 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { promisify } from "node:util";
-import type {
-  FastifyRequest,
-  FastifyReply,
-  RouteGenericInterface,
-} from "fastify";
 import type { Http2Server } from "node:http2";
-import { encode as blurhashEncode } from "blurhash";
-import sharp from "sharp";
+import { promisify } from "node:util";
+
 import {
   HTTPError,
+  type InfoOptions,
   parseInfoUrl,
   verifySignature,
-  type InfoOptions,
 } from "@socialtip/asset-proxy-url-parser";
-import { type ProcessingEnv, env as envSwitched } from "./env.js";
+import { encode as blurhashEncode } from "blurhash";
+import type {
+  FastifyReply,
+  FastifyRequest,
+  RouteGenericInterface,
+} from "fastify";
+import sharp from "sharp";
+
+import { env as envSwitched, type ProcessingEnv } from "./env.js";
 
 const env = envSwitched as ProcessingEnv;
 import { logger } from "./logger.js";

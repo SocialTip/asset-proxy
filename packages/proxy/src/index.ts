@@ -1,16 +1,10 @@
-import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import type { Http2Server } from "node:http2";
 import { Readable } from "node:stream";
 import { promisify } from "node:util";
-import contentDisposition from "content-disposition";
+
 import { Storage } from "@google-cloud/storage";
-import Fastify from "fastify";
-import type {
-  FastifyReply,
-  FastifyRequest,
-  RouteGenericInterface,
-} from "fastify";
-import type { Http2Server } from "node:http2";
 import {
   HTTPError,
   isImageUrl,
@@ -18,7 +12,15 @@ import {
   parseProcessingUrl,
   verifySignature,
 } from "@socialtip/asset-proxy-url-parser";
-import { type ProcessingEnv, env as envSwitched, isCacheMode } from "./env.js";
+import contentDisposition from "content-disposition";
+import type {
+  FastifyReply,
+  FastifyRequest,
+  RouteGenericInterface,
+} from "fastify";
+import Fastify from "fastify";
+
+import { env as envSwitched, isCacheMode, type ProcessingEnv } from "./env.js";
 import { startHealthServer } from "./health-server.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 

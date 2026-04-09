@@ -1,8 +1,9 @@
 import {
   generateUrl,
-  type UrlGeneratorOptions,
   type ParsedUrlInput,
+  type UrlGeneratorOptions,
 } from "@socialtip/asset-proxy-url-generator";
+
 import type { AssetProxyServiceConfig } from "./index.js";
 
 export type GetImageUrlOptions = Partial<Omit<ParsedUrlInput, "sourceUrl">> & {

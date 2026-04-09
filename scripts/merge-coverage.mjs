@@ -1,5 +1,5 @@
+import { existsSync,readFileSync, rmSync, writeFileSync } from "node:fs";
 import process from "node:process";
-import { readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
 
 const [vitestLcov, serverLcov] = process.argv.slice(2);
 

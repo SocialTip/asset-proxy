@@ -1,15 +1,16 @@
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
+
 import {
   fetchImage,
   fetchImageFrom,
   fetchImageWithFormat,
-  toPng,
+  SERVICE_URL,
   sharp,
   SOURCE_URL,
-  SERVICE_URL,
+  toPng,
 } from "./helpers.js";
-import { URL_CONFIG, h2Fetch as fetch } from "./setup.js";
+import { h2Fetch as fetch, URL_CONFIG } from "./setup.js";
 
 const BUTTERFLY_URL = "http://file-server/test-image-butterfly.png";
 const TRANSPARENT_URL = "http://file-server/test-image-transparent.png";

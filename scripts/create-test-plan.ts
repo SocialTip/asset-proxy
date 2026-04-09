@@ -17,9 +17,10 @@ import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+
 import {
-  generateUrl,
   generateInfoUrl,
+  generateUrl,
   type UrlGeneratorConfig,
 } from "@socialtip/asset-proxy-url-generator";
 

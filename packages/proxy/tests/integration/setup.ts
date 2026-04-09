@@ -1,4 +1,5 @@
 import http2 from "node:http2";
+
 import type { UrlGeneratorConfig } from "@socialtip/asset-proxy-url-generator";
 
 export const SERVICE_URL = process.env.SERVICE_URL ?? "http://localhost:8080";
