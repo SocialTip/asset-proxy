@@ -101,7 +101,7 @@ async function videoArgs(path: string): Promise<string[]> {
   setupSpawnMock();
   // processVideo is async (awaits gpuReady), so we need to await it starting
   // We don't await the full result since it would try to read the stream
-  await processVideo(parsed.sourceUrl, parsed as never).catch(() => {});
+  await processVideo(parsed.sourceUrl, parsed as never, "test").catch(() => {});
   const args = mockSpawn.mock.calls.at(-1)![1] as string[];
   return args.map((a) =>
     /asset-proxy-.*\/output\.\w+$/.test(a) ? "<tempfile>" : a,

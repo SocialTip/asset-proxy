@@ -12,6 +12,15 @@ function parseFormatMap(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+const logLevels = [
+  "error",
+  "warn",
+  "info",
+  "verbose",
+  "debug",
+  "silly",
+] as const;
+
 const commonFields = {
   /** Server listen port. */
   PORT: z.coerce.number().int().positive().default(8080),
@@ -21,6 +30,9 @@ const commonFields = {
 
   /** Cache-Control header value for successful responses. */
   CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
+
+  /** Minimum log level. Defaults to "info". */
+  LOG_LEVEL: z.enum(logLevels).default("info"),
 };
 
 const processingModeSchema = z

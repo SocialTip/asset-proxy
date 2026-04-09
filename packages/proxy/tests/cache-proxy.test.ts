@@ -153,21 +153,12 @@ describe("cache proxy inflight coalescing", () => {
 
     await new Promise((r) => setTimeout(r, 10));
 
-    // Suppress uncaught exception from light-my-request — in production
-    // the stream destruction would just close the HTTP/2 connection.
-    const suppress = (err: Error) => {
-      if (err.message !== "connection reset") throw err;
-    };
-    process.on("uncaughtException", suppress);
-
     source.destroy(new Error("connection reset"));
 
     const [firstResult, rangeResult] = await Promise.allSettled([
       firstRequest,
       rangeRequest,
     ]);
-
-    process.removeListener("uncaughtException", suppress);
     // First request's response stream was destroyed mid-transfer.
     expect(firstResult.status).toBe("rejected");
     expect(

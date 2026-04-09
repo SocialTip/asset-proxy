@@ -1,6 +1,5 @@
 import assert from "node:assert";
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -196,6 +195,7 @@ export type VideoResult =
 export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
+  key: string,
 ): Promise<VideoResult> {
   rejectImageOnlyOptions(parsed);
 
@@ -216,35 +216,36 @@ export async function processVideo(
     gpu: useGpu,
   };
 
-  const semKey = createHash("md5").update(JSON.stringify(parsed)).digest("hex");
-
   if (parsed.outputFormat === "mp4") {
     if (useGpu) {
-      using _lock = await acquireGpuLock(semKey);
-      return await processMp4(sourceUrl, params, parsed.outputFormat);
+      using _lock = await acquireGpuLock(key);
+      logger.verbose("[processor] processMp4", { key, gpu: true });
+      return await processMp4(sourceUrl, params, parsed.outputFormat, key);
     }
-    return await processMp4(sourceUrl, params, parsed.outputFormat);
+    logger.verbose("[processor] processMp4", { key, gpu: false });
+    return await processMp4(sourceUrl, params, parsed.outputFormat, key);
   }
 
   // WebM streams directly from ffmpeg — no moov atom concern, so we can pipe
   // to the response immediately for lower TTFB. For GPU requests, hold a
   // concurrency slot until the stream closes.
   if (useGpu) {
-    const lock = await acquireGpuLock(semKey);
+    const lock = await acquireGpuLock(key);
     const args = buildVideoArgs(sourceUrl, params);
-    const stream = runFfmpeg(args);
+    const stream = runFfmpeg(args, key);
     stream.on("close", () => lock[Symbol.dispose]());
     return { stream, outputFormat: parsed.outputFormat };
   }
 
   const args = buildVideoArgs(sourceUrl, params);
-  return { stream: runFfmpeg(args), outputFormat: parsed.outputFormat };
+  return { stream: runFfmpeg(args, key), outputFormat: parsed.outputFormat };
 }
 
 async function processMp4(
   sourceUrl: string,
   params: VideoParams,
   outputFormat: string,
+  key: string,
 ) {
   // MP4 is written to a temp file so ffmpeg can place the moov atom at the
   // start (faststart). This trades higher initial latency on cache misses
@@ -252,7 +253,7 @@ async function processMp4(
   const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
   const outPath = join(dir, "output.mp4");
   const args = buildVideoArgs(sourceUrl, params, { outputPath: outPath });
-  const stream = runFfmpeg(args);
+  const stream = runFfmpeg(args, key);
   await new Promise<void>((resolve, reject) => {
     stream.on("end", resolve);
     stream.on("error", reject);
@@ -913,8 +914,8 @@ async function runExiftool(
   }
 }
 
-function runFfmpeg(args: string[]): Readable {
-  logger.verbose("Running ffmpeg", { args: args.join(" ") });
+function runFfmpeg(args: string[], key?: string): Readable {
+  logger.verbose("[processor] runFfmpeg", { key, args: args.join(" ") });
   const span = tracer.startSpan("exec.ffmpeg");
   const proc = spawn("ffmpeg", args);
   const output = new PassThrough();
@@ -925,16 +926,20 @@ function runFfmpeg(args: string[]): Readable {
 
   let stderr = "";
   proc.stderr.on("data", (chunk: Buffer) => {
-    stderr += chunk.toString();
+    const text = chunk.toString();
+    stderr += text;
     if (stderr.length > 10000) stderr = stderr.slice(-5000);
+    logger.verbose("[processor] ffmpeg stderr", { key, text });
   });
 
   proc.on("close", (code) => {
+    logger.verbose("[processor] ffmpeg closed", { key, code });
     span.setAttribute("process.exit_code", code ?? -1);
     if (code !== 0) {
       const err = new Error(`ffmpeg exited with code ${code}`);
       recordException(span, err);
-      logger.error("ffmpeg exited with non-zero code", {
+      logger.error("[processor] ffmpeg exited with non-zero code", {
+        key,
         code,
         stderr: stderr.slice(-2000),
       });

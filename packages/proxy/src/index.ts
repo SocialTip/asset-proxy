@@ -33,6 +33,7 @@ import {
 } from "./ffmpeg.js";
 import { handleInfoRequest } from "./info.js";
 import { logger } from "./logger.js";
+import { requestKey } from "./request-key.js";
 import { recordException, tracer, withSpan } from "./tracing.js";
 
 const execFileAsync = promisify(execFile);
@@ -279,6 +280,7 @@ function setContentDisposition(
 
 async function handleRequest(request: AppRequest, reply: AppReply) {
   const span = tracer.startSpan("asset-proxy.request");
+  const key = requestKey(request.url.split("?")[0]);
   try {
     const pathAfterSignature = verifySignature(request.url.split("?")[0], {
       signingKey: env.SIGNING_KEY,
@@ -326,7 +328,7 @@ async function handleRequest(request: AppRequest, reply: AppReply) {
     await checkSourceLimits(sourceUrl, parsed);
 
     try {
-      await processAndRespond(reply, parsed, sourceUrl);
+      await processAndRespond(reply, parsed, sourceUrl, key);
     } catch (err) {
       if (parsed.fallbackImageUrl && !reply.sent) {
         const fallbackUrl = Buffer.from(
@@ -354,6 +356,7 @@ async function processAndRespond(
   reply: AppReply,
   parsed: ReturnType<typeof parseProcessingUrl>,
   sourceUrl: string,
+  key: string,
 ): Promise<void> {
   if (shouldSkipProcessing(parsed)) {
     const response = await fetch(sourceUrl);
@@ -400,7 +403,7 @@ async function processAndRespond(
   } else if (isVideoUrl(parsed)) {
     try {
       const result: VideoResult = await withSpan("processVideo", {}, () =>
-        processVideo(sourceUrl, parsed),
+        processVideo(sourceUrl, parsed, key),
       );
 
       const contentType = CONTENT_TYPES[result.outputFormat] || "video/mp4";
@@ -409,6 +412,7 @@ async function processAndRespond(
       setContentDisposition(reply, parsed, result.outputFormat);
 
       if (result.stream) {
+        logger.verbose("[processor] send video stream", { key });
         return reply.send(result.stream);
       }
 
@@ -417,6 +421,7 @@ async function processAndRespond(
           code: "INTERNAL_SERVER_ERROR",
         });
       }
+      logger.verbose("[processor] send video buffer", { key });
       return reply.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;

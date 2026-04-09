@@ -14,6 +14,7 @@ import { type CacheEnv, env as envSwitched } from "./env.js";
 import { h2Fetch } from "./h2-fetch.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 import { logger } from "./logger.js";
+import { requestKey } from "./request-key.js";
 import { tracer } from "./tracing.js";
 
 const env = envSwitched as CacheEnv;
@@ -45,6 +46,9 @@ class InflightStream {
 
   subscribe(): PassThrough {
     const pt = new PassThrough();
+    pt.on("error", () => {
+      // Prevent unhandled error crashing process
+    });
     if (this.error) {
       pt.destroy(this.error);
       return pt;
@@ -151,11 +155,13 @@ export async function createCacheProxyApp() {
   }
 
   app.get("/*", async (request, reply) => {
-    const key = cacheKey(request.url.split("?")[0]);
-    if (!key) {
+    const path = request.url.split("?")[0];
+    const gcsKey = cacheKey(path);
+    if (!gcsKey) {
       return reply.code(404).header("Content-Type", "text/plain").send();
     }
-    const file = cacheBucket.file(key);
+    const key = requestKey(path);
+    const file = cacheBucket.file(gcsKey);
 
     const [exists] = await file.exists();
     if (exists) {
@@ -216,7 +222,7 @@ export async function createCacheProxyApp() {
       .catch((cause) => {
         logger.warn("Failed to write to cache bucket", {
           cause,
-          cacheKey: key,
+          cacheKey: gcsKey,
         });
       })
       .finally(() => {
@@ -284,7 +290,7 @@ export async function createCacheProxyApp() {
       cacheWriteStarted = true;
       logger.info("[cache-proxy] starting cache write", { key });
       const cacheStream = cacheBucket
-        .file(key)
+        .file(gcsKey)
         .createWriteStream({ contentType, resumable: false });
       cacheStream.on("finish", resolveCacheWrite);
       cacheStream.on("error", (cause) => {
