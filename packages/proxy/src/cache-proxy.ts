@@ -286,11 +286,24 @@ export async function createCacheProxyApp() {
       stream.subscribe().pipe(cacheStream);
     });
     source.once("end", () => {
-      if (!cacheWriteStarted) resolveCacheWrite();
+      if (!cacheWriteStarted) {
+        logger.error(
+          "[cache-proxy] source ended without data, skipping cache write",
+          { key },
+        );
+        rejectCacheWrite(new Error("Source ended without data"));
+      }
     });
-    source.once("error", () => {
-      if (!cacheWriteStarted)
-        rejectCacheWrite(new Error("Source stream errored before data"));
+    source.once("error", (cause) => {
+      if (!cacheWriteStarted) {
+        logger.error("[cache-proxy] source errored before data", {
+          key,
+          error: cause instanceof Error ? cause.message : String(cause),
+        });
+        rejectCacheWrite(
+          new Error("Source stream errored before data", { cause }),
+        );
+      }
     });
 
     return reply.send(stream.subscribe());
