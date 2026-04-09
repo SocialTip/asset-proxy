@@ -1,6 +1,6 @@
 {
   "name": "@socialtip/asset-proxy-astro",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Astro image service for asset-proxy",
   "type": "module",
   "main": "dist/index.js",

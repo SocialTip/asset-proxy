@@ -1,3 +1,7 @@
+## 0.4.2
+
+- fix: lint
+
 ## 0.4.0
 
 - chore: publish packages to npm instead of GitHub Packages
