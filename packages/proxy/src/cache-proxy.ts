@@ -22,8 +22,10 @@ const env = envSwitched as CacheEnv;
 class InflightStream {
   private readonly source: Readable;
   private readonly buffer: Buffer[] = [];
+  private bufferBytes = 0;
   private ended = false;
   private error: Error | null = null;
+  private readonly key: string;
   readonly responseHeaders: [string, string][];
   readonly status: number;
 
@@ -31,20 +33,40 @@ class InflightStream {
     source: Readable,
     responseHeaders: [string, string][],
     status: number,
+    key: string,
   ) {
     this.source = source;
     this.responseHeaders = responseHeaders;
     this.status = status;
-    source.on("data", (chunk: Buffer) => this.buffer.push(chunk));
+    this.key = key;
+    source.on("data", (chunk: Buffer) => {
+      this.buffer.push(chunk);
+      this.bufferBytes += chunk.length;
+      logger.debug("[cache-proxy] inflight chunk", {
+        key: this.key,
+        chunkSize: chunk.length,
+        bufferBytes: this.bufferBytes,
+      });
+    });
     source.on("end", () => {
       this.ended = true;
     });
     source.on("error", (err) => {
+      logger.error("[cache-proxy] inflight source error", {
+        key: this.key,
+        cause: err,
+      });
       this.error = err;
     });
   }
 
   subscribe(): PassThrough {
+    logger.debug("[cache-proxy] inflight subscribe", {
+      key: this.key,
+      bufferBytes: this.bufferBytes,
+      ended: this.ended,
+      error: !!this.error,
+    });
     const pt = new PassThrough();
     pt.on("error", () => {
       // Prevent unhandled error crashing process
@@ -282,7 +304,12 @@ export async function createCacheProxyApp() {
       if (!HOP_BY_HOP.has(h.toLowerCase())) responseHeaders.push([h, v]);
     }
 
-    const stream = new InflightStream(source, responseHeaders, upstream.status);
+    const stream = new InflightStream(
+      source,
+      responseHeaders,
+      upstream.status,
+      key,
+    );
     resolveStream(stream);
 
     let cacheWriteStarted = false;
@@ -292,7 +319,10 @@ export async function createCacheProxyApp() {
       const cacheStream = cacheBucket
         .file(gcsKey)
         .createWriteStream({ contentType, resumable: false });
-      cacheStream.on("finish", resolveCacheWrite);
+      cacheStream.on("finish", () => {
+        logger.verbose("[cache-proxy] cache write finished", { key });
+        resolveCacheWrite();
+      });
       cacheStream.on("error", (cause) => {
         logger.error("[cache-proxy] cache write stream error", {
           key,

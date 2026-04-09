@@ -66,10 +66,6 @@ vi.mock("@/env.js", () => ({
   },
 }));
 
-vi.mock("@/logger.js", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
-
 const mockH2Fetch = vi.fn();
 vi.mock("@/h2-fetch.js", () => ({ h2Fetch: mockH2Fetch }));
 

@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { createReadStream, mkdtempSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -188,9 +188,7 @@ function rejectImageOnlyOptions(parsed: ParsedUrl) {
   }
 }
 
-export type VideoResult =
-  | { buffer: Buffer; stream?: undefined; outputFormat: string }
-  | { stream: Readable; buffer?: undefined; outputFormat: string };
+export type VideoResult = { stream: Readable; outputFormat: string };
 
 export async function processVideo(
   sourceUrl: string,
@@ -253,15 +251,16 @@ async function processMp4(
   const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
   const outPath = join(dir, "output.mp4");
   const args = buildVideoArgs(sourceUrl, params, { outputPath: outPath });
-  const stream = runFfmpeg(args, key);
+  const ffmpeg = runFfmpeg(args, key);
   await new Promise<void>((resolve, reject) => {
-    stream.on("end", resolve);
-    stream.on("error", reject);
-    stream.resume();
+    ffmpeg.on("end", resolve);
+    ffmpeg.on("error", reject);
+    ffmpeg.resume();
   });
-  const buffer = await readFile(outPath);
-  await rm(dir, { recursive: true, force: true });
-  return { buffer, outputFormat } as const;
+  const stream = createReadStream(outPath);
+  stream.on("error", () => rm(dir, { recursive: true, force: true }));
+  stream.on("close", () => rm(dir, { recursive: true, force: true }));
+  return { stream, outputFormat } as const;
 }
 
 /** Encode a buffer into a specific format with optional quality using sharp. */
@@ -929,7 +928,7 @@ function runFfmpeg(args: string[], key?: string): Readable {
     const text = chunk.toString();
     stderr += text;
     if (stderr.length > 10000) stderr = stderr.slice(-5000);
-    logger.verbose("[processor] ffmpeg stderr", { key, text });
+    logger.debug("[processor] ffmpeg stderr", { key, text });
   });
 
   proc.on("close", (code) => {
