@@ -38,6 +38,7 @@ ENV FORWARD_URL=
 ENV BEST_FORMAT_COMPLEXITY_THRESHOLD=5.5
 ENV BEST_FORMAT_MAX_RESOLUTION=0
 ENV BEST_FORMAT_BY_DEFAULT=
+ENV LOG_LEVEL=info
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
