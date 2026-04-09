@@ -267,9 +267,6 @@ export async function createCacheProxyApp() {
     const contentType =
       upstream.headers.get("content-type") ?? "application/octet-stream";
     const source = upstream.body;
-    const cacheStream = cacheBucket
-      .file(key)
-      .createWriteStream({ contentType, resumable: false });
 
     const responseHeaders: [string, string][] = [];
     for (const [h, v] of upstream.headers) {
@@ -277,9 +274,37 @@ export async function createCacheProxyApp() {
     }
     const stream = new InflightStream(source, responseHeaders, upstream.status);
     resolveStream(stream);
-    cacheStream.on("finish", resolveCacheWrite);
-    cacheStream.on("error", rejectCacheWrite);
-    source.pipe(cacheStream);
+
+    let cacheWriteStarted = false;
+    source.once("data", () => {
+      cacheWriteStarted = true;
+      const cacheStream = cacheBucket
+        .file(key)
+        .createWriteStream({ contentType, resumable: false });
+      cacheStream.on("finish", resolveCacheWrite);
+      cacheStream.on("error", rejectCacheWrite);
+      stream.subscribe().pipe(cacheStream);
+    });
+    source.once("end", () => {
+      if (!cacheWriteStarted) {
+        logger.error(
+          "[cache-proxy] source ended without data, skipping cache write",
+          { key },
+        );
+        rejectCacheWrite(new Error("Source ended without data"));
+      }
+    });
+    source.once("error", (cause) => {
+      if (!cacheWriteStarted) {
+        logger.error("[cache-proxy] source errored before data", {
+          key,
+          error: cause instanceof Error ? cause.message : String(cause),
+        });
+        rejectCacheWrite(
+          new Error("Source stream errored before data", { cause }),
+        );
+      }
+    });
 
     return reply.send(stream.subscribe());
   });
