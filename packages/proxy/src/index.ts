@@ -410,19 +410,8 @@ async function processAndRespond(
       reply.header("Content-Type", contentType);
       reply.header("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(reply, parsed, result.outputFormat);
-
-      if (result.stream) {
-        logger.verbose("[processor] send video stream", { key });
-        return reply.send(result.stream);
-      }
-
-      if (!result.buffer.length) {
-        throw new HTTPError("Video processing produced no output", {
-          code: "INTERNAL_SERVER_ERROR",
-        });
-      }
-      logger.verbose("[processor] send video buffer", { key });
-      return reply.send(result.buffer);
+      logger.verbose("[processor] send video stream", { key });
+      return reply.send(result.stream);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
       logger.error("Error processing video", {
