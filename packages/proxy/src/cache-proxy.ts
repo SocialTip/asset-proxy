@@ -54,6 +54,9 @@ class InflightStream {
       pt.end();
     } else {
       this.source.pipe(pt, { end: true });
+      this.source.on("error", (err) => {
+        if (!pt.destroyed) pt.destroy(err);
+      });
     }
     return pt;
   }
@@ -210,9 +213,9 @@ export async function createCacheProxyApp() {
 
     streamPromise.catch(() => {});
     cacheWrite
-      .catch((err) => {
+      .catch((cause) => {
         logger.warn("Failed to write to cache bucket", {
-          error: err instanceof Error ? err.message : String(err),
+          cause,
           cacheKey: key,
         });
       })
@@ -272,38 +275,40 @@ export async function createCacheProxyApp() {
     for (const [h, v] of upstream.headers) {
       if (!HOP_BY_HOP.has(h.toLowerCase())) responseHeaders.push([h, v]);
     }
+
     const stream = new InflightStream(source, responseHeaders, upstream.status);
     resolveStream(stream);
 
     let cacheWriteStarted = false;
     source.once("data", () => {
       cacheWriteStarted = true;
+      logger.info("[cache-proxy] starting cache write", { key });
       const cacheStream = cacheBucket
         .file(key)
         .createWriteStream({ contentType, resumable: false });
       cacheStream.on("finish", resolveCacheWrite);
-      cacheStream.on("error", rejectCacheWrite);
+      cacheStream.on("error", (cause) => {
+        logger.error("[cache-proxy] cache write stream error", {
+          key,
+          cause,
+        });
+        rejectCacheWrite(cause);
+      });
       stream.subscribe().pipe(cacheStream);
     });
     source.once("end", () => {
       if (!cacheWriteStarted) {
-        logger.error(
-          "[cache-proxy] source ended without data, skipping cache write",
-          { key },
-        );
+        logger.error("[cache-proxy] source ended without data", { key });
         rejectCacheWrite(new Error("Source ended without data"));
       }
     });
     source.once("error", (cause) => {
-      if (!cacheWriteStarted) {
-        logger.error("[cache-proxy] source errored before data", {
-          key,
-          error: cause instanceof Error ? cause.message : String(cause),
-        });
-        rejectCacheWrite(
-          new Error("Source stream errored before data", { cause }),
-        );
-      }
+      logger.error("[cache-proxy] source stream error", {
+        key,
+        cacheWriteStarted,
+        cause,
+      });
+      rejectCacheWrite(cause);
     });
 
     return reply.send(stream.subscribe());
