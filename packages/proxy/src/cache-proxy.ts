@@ -267,9 +267,6 @@ export async function createCacheProxyApp() {
     const contentType =
       upstream.headers.get("content-type") ?? "application/octet-stream";
     const source = upstream.body;
-    const cacheStream = cacheBucket
-      .file(key)
-      .createWriteStream({ contentType, resumable: false });
 
     const responseHeaders: [string, string][] = [];
     for (const [h, v] of upstream.headers) {
@@ -277,9 +274,24 @@ export async function createCacheProxyApp() {
     }
     const stream = new InflightStream(source, responseHeaders, upstream.status);
     resolveStream(stream);
-    cacheStream.on("finish", resolveCacheWrite);
-    cacheStream.on("error", rejectCacheWrite);
-    source.pipe(cacheStream);
+
+    let cacheWriteStarted = false;
+    source.once("data", () => {
+      cacheWriteStarted = true;
+      const cacheStream = cacheBucket
+        .file(key)
+        .createWriteStream({ contentType, resumable: false });
+      cacheStream.on("finish", resolveCacheWrite);
+      cacheStream.on("error", rejectCacheWrite);
+      stream.subscribe().pipe(cacheStream);
+    });
+    source.once("end", () => {
+      if (!cacheWriteStarted) resolveCacheWrite();
+    });
+    source.once("error", () => {
+      if (!cacheWriteStarted)
+        rejectCacheWrite(new Error("Source stream errored before data"));
+    });
 
     return reply.send(stream.subscribe());
   });
