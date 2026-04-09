@@ -46,6 +46,9 @@ class InflightStream {
 
   subscribe(): PassThrough {
     const pt = new PassThrough();
+    pt.on("error", () => {
+      // Prevent unhandled error crashing process
+    });
     if (this.error) {
       pt.destroy(this.error);
       return pt;
