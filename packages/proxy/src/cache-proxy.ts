@@ -20,12 +20,12 @@ import { tracer } from "./tracing.js";
 const env = envSwitched as CacheEnv;
 
 class InflightStream {
-  private readonly source: Readable;
   private readonly buffer: Buffer[] = [];
   private bufferBytes = 0;
   private ended = false;
   private error: Error | null = null;
   private readonly key: string;
+  private readonly subscribers: PassThrough[] = [];
   readonly responseHeaders: [string, string][];
   readonly status: number;
 
@@ -35,7 +35,6 @@ class InflightStream {
     status: number,
     key: string,
   ) {
-    this.source = source;
     this.responseHeaders = responseHeaders;
     this.status = status;
     this.key = key;
@@ -47,9 +46,17 @@ class InflightStream {
         chunkSize: chunk.length,
         bufferBytes: this.bufferBytes,
       });
+      for (const pt of this.subscribers) pt.write(chunk);
     });
     source.on("end", () => {
+      logger.debug("[cache-proxy] inflight source ended", {
+        key: this.key,
+        bufferBytes: this.bufferBytes,
+        subscribers: this.subscribers.length,
+      });
       this.ended = true;
+      for (const pt of this.subscribers) pt.end();
+      this.subscribers.length = 0;
     });
     source.on("error", (err) => {
       logger.error("[cache-proxy] inflight source error", {
@@ -57,6 +64,10 @@ class InflightStream {
         cause: err,
       });
       this.error = err;
+      for (const pt of this.subscribers) {
+        if (!pt.destroyed) pt.destroy(err);
+      }
+      this.subscribers.length = 0;
     });
   }
 
@@ -79,10 +90,7 @@ class InflightStream {
     if (this.ended) {
       pt.end();
     } else {
-      this.source.pipe(pt, { end: true });
-      this.source.on("error", (err) => {
-        if (!pt.destroyed) pt.destroy(err);
-      });
+      this.subscribers.push(pt);
     }
     return pt;
   }
