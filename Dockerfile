@@ -42,6 +42,11 @@ ENV CACHE_BUCKET=
 # When set, container will run in cache mode
 ENV FORWARD_URL=
 
+# Default quality for lossy formats (1–100). Per-request quality overrides this.
+ENV QUALITY=80
+# Format-specific default quality, e.g. "avif=63,webp=79".
+# Overrides QUALITY for the specified formats.
+ENV FORMAT_QUALITY=webp=79,avif=63,jpg=80
 # Best format selection: automatically pick the smallest encoding among
 # candidates (JPG, WebP, AVIF) based on image complexity.
 ENV BEST_FORMAT_COMPLEXITY_THRESHOLD=5.5
