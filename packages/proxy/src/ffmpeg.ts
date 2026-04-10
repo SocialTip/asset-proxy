@@ -756,7 +756,10 @@ async function generateVideoAnimation(
     // Default to animated webp
     args.push("-loop", "0");
     const webpQuality =
-      parsed.quality ?? env.FORMAT_QUALITY?.["webp"] ?? env.QUALITY;
+      parsed.formatQuality?.["webp"] ??
+      parsed.quality ??
+      env.FORMAT_QUALITY?.["webp"] ??
+      env.QUALITY;
     args.push("-quality", String(webpQuality));
     args.push("-f", "webp", "pipe:1");
   }
