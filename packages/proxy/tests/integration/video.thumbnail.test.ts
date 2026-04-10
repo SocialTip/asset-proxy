@@ -129,6 +129,20 @@ describe("video thumbnails", () => {
     }
   });
 
+  it("vts with best format selects an efficient image format", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/vts:0/w:128/f:best/plain/${VIDEO_URL}`,
+    );
+    const res = await fetch(`${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`);
+    expect(res.status).toBe(200);
+    const contentType = res.headers.get("content-type")!;
+    expect(["image/jpeg", "image/webp", "image/avif"]).toContain(contentType);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(128);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
   it("vta extendFrame pads to exact dimensions", async () => {
     const url = videoUrlWithFormat("/vta:0.2:100:3:320:180:1", "gif");
     const res = await fetch(url);
