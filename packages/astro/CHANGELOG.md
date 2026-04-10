@@ -1,3 +1,7 @@
+## 0.4.3
+
+- fix: exclude source files from published npm packages
+
 ## 0.4.2
 
 - fix: lint
