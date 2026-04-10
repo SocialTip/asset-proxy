@@ -71,6 +71,11 @@ class InflightStream {
     });
   }
 
+  release(): void {
+    this.buffer.length = 0;
+    this.bufferBytes = 0;
+  }
+
   subscribe(): PassThrough {
     logger.debug("[cache-proxy] inflight subscribe", {
       key: this.key,
@@ -255,9 +260,11 @@ export async function createCacheProxyApp() {
           cacheKey: gcsKey,
         });
       })
-      .finally(() => {
+      .finally(async () => {
         logger.info("[cache-proxy] inflight-cleanup", { key });
         inflight.delete(key);
+        const stream = await streamPromise.catch(() => null);
+        stream?.release();
       });
 
     const forwardUrl = `${env.FORWARD_URL}${request.url}`;
