@@ -130,6 +130,18 @@ describe("video thumbnails", () => {
     }
   });
 
+  it("vta with best format returns animated webp", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/vta:0.2:100:5:128:96/f:best/plain/${VIDEO_URL}`,
+    );
+    const res = await fetch(`${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/webp");
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const meta = await sharp(buffer, { animated: true }).metadata();
+    expect(meta.pages).toBeGreaterThan(1);
+  });
+
   it("vts with best format selects an efficient image format", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/vts:0/w:128/f:best/plain/${VIDEO_URL}`,

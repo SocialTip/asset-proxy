@@ -418,6 +418,7 @@ export async function processImage(
   // Video thumbnail animation: generate animated gif/webp from video frames
   if (parsed.videoThumbnailAnimation) {
     buffer = await generateVideoAnimation(ffmpegInput, effectiveParsed);
+    outputFormat = parsed.outputFormat === "gif" ? "gif" : "webp";
   } else if (!useBestFormat && parsed.outputFormat === "avif") {
     const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
     const outPath = join(dir, "output.avif");
