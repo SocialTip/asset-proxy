@@ -447,10 +447,11 @@ export async function processImage(
 
   // Best format: compare candidate formats and pick the smallest
   if (useBestFormat && !parsed.videoThumbnailAnimation) {
-    const best = await selectBestFormat(buffer, parsed.quality ?? env.QUALITY, {
-      ...env.FORMAT_QUALITY,
-      ...parsed.formatQuality,
-    });
+    const best = await selectBestFormat(
+      buffer,
+      parsed.quality ?? env.QUALITY,
+      parsed.formatQuality ?? (parsed.quality ? undefined : env.FORMAT_QUALITY),
+    );
     buffer = best.buffer;
     outputFormat = best.format;
   }
