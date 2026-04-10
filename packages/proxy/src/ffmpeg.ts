@@ -748,9 +748,7 @@ async function generateVideoAnimation(
   } else {
     // Default to animated webp
     args.push("-loop", "0");
-    if (parsed.quality !== undefined) {
-      args.push("-quality", String(parsed.quality));
-    }
+    args.push("-quality", String(parsed.quality ?? 85));
     args.push("-f", "webp", "pipe:1");
   }
 

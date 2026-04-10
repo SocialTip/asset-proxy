@@ -98,7 +98,7 @@ describe("video thumbnails", () => {
     const buffers: Record<string, Buffer> = {};
 
     for (const q of qualities) {
-      const url = videoUrlWithFormat(`/vta:0.2:100:5:128:96/q:${q}`, "webp");
+      const url = videoUrlWithFormat(`/vta:0.2:100:5/q:${q}`, "webp");
       const res = await fetch(url);
       expect(res.status).toBe(200);
       const buffer = Buffer.from(await res.arrayBuffer());
@@ -107,7 +107,7 @@ describe("video thumbnails", () => {
     }
 
     // Default quality (no q: param)
-    const defaultUrl = videoUrlWithFormat("/vta:0.2:100:5:128:96", "webp");
+    const defaultUrl = videoUrlWithFormat("/vta:0.2:100:5", "webp");
     const defaultRes = await fetch(defaultUrl);
     expect(defaultRes.status).toBe(200);
     const defaultBuffer = Buffer.from(await defaultRes.arrayBuffer());
@@ -117,7 +117,7 @@ describe("video thumbnails", () => {
     // Lower quality should produce smaller files
     expect(sizes["q10"]).toBeLessThan(sizes["q50"]);
     expect(sizes["q50"]).toBeLessThan(sizes["q100"]);
-    // Default (75) should sit between q50 and q100
+    // Default (85) should sit between q50 and q100
     expect(sizes["default"]).toBeGreaterThan(sizes["q50"]);
     expect(sizes["default"]).toBeLessThan(sizes["q100"]);
 
