@@ -1,3 +1,13 @@
+## 0.7.1
+
+- chore: bumped url-parser to 0.7.0
+- release: bump package versions
+- fix: lint
+- feat: validate that exar requires resize dimensions
+- feat: add cuvid GPU scaler using decoder-level resize
+- release: bump package versions
+- feat: return 429 with Retry-After when GPU slot cannot be acquired within 5s
+
 ## 0.7.0
 
 - fix: lint

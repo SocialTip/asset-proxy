@@ -1,3 +1,8 @@
+## 0.4.3
+
+- release: bump package versions
+- fix: lint
+
 ## 0.4.2
 
 - fix: lint
