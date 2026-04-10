@@ -39,7 +39,7 @@
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SocialTip/asset-proxy.git",
+    "url": "git+https://github.com/SocialTip/asset-proxy.git",
     "directory": "packages/astro"
   }
 }
