@@ -1,3 +1,7 @@
+## 0.7.1
+
+- fix: exclude source files from published npm packages
+
 ## 0.7.0
 
 - fix: lint
