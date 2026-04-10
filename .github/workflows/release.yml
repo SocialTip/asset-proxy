@@ -24,7 +24,6 @@ jobs:
         with:
           node-version-file: .tool-versions
           cache: pnpm
-          registry-url: "https://registry.npmjs.org"
 
       - run: pnpm install --frozen-lockfile
 
@@ -50,8 +49,6 @@ jobs:
       - run: pnpm -w run build
 
       - name: Publish to npm
-        run: |
-          unset NODE_AUTH_TOKEN
-          pnpm --filter ${{ steps.detect.outputs.package }} publish --access public --no-git-checks --provenance
+        run: pnpm --filter ${{ steps.detect.outputs.package }} publish --access public --no-git-checks --provenance
 
       - run: echo "::notice::Published ${{ steps.detect.outputs.tag }}"
