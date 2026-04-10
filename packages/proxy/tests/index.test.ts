@@ -179,6 +179,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -201,6 +203,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -223,6 +227,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -245,6 +251,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -267,6 +275,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -289,6 +299,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -311,6 +323,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -333,6 +347,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -403,6 +419,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -426,6 +444,8 @@ describe("image ffmpeg args", () => {
           "image2",
           "-c:v",
           "mjpeg",
+          "-q:v",
+          "8",
           "pipe:1",
         ]
       `);
@@ -448,6 +468,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -470,6 +492,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -506,6 +530,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -528,6 +554,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -555,6 +583,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -577,6 +607,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -599,6 +631,8 @@ describe("image ffmpeg args", () => {
         "image2",
         "-c:v",
         "mjpeg",
+        "-q:v",
+        "8",
         "pipe:1",
       ]
     `);
@@ -622,6 +656,8 @@ describe("video ffmpeg args", () => {
         "libx264",
         "-preset",
         "fast",
+        "-crf",
+        "10",
         "-c:a",
         "copy",
         "-movflags",
@@ -651,6 +687,8 @@ describe("video ffmpeg args", () => {
           "libx264",
           "-preset",
           "fast",
+          "-crf",
+          "10",
           "-c:a",
           "copy",
           "-movflags",
@@ -675,6 +713,8 @@ describe("video ffmpeg args", () => {
         "libx264",
         "-preset",
         "fast",
+        "-crf",
+        "10",
         "-c:a",
         "copy",
         "-movflags",
@@ -689,24 +729,26 @@ describe("video ffmpeg args", () => {
   it("webm output", async () => {
     expect(await videoArgs(vplain("/rs:force:480:360") + "@webm"))
       .toMatchInlineSnapshot(`
-      [
-        "-hide_banner",
-        "-y",
-        "-i",
-        "https://example.com/video.mp4",
-        "-vf",
-        "scale=480:360,crop=trunc(iw/2)*2:trunc(ih/2)*2",
-        "-c:v",
-        "libsvtav1",
-        "-preset",
-        "8",
-        "-c:a",
-        "libopus",
-        "-f",
-        "webm",
-        "pipe:1",
-      ]
-    `);
+        [
+          "-hide_banner",
+          "-y",
+          "-i",
+          "https://example.com/video.mp4",
+          "-vf",
+          "scale=480:360,crop=trunc(iw/2)*2:trunc(ih/2)*2",
+          "-c:v",
+          "libsvtav1",
+          "-preset",
+          "8",
+          "-crf",
+          "13",
+          "-c:a",
+          "libopus",
+          "-f",
+          "webm",
+          "pipe:1",
+        ]
+      `);
   });
 
   it("crop_aspect_ratio with resize", async () => {
@@ -723,6 +765,8 @@ describe("video ffmpeg args", () => {
           "libx264",
           "-preset",
           "fast",
+          "-crf",
+          "10",
           "-c:a",
           "copy",
           "-movflags",

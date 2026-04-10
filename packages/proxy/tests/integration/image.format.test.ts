@@ -354,12 +354,29 @@ describe("image quality", () => {
   });
 
   it("autoquality by size limits output", async () => {
-    const auto = await fetchImageFrom(
-      "/w:200/aq:size:3000:1:95",
-      BUTTERFLY_URL,
-    );
-    expect(auto.length).toBeLessThanOrEqual(3000);
-    expect(await toPng(auto)).toMatchImageSnapshot();
+    // No image snapshot here: the exact quality degradation to meet the size
+    // target varies across platforms (macOS vs Linux libvips), making the
+    // snapshot flaky. The size assertion is the meaningful check.
+    await expect(
+      fetchImageFrom("/w:200/aq:size:1000:1:95", BUTTERFLY_URL).then(
+        (res) => res.length,
+      ),
+    ).resolves.toBeLessThanOrEqual(1000);
+    await expect(
+      fetchImageFrom("/w:200/aq:size:2000:1:95", BUTTERFLY_URL).then(
+        (res) => res.length,
+      ),
+    ).resolves.toBeLessThanOrEqual(2000);
+    await expect(
+      fetchImageFrom("/w:200/aq:size:3000:1:95", BUTTERFLY_URL).then(
+        (res) => res.length,
+      ),
+    ).resolves.toBeLessThanOrEqual(3000);
+    await expect(
+      fetchImageFrom("/w:200/aq:size:3000:1:95", BUTTERFLY_URL).then(
+        (res) => res.length,
+      ),
+    ).resolves.toBeGreaterThan(1000);
   });
 
   it("autoquality by DSSIM adjusts quality", async () => {

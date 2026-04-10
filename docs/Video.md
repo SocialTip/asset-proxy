@@ -89,7 +89,7 @@ Anchor point for crop operations.
 
 ### Quality — `quality:<1-100>` (shorthand `q`)
 
-Output quality for lossy encoding.
+Output quality for lossy encoding. When not specified, falls back to the `FORMAT_QUALITY` and `QUALITY` environment variables (see [Configuration](Configuration.md)).
 
 ### Format Quality — `format_quality:<fmt1>:<q1>:<fmt2>:<q2>` (shorthand `fq`)
 

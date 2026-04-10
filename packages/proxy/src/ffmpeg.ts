@@ -207,7 +207,11 @@ export async function processVideo(
     flip: parsed.flip,
     framerate: parsed.framerate,
     cut: parsed.cut,
-    quality: parsed.formatQuality?.[parsed.outputFormat] ?? parsed.quality,
+    quality:
+      parsed.formatQuality?.[parsed.outputFormat] ??
+      parsed.quality ??
+      env.FORMAT_QUALITY?.[parsed.outputFormat] ??
+      env.QUALITY,
     maxBytes: parsed.maxBytes,
     mute: parsed.mute,
     outputFormat: parsed.outputFormat,
@@ -391,9 +395,12 @@ export async function processImage(
   const useBestFormat =
     parsed.bestFormat || (!parsed.bestFormat && env.BEST_FORMAT_BY_DEFAULT);
 
-  // Resolve effective quality: format-specific > global > default
+  // Resolve effective quality: per-request format > per-request global > env format > env global
   const effectiveQuality =
-    parsed.formatQuality?.[parsed.outputFormat] ?? parsed.quality;
+    parsed.formatQuality?.[parsed.outputFormat] ??
+    parsed.quality ??
+    env.FORMAT_QUALITY?.[parsed.outputFormat] ??
+    env.QUALITY;
   const effectiveParsed = { ...parsed, quality: effectiveQuality };
 
   // When best format is active, use PNG as intermediate format for ffmpeg
@@ -442,8 +449,8 @@ export async function processImage(
   if (useBestFormat && !parsed.videoThumbnailAnimation) {
     const best = await selectBestFormat(
       buffer,
-      parsed.quality,
-      parsed.formatQuality,
+      parsed.quality ?? env.QUALITY,
+      parsed.formatQuality ?? (parsed.quality ? undefined : env.FORMAT_QUALITY),
     );
     buffer = best.buffer;
     outputFormat = best.format;
@@ -748,9 +755,12 @@ async function generateVideoAnimation(
   } else {
     // Default to animated webp
     args.push("-loop", "0");
-    if (parsed.quality !== undefined) {
-      args.push("-quality", String(parsed.quality));
-    }
+    const webpQuality =
+      parsed.formatQuality?.["webp"] ??
+      parsed.quality ??
+      env.FORMAT_QUALITY?.["webp"] ??
+      env.QUALITY;
+    args.push("-quality", String(webpQuality));
     args.push("-f", "webp", "pipe:1");
   }
 
