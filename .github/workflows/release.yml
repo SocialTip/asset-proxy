@@ -11,7 +11,7 @@ on:
 jobs:
   release:
     name: "Release package: ${{ github.ref_name }}"
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
