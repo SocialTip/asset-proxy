@@ -295,12 +295,10 @@ export async function createCacheProxyApp() {
         status: upstream.status,
         body: upstream.body,
       });
-      const error = new HTTPError("Upstream request failed", {
-        code: "BAD_GATEWAY",
-      });
+      const error = new Error("Upstream returned non-OK status");
       rejectStream(error);
       rejectCacheWrite(error);
-      throw error;
+      return reply.send(upstream.body ?? undefined);
     }
 
     const contentType =
