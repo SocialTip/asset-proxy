@@ -119,6 +119,14 @@ const processingModeSchema = z
       .optional()
       .transform((v) => v === "1" || v === "true"),
 
+    /** Default quality for lossy formats (1–100). */
+    QUALITY: z.coerce.number().int().min(1).max(100).default(80),
+    /** Format-specific default quality, e.g. "avif=63,webp=79". Overrides QUALITY for the specified formats. */
+    FORMAT_QUALITY: z
+      .string()
+      .optional()
+      .transform((v) => parseFormatMap(v)),
+
     /** Autoquality method: none, dssim, or size. ML is not supported. */
     AUTOQUALITY_METHOD: z.enum(["none", "dssim", "size"]).default("none"),
     /** Autoquality target (DSSIM value for dssim, bytes for size). */
