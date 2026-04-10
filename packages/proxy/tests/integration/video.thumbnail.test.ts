@@ -92,6 +92,43 @@ describe("video thumbnails", () => {
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
 
+  it("vta webp quality affects output size", async () => {
+    const qualities = [10, 50, 100] as const;
+    const sizes: Record<string, number> = {};
+    const buffers: Record<string, Buffer> = {};
+
+    for (const q of qualities) {
+      const url = videoUrlWithFormat(`/vta:0.2:100:5:128:96/q:${q}`, "webp");
+      const res = await fetch(url);
+      expect(res.status).toBe(200);
+      const buffer = Buffer.from(await res.arrayBuffer());
+      sizes[`q${q}`] = buffer.length;
+      buffers[`q${q}`] = buffer;
+    }
+
+    // Default quality (no q: param)
+    const defaultUrl = videoUrlWithFormat("/vta:0.2:100:5:128:96", "webp");
+    const defaultRes = await fetch(defaultUrl);
+    expect(defaultRes.status).toBe(200);
+    const defaultBuffer = Buffer.from(await defaultRes.arrayBuffer());
+    sizes["default"] = defaultBuffer.length;
+    buffers["default"] = defaultBuffer;
+
+    // Lower quality should produce smaller files
+    expect(sizes["q10"]).toBeLessThan(sizes["q50"]);
+    expect(sizes["q50"]).toBeLessThan(sizes["q100"]);
+    // Default (75) should sit between q50 and q100
+    expect(sizes["default"]).toBeGreaterThan(sizes["q50"]);
+    expect(sizes["default"]).toBeLessThan(sizes["q100"]);
+
+    // Visual snapshots for each quality level
+    for (const key of ["q10", "q50", "default", "q100"]) {
+      expect(await toPng(buffers[key])).toMatchImageSnapshot({
+        customSnapshotIdentifier: `vta-webp-quality-${key}`,
+      });
+    }
+  });
+
   it("vta extendFrame pads to exact dimensions", async () => {
     const url = videoUrlWithFormat("/vta:0.2:100:3:320:180:1", "gif");
     const res = await fetch(url);
