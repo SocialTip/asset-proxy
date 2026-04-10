@@ -280,9 +280,27 @@ describe("cache proxy", () => {
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(500);
 
     const [files] = await bucket.getFiles({ prefix: urlPath.slice(1) });
+    expect(files).toHaveLength(0);
+  });
+
+  it("forwards 403 for invalid signature", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+    // Corrupt the signature (first path segment) so the processor rejects it
+    const corruptedPath = urlPath.replace(
+      /^\/[^/]+/,
+      "/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    );
+    const res = await fetch(`${CACHE_PROXY_URL}${corruptedPath}`);
+    expect(res.status).toBe(403);
+    expect(await res.text()).toBe("Invalid signature");
+
+    const [files] = await bucket.getFiles({ prefix: corruptedPath.slice(1) });
     expect(files).toHaveLength(0);
   });
 });
