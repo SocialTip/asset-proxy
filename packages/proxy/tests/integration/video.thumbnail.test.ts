@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { h2Fetch as fetch, SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 const VIDEO_URL = "http://file-server/test-video.mp4";
+const IMAGE_URL = "http://file-server/test-image-butterfly.png";
 
 async function toPng(buffer: Buffer): Promise<Buffer> {
   return sharp(buffer).png().toBuffer();
@@ -137,6 +138,19 @@ describe("video thumbnails", () => {
     expect(res.status).toBe(200);
     const contentType = res.headers.get("content-type")!;
     expect(["image/jpeg", "image/webp", "image/avif"]).toContain(contentType);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBe(128);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
+  });
+
+  it("vts works on an image source", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/vts:0/w:128/plain/${IMAGE_URL}@jpg`,
+    );
+    const res = await fetch(`${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
     const buffer = Buffer.from(await res.arrayBuffer());
     const meta = await sharp(buffer).metadata();
     expect(meta.width).toBe(128);
