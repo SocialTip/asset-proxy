@@ -21,9 +21,13 @@ FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_VERSION=24.13.0
+
+ENV LOG_LEVEL=info
+
 ENV FFMPEG_VERSION=7.0
 ENV FFMPEG_RELEASE=autobuild-2024-08-31-12-50
 ENV FFMPEG_BUILD=n7.0.2-6-g7e69129d2f
+
 # GPU is only used for video outputs (MP4/WebM). Image outputs — including
 # video thumbnails extracted with vts — are always processed on CPU.
 # Set SKIP_GPU=1 to fall back to CPU encoding for all video output.
@@ -33,12 +37,26 @@ ENV SKIP_GPU=
 ENV GPU_CONCURRENCY=1
 # Milliseconds to wait for a GPU slot before returning HTTP 429.
 ENV GPU_ACQUIRE_TIMEOUT_MS=5000
+
 ENV CACHE_BUCKET=
+# When set, container will run in cache mode
 ENV FORWARD_URL=
+
+# Best format selection: automatically pick the smallest encoding among
+# candidates (JPG, WebP, AVIF) based on image complexity.
 ENV BEST_FORMAT_COMPLEXITY_THRESHOLD=5.5
-ENV BEST_FORMAT_MAX_RESOLUTION=0
+ENV BEST_FORMAT_MAX_RESOLUTION=3
 ENV BEST_FORMAT_BY_DEFAULT=
-ENV LOG_LEVEL=info
+# Autoquality: automatically search for the lowest quality that meets a
+# visual or size target. Method can be "none", "dssim", or "size".
+ENV AUTOQUALITY_METHOD=none
+ENV AUTOQUALITY_TARGET=
+ENV AUTOQUALITY_MIN=
+ENV AUTOQUALITY_MAX=
+ENV AUTOQUALITY_ALLOWED_ERROR=
+# Format-specific autoquality bounds, e.g. "avif=60,webp=70".
+ENV AUTOQUALITY_FORMAT_MIN=
+ENV AUTOQUALITY_FORMAT_MAX=
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

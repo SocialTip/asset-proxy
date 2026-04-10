@@ -89,7 +89,7 @@ Anchor point for crop operations.
 
 ### Quality — `quality:<1-100>` (shorthand `q`)
 
-Output quality for lossy encoding.
+Output quality for lossy encoding. For animated WebP output, defaults to 85 when not specified.
 
 ### Format Quality — `format_quality:<fmt1>:<q1>:<fmt2>:<q2>` (shorthand `fq`)
 
