@@ -35,6 +35,7 @@ describe("cache proxy", () => {
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
     const responseBuffer = Buffer.from(await res.arrayBuffer());
 
     await new Promise((r) => setTimeout(r, 500));
@@ -69,6 +70,7 @@ describe("cache proxy", () => {
 
     const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res2.status).toBe(200);
+    expect(res2.headers.get("content-type")).toBe("text/plain");
     const body = await res2.text();
     expect(body).toBe("sentinel");
     expect(res2.headers.get("etag")).toBeTruthy();
@@ -85,6 +87,7 @@ describe("cache proxy", () => {
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("video/mp4");
     const responseBuffer = Buffer.from(await res.arrayBuffer());
 
     await new Promise((r) => setTimeout(r, 1000));
@@ -107,6 +110,7 @@ describe("cache proxy", () => {
     });
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
     const responseBuffer = Buffer.from(await res.arrayBuffer());
 
     await new Promise((r) => setTimeout(r, 500));
@@ -126,6 +130,7 @@ describe("cache proxy", () => {
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
     const responseBuffer = Buffer.from(await res.arrayBuffer());
 
     await new Promise((r) => setTimeout(r, 500));
@@ -146,6 +151,7 @@ describe("cache proxy", () => {
 
     const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res1.status).toBe(200);
+    expect(res1.headers.get("content-type")).toBe("image/jpeg");
     const fullBody = Buffer.from(await res1.arrayBuffer());
 
     await new Promise((r) => setTimeout(r, 500));
@@ -154,6 +160,7 @@ describe("cache proxy", () => {
       headers: { Range: "bytes=0-9" },
     });
     expect(res2.status).toBe(206);
+    expect(res2.headers.get("content-type")).toBe("image/jpeg");
     expect(res2.headers.get("content-range")).toBe(
       `bytes 0-9/${fullBody.length}`,
     );
@@ -171,6 +178,7 @@ describe("cache proxy", () => {
 
     const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res1.status).toBe(200);
+    expect(res1.headers.get("content-type")).toBe("image/jpeg");
     const fullBody = Buffer.from(await res1.arrayBuffer());
 
     await new Promise((r) => setTimeout(r, 500));
@@ -179,6 +187,7 @@ describe("cache proxy", () => {
       headers: { Range: "bytes=-5" },
     });
     expect(res2.status).toBe(206);
+    expect(res2.headers.get("content-type")).toBe("image/jpeg");
     const expectedStart = fullBody.length - 5;
     expect(res2.headers.get("content-range")).toBe(
       `bytes ${expectedStart}-${fullBody.length - 1}/${fullBody.length}`,
@@ -196,6 +205,7 @@ describe("cache proxy", () => {
 
     const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res1.status).toBe(200);
+    expect(res1.headers.get("content-type")).toBe("image/jpeg");
     const fullBody = Buffer.from(await res1.arrayBuffer());
 
     await new Promise((r) => setTimeout(r, 500));
@@ -222,6 +232,7 @@ describe("cache proxy", () => {
 
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
     expect(res.headers.get("accept-ranges")).toBe("bytes");
     expect(res.headers.get("content-length")).toBeTruthy();
   });
