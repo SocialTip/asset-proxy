@@ -748,7 +748,8 @@ async function generateVideoAnimation(
   } else {
     // Default to animated webp
     args.push("-loop", "0");
-    args.push("-quality", String(parsed.quality ?? 85));
+    // Default to 80 to align with sharp's default WebP quality
+    args.push("-quality", String(parsed.quality ?? 80));
     args.push("-f", "webp", "pipe:1");
   }
 

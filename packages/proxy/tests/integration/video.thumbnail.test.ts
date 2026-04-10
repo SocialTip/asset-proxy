@@ -117,7 +117,7 @@ describe("video thumbnails", () => {
     // Lower quality should produce smaller files
     expect(sizes["q10"]).toBeLessThan(sizes["q50"]);
     expect(sizes["q50"]).toBeLessThan(sizes["q100"]);
-    // Default (85) should sit between q50 and q100
+    // Default (80) should sit between q50 and q100
     expect(sizes["default"]).toBeGreaterThan(sizes["q50"]);
     expect(sizes["default"]).toBeLessThan(sizes["q100"]);
 
