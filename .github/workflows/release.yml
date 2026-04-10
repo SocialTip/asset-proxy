@@ -54,6 +54,6 @@ jobs:
 
       - name: Publish to npm
         working-directory: ${{ steps.detect.outputs.directory }}
-        run: npm publish --access public --provenance
+        run: npm publish --access public
 
       - run: echo "::notice::Published ${{ steps.detect.outputs.tag }}"

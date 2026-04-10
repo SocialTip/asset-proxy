@@ -16,8 +16,7 @@
   "files": [
     "dist",
     "src/Image.astro",
-    "src/Video.astro",
-    "src/get-image-url.ts"
+    "src/Video.astro"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
