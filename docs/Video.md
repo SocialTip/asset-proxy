@@ -8,12 +8,15 @@ See also: [Image Processing](Image.md), [Metadata](Metadata.md)
 
 Append a format suffix to the source URL to choose the output format:
 
-| Format | Suffix  | Notes                                                        |
-| ------ | ------- | ------------------------------------------------------------ |
-| MP4    | `@mp4`  | H.264 video, audio copied through. Default for video output. |
-| WebM   | `@webm` | AV1 video, Opus audio                                        |
+| Format | Suffix  | Notes                                                                                                                                                                                                                                                                                                    |
+| ------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MP4    | `@mp4`  | H.264 video, audio copied through. Default for video output.                                                                                                                                                                                                                                             |
+| fMP4   | `@fmp4` | Fragmented MP4 — same H.264 codecs as MP4 but streams without buffering. Requires [MSE](https://developer.mozilla.org/en-US/docs/Web/API/MediaSource) or [ManagedMediaSource](https://developer.mozilla.org/en-US/docs/Web/API/ManagedMediaSource) for playback; does not work as a plain `<video src>`. |
+| WebM   | `@webm` | AV1 video, Opus audio                                                                                                                                                                                                                                                                                    |
 
 `format:best` (or `@best`) always resolves to MP4 for video output. While WebM with AV1 offers better compression and streaming characteristics, Apple devices lack reliable WebM playback support, making MP4 with H.264 the safest choice for broad compatibility.
+
+**fMP4 vs MP4:** Regular MP4 requires the entire file to be encoded before the `moov` atom can be placed at the start (`faststart`), resulting in higher initial latency on cache misses. Fragmented MP4 streams immediately using `empty_moov` and `frag_keyframe`, avoiding the buffering step. The trade-off is that fMP4 cannot be played via a plain `<video src>` — it requires a JavaScript player using the MediaSource or ManagedMediaSource API.
 
 You can also extract a still image from a video by using an image format suffix (`@jpg`, `@png`, etc.). See [Video Thumbnail Second](#video-thumbnail-second--video_thumbnail_secondseconds-shorthand-vts) for controlling which frame is extracted.
 

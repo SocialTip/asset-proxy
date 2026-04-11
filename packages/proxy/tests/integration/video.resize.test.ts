@@ -28,6 +28,14 @@ describe("video resize", () => {
     const buffer = Buffer.from(await res.arrayBuffer());
     expect(buffer.length).toBeGreaterThan(0);
 
+    // Regular MP4 should be faststarted: moov before mdat, no moof fragments
+    const moovAt = buffer.indexOf("moov");
+    const mdatAt = buffer.indexOf("mdat");
+    expect(moovAt).toBeGreaterThan(-1);
+    expect(mdatAt).toBeGreaterThan(-1);
+    expect(moovAt).toBeLessThan(mdatAt);
+    expect(buffer.indexOf("moof")).toBe(-1);
+
     const tmp = mkdtempSync(join(tmpdir(), "asset-proxy-test-"));
     const videoPath = join(tmp, "output.mp4");
     writeFileSync(videoPath, buffer);
@@ -40,6 +48,31 @@ describe("video resize", () => {
 
     const frame = extractFrame(videoPath);
     expect(frame).toMatchImageSnapshot();
+  });
+
+  it("fmp4 streams fragmented mp4 with correct content-type", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/resize:fill:128:128/fr:15/ct:1/plain/${VIDEO_SOURCE_URL}@fmp4`,
+    );
+    const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
+    const res = await fetch(url);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("video/mp4");
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    expect(buffer.length).toBeGreaterThan(0);
+
+    // Fragmented MP4 should have moof atoms and no faststart moov-before-mdat
+    expect(buffer.indexOf("moof")).toBeGreaterThan(-1);
+
+    const tmp = mkdtempSync(join(tmpdir(), "asset-proxy-test-"));
+    const videoPath = join(tmp, "output.mp4");
+    writeFileSync(videoPath, buffer);
+
+    const meta = probeVideo(videoPath);
+    expect(meta.width).toBe(128);
+    expect(meta.height).toBe(128);
   });
 
   it("crop_aspect_ratio crops video to 1:1", async () => {

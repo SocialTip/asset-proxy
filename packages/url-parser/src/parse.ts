@@ -80,7 +80,7 @@ const zResizingAlgorithm = z.string().transform((v): ResizingAlgorithm => {
   return { mode: "cpu", algorithm: v as CpuAlgorithm };
 });
 
-const videoFormat = z.enum(["mp4", "webm"]);
+const videoFormat = z.enum(["mp4", "fmp4", "webm"]);
 const imageFormat = z.enum(["jpg", "png", "webp", "avif", "gif"]);
 const outputFormat = z.union([videoFormat, imageFormat]);
 export type VideoFormat = z.output<typeof videoFormat>;
@@ -197,7 +197,7 @@ const notImplemented = (name: string) =>
     });
   });
 
-const VIDEO_FORMATS = new Set<string>(["mp4", "webm"]);
+const VIDEO_FORMATS = new Set<string>(["mp4", "fmp4", "webm"]);
 const IMAGE_FORMATS = new Set<string>(["jpg", "png", "webp", "avif", "gif"]);
 const ALL_FORMATS = new Set<string>([...VIDEO_FORMATS, ...IMAGE_FORMATS]);
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|avif|gif|svg|bmp|tiff?)$/i;

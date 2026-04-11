@@ -751,6 +751,33 @@ describe("video ffmpeg args", () => {
       `);
   });
 
+  it("fmp4 output uses fragmented movflags", async () => {
+    expect(await videoArgs(vplain("/rs:force:480:360") + "@fmp4"))
+      .toMatchInlineSnapshot(`
+        [
+          "-hide_banner",
+          "-y",
+          "-i",
+          "https://example.com/video.mp4",
+          "-vf",
+          "scale=480:360",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "fast",
+          "-crf",
+          "10",
+          "-c:a",
+          "copy",
+          "-movflags",
+          "+frag_keyframe+empty_moov+default_base_moof",
+          "-f",
+          "mp4",
+          "pipe:1",
+        ]
+      `);
+  });
+
   it("crop_aspect_ratio with resize", async () => {
     expect(await videoArgs(vplain("/rs:force:480:360/car:16:9")))
       .toMatchInlineSnapshot(`
@@ -2023,5 +2050,92 @@ describe("best format ffmpeg args", () => {
     // When best format is active, ffmpeg should output PNG (lossless intermediate)
     expect(args).toContain("png");
     expect(args).not.toContain("mjpeg");
+  });
+});
+
+describe("video streaming behaviour", () => {
+  it("fmp4 streams data before ffmpeg completes", async () => {
+    const stdout = new Readable({ read() {} });
+    const stderr = new Readable({ read() {} });
+    const listeners = new Map<string, ((...args: never[]) => void)[]>();
+    mockSpawn.mockReturnValue({
+      stdout,
+      stderr,
+      stdin: new Readable({ read() {} }),
+      kill: vi.fn(),
+      on: vi.fn((event: string, cb: (...args: never[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, []);
+        listeners.get(event)!.push(cb);
+      }),
+      pid: 1,
+    } as never);
+
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:force:480:360/plain/${VSRC}@fmp4`,
+    );
+    const resultPromise = processVideo(parsed.sourceUrl, parsed as never, "t");
+
+    // Send first chunk
+    stdout.push(Buffer.from("first"));
+
+    const result = await resultPromise;
+    const chunks: Buffer[] = [];
+    result.stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+
+    // Wait for the first chunk to arrive
+    await new Promise<void>((r) => {
+      if (chunks.length > 0) return r();
+      result.stream.once("data", () => r());
+    });
+    expect(chunks.length).toBeGreaterThan(0);
+
+    // Now send the rest and close
+    stdout.push(Buffer.from("second"));
+    stdout.push(null);
+    stdout.on("end", () => {
+      for (const cb of listeners.get("close") ?? []) cb(0 as never);
+    });
+  });
+
+  it("mp4 buffers entire output before returning", async () => {
+    const stdout = new Readable({ read() {} });
+    const stderr = new Readable({ read() {} });
+    const listeners = new Map<string, ((...args: never[]) => void)[]>();
+    mockSpawn.mockReturnValue({
+      stdout,
+      stderr,
+      stdin: new Readable({ read() {} }),
+      kill: vi.fn(),
+      on: vi.fn((event: string, cb: (...args: never[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, []);
+        listeners.get(event)!.push(cb);
+      }),
+      pid: 1,
+    } as never);
+
+    const parsed = parseProcessingUrl(
+      `/insecure/rs:force:480:360/plain/${VSRC}@mp4`,
+    );
+    const resultPromise = processVideo(parsed.sourceUrl, parsed as never, "t");
+
+    // Send first chunk — processVideo should NOT resolve yet
+    stdout.push(Buffer.from("first"));
+
+    let resolved = false;
+    resultPromise.then(() => {
+      resolved = true;
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(resolved).toBe(false);
+
+    // Complete the stream — now processVideo should resolve
+    stdout.push(null);
+    stdout.on("end", () => {
+      for (const cb of listeners.get("close") ?? []) cb(0 as never);
+    });
+
+    const result = await resultPromise;
+    expect(result.stream).toBeTruthy();
   });
 });

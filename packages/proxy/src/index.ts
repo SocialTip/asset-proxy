@@ -40,6 +40,7 @@ const execFileAsync = promisify(execFile);
 
 const CONTENT_TYPES: Record<string, string> = {
   mp4: "video/mp4",
+  fmp4: "video/mp4",
   webm: "video/webm",
   jpg: "image/jpeg",
   png: "image/png",

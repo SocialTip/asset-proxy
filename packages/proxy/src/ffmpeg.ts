@@ -228,9 +228,9 @@ export async function processVideo(
     return await processMp4(sourceUrl, params, parsed.outputFormat, key);
   }
 
-  // WebM streams directly from ffmpeg — no moov atom concern, so we can pipe
-  // to the response immediately for lower TTFB. For GPU requests, hold a
-  // concurrency slot until the stream closes.
+  // WebM and fMP4 stream directly from ffmpeg — no moov atom concern, so we
+  // can pipe to the response immediately for lower TTFB. For GPU requests,
+  // hold a concurrency slot until the stream closes.
   if (useGpu) {
     const lock = await acquireGpuLock(key);
     const args = buildVideoArgs(sourceUrl, params);
@@ -1212,7 +1212,11 @@ export function buildVideoArgs(
     } else {
       args.push("-c:a", "copy");
     }
-    args.push("-movflags", "+faststart");
+    if (outputFormat === "fmp4") {
+      args.push("-movflags", "+frag_keyframe+empty_moov+default_base_moof");
+    } else {
+      args.push("-movflags", "+faststart");
+    }
     if (maxBytes) args.push("-fs", String(maxBytes));
     args.push("-f", "mp4", opts?.outputPath ?? "pipe:1");
   }
