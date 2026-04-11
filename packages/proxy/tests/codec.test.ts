@@ -44,7 +44,7 @@ describe("videoCodecString", () => {
           width: 128,
           height: 128,
           fps: 15,
-          sourceAudio: { codec: "opus" },
+          sourceAudio: { codec: "opus", profile: undefined },
         },
         expected: "avc1.64000a, mp4a.40.2",
       },
@@ -116,7 +116,7 @@ describe("videoCodecString", () => {
         opts: { ...defaults, width: 128, height: 128, fps: 15 },
         expected: "avc1.64000a, mp4a.40.2",
       },
-    ])("$desc → $expected", ({ opts, expected }) => {
+    ] as const)("$desc → $expected", ({ opts, expected }) => {
       expect(videoCodecString(opts)).toBe(expected);
     });
   });

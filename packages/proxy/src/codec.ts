@@ -1,10 +1,12 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+/** Information about an audio stream probed from a video */
 interface AudioProbe {
+  /** E.g. aac, opus */
   codec: string;
   /** Audio codec profile, e.g. LC, HE-ACC */
-  profile: string;
+  profile: string | undefined;
 }
 
 /** Probe the source audio codec name and profile via ffprobe. */
