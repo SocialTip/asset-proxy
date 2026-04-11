@@ -6,53 +6,49 @@ import { join } from "node:path";
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 import { AV, AVC } from "media-codecs";
-import MediaInfoFactory from "mediainfo.js";
+import MediaInfoFactory, {
+  type AudioTrack,
+  type MediaInfoResult,
+  type VideoTrack,
+} from "mediainfo.js";
 
 import { h2Fetch as fetch, SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 export const VIDEO_SOURCE_URL = "http://file-server/test-video.mp4";
+export const VIDEO_LC_SOURCE_URL = "http://file-server/test-video-lc.mp4";
 export const WEBM_SOURCE_URL = "http://file-server/test-video.webm";
 
 const avcItems = AVC.getAllItems();
 const avItems = AV.getAllItems();
 
-interface MediaInfoTrack {
-  "@type": string;
-  Format?: string;
-  Format_Profile?: string;
-  Format_Level?: string;
-  CodecID?: string;
-  BitDepth?: number;
-  [key: string]: unknown;
-}
-
 export async function probeCodecs(buf: Buffer): Promise<string[]> {
   const mi = await MediaInfoFactory();
-  const result = await mi.analyzeData(
+  const result: MediaInfoResult = await mi.analyzeData(
     () => buf.length,
     (size: number, offset: number) => new Uint8Array(buf.buffer, offset, size),
   );
   mi.close();
 
+  const tracks = result.media?.track ?? [];
   const codecs: string[] = [];
-  for (const track of (result as { media: { track: MediaInfoTrack[] } }).media
-    .track) {
+  for (const track of tracks) {
     if (track["@type"] === "Video") {
-      if (track.Format === "AVC") {
-        const name = `AVC ${track.Format_Profile} Profile Level ${track.Format_Level}`;
+      const vt = track as VideoTrack;
+      if (vt.Format === "AVC") {
+        const name = `AVC ${vt.Format_Profile} Profile Level ${vt.Format_Level}`;
         const item = avcItems.find((i) => i.name === name);
         if (item) codecs.push(item.codec);
-      } else if (track.Format === "AV1") {
-        const name = `AV1 ${track.Format_Profile} Profile Level ${track.Format_Level} Tier Main BitDepth ${track.BitDepth}`;
+      } else if (vt.Format === "AV1") {
+        const name = `AV1 ${vt.Format_Profile} Profile Level ${vt.Format_Level} Tier Main BitDepth ${vt.BitDepth}`;
         const item = avItems.find((i) => i.name === name);
         if (item) codecs.push(item.codec);
       }
     } else if (track["@type"] === "Audio") {
-      if (track.Format === "Opus") {
+      const at = track as AudioTrack;
+      if (at.Format === "Opus") {
         codecs.push("opus");
-      } else if (track.Format === "AAC") {
-        const codecId = track.CodecID as string | undefined;
-        const mp4aMatch = codecId?.match(/mp4a-\d+-\d+/);
+      } else if (at.Format === "AAC") {
+        const mp4aMatch = at.CodecID?.match(/mp4a-\d+-\d+/);
         codecs.push(
           mp4aMatch ? mp4aMatch[0].replaceAll("-", ".") : "mp4a.40.2",
         );

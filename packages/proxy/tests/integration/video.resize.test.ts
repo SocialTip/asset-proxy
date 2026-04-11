@@ -12,6 +12,7 @@ import {
   probeCodecs,
   probeVideo,
   SERVICE_URL,
+  VIDEO_LC_SOURCE_URL,
   VIDEO_SOURCE_URL,
   WEBM_SOURCE_URL,
 } from "./video-helpers.js";
@@ -100,6 +101,26 @@ describe("video resize", () => {
   it("mp4 from webm source re-encodes audio to aac", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/resize:fill:128:128/fr:15/ct:1/plain/${WEBM_SOURCE_URL}@mp4`,
+    );
+    const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
+    const res = await fetch(url);
+
+    expect(res.status).toBe(200);
+    const contentType = res.headers.get("content-type")!;
+    expect(contentType).toMatchInlineSnapshot(
+      `"video/mp4; codecs="avc1.64000a, mp4a.40.2""`,
+    );
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const actualCodecs = await probeCodecs(buffer);
+    for (const codec of parseCodecs(contentType)) {
+      expect(actualCodecs).toContain(codec);
+    }
+  });
+
+  it("mp4 from AAC-LC source has correct audio codec", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/resize:fill:128:128/fr:15/ct:1/plain/${VIDEO_LC_SOURCE_URL}@mp4`,
     );
     const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
     const res = await fetch(url);

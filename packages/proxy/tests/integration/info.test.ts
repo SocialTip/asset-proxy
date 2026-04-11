@@ -64,14 +64,14 @@ describe("info endpoint", () => {
       const body = await res.json();
       expect(body).toMatchInlineSnapshot(`
         {
-          "duration": 30.138095,
+          "duration": 5.069844,
           "format": "mov",
           "height": 640,
           "mime_type": "video/quicktime",
           "orientation": 1,
-          "size": 2931063,
+          "size": 747030,
           "video_meta": {
-            "bitrate": 705732,
+            "bitrate": 1105458,
             "codec": "h264",
             "framerate": 29.98,
           },
