@@ -1,7 +1,7 @@
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 
-import { h2Fetch as fetch, URL_CONFIG } from "./setup.js";
+import { CACHE_PROXY_URL, h2Fetch as fetch, URL_CONFIG } from "./setup.js";
 import { SERVICE_URL, VIDEO_SOURCE_URL } from "./video-helpers.js";
 
 const JAEGER_URL = process.env.JAEGER_URL ?? "http://localhost:16686";
@@ -95,5 +95,39 @@ describe("otel configuration", () => {
     // Sentry constructs the description as "{method} {http.route}" when http.route is present
     expect(attrs["http.request.method"]).toBe("GET");
     expect(attrs["http.route"]).toBe("/:signature/*");
+  });
+
+  it("cache.serveFromCache span has cache key as Sentry description", async () => {
+    const testStart = Date.now() * 1000;
+
+    const parsed = parseProcessingUrl(
+      `/insecure/w:128/plain/http://file-server/test-image.png@jpg`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    // First request (cache miss) populates the cache
+    const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res1.status).toBe(200);
+    await res1.arrayBuffer();
+
+    // Second request (cache hit) triggers serveFromCache
+    const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res2.status).toBe(200);
+    await res2.arrayBuffer();
+
+    const cacheSpan = await vi.waitFor(async () => {
+      const spans = allSpans(await getTraces("cache-proxy", testStart));
+      const span = spans.find(
+        (s) => s.operationName === "cache.serveFromCache",
+      );
+      expect(span).toBeDefined();
+      return span!;
+    });
+
+    expect(cacheSpan.operationName).toBe("cache.serveFromCache");
+    const attrs = spanAttrs(cacheSpan);
+    expect(attrs["sentry.custom_span_name"]).toMatchInlineSnapshot(
+      `"gBhXjyg-Ny3we6cqSRSatA2W_V37gXeWZU5hZmcEhaw/f:jpg/rs:fit:128:0/enc/NzMyYzQzZGJhYjk5ZDBlZtBKi-Id0FYxlGQ7-9wXDkM3s2zCBr3Da1CfeTUcMhYe03RhgH0EO99c6crVLSXM_A"`,
+    );
   });
 });
