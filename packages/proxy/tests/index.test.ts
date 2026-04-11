@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createCipheriv, randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
 
@@ -6,7 +6,29 @@ import { request } from "./setup.js";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
-  execFile: vi.fn(),
+  execFile: vi.fn(
+    (
+      _cmd: string,
+      _args: string[],
+      cb: (err: null, result: { stdout: string; stderr: string }) => void,
+    ) => {
+      cb(null, {
+        stdout: JSON.stringify({
+          streams: [
+            {
+              codec_type: "video",
+              codec_name: "h264",
+              width: 1920,
+              height: 1080,
+              r_frame_rate: "30/1",
+            },
+            { codec_type: "audio", codec_name: "aac", profile: "LC" },
+          ],
+        }),
+        stderr: "",
+      });
+    },
+  ),
 }));
 vi.mock("@google-cloud/storage", () => {
   return {
@@ -21,6 +43,7 @@ vi.mock("@google-cloud/storage", () => {
 });
 
 const mockSpawn = vi.mocked(spawn);
+const mockExecFile = vi.mocked(execFile);
 
 function setupSpawnMock() {
   const stdout = new Readable({ read() {} });
@@ -115,6 +138,7 @@ const vplain = (opts: string) => `${opts}/plain/${VSRC}`;
 
 beforeEach(() => {
   mockSpawn.mockReset();
+  mockExecFile.mockClear();
 });
 
 describe("error handling", () => {
@@ -825,6 +849,31 @@ describe("video ffmpeg args", () => {
     expect(args).toContain("-an");
     expect(args).not.toContain("-c:a");
   });
+
+  it("probes source via ffprobe", async () => {
+    await videoArgs(vplain("/rs:force:480:360"));
+    expect(mockExecFile.mock.calls).toHaveLength(1);
+    expect(mockExecFile.mock.calls[0]).toMatchInlineSnapshot(`
+      [
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-show_entries",
+          "stream=codec_type,codec_name,profile,width,height,r_frame_rate",
+          "-of",
+          "json",
+          "https://example.com/video.mp4",
+        ],
+        [Function],
+      ]
+    `);
+  });
+
+  it("probes source even when muted (needs dimensions)", async () => {
+    await videoArgs(vplain("/rs:force:480:360/mu:1"));
+    expect(mockExecFile.mock.calls).toHaveLength(1);
+  });
 });
 
 describe("video ffmpeg args (GPU)", () => {
@@ -839,6 +888,7 @@ describe("video ffmpeg args (GPU)", () => {
     quality?: number;
     mute?: boolean;
     outputFormat?: string;
+    sourceAudioCodec?: string;
   }): string[] {
     return buildVideoArgs("https://example.com/video.mp4", {
       resizingType: (opts.resizingType ?? "force") as never,
@@ -852,6 +902,7 @@ describe("video ffmpeg args (GPU)", () => {
       mute: opts.mute,
       outputFormat: (opts.outputFormat ?? "mp4") as never,
       gpu: true,
+      sourceAudioCodec: opts.sourceAudioCodec ?? "aac",
     });
   }
 

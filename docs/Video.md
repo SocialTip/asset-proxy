@@ -18,6 +18,8 @@ Append a format suffix to the source URL to choose the output format:
 
 **fMP4 vs MP4:** Regular MP4 requires the entire file to be encoded before the `moov` atom can be placed at the start (`faststart`), resulting in higher initial latency on cache misses. Fragmented MP4 streams immediately using `empty_moov` and `frag_keyframe`, avoiding the buffering step. The trade-off is that fMP4 cannot be played via a plain `<video src>` — it requires a JavaScript player using the MediaSource or ManagedMediaSource API.
 
+**Codec signalling:** Video responses include the codec string in the `Content-Type` header per [RFC 6381](https://www.rfc-editor.org/rfc/rfc6381), e.g. `video/mp4; codecs="avc1.640028, mp4a.40.2"`. This allows MSE players to configure the source buffer without hardcoding codec assumptions. Audio is always AAC for MP4/fMP4 (passthrough if the source is AAC, re-encoded otherwise) and Opus for WebM.
+
 You can also extract a still image from a video by using an image format suffix (`@jpg`, `@png`, etc.). See [Video Thumbnail Second](#video-thumbnail-second--video_thumbnail_secondseconds-shorthand-vts) for controlling which frame is extracted.
 
 **Examples:**

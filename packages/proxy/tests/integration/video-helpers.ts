@@ -5,10 +5,61 @@ import { join } from "node:path";
 
 import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
+import { AV, AVC } from "media-codecs";
+import MediaInfoFactory, {
+  type AudioTrack,
+  type MediaInfoResult,
+  type VideoTrack,
+} from "mediainfo.js";
 
 import { h2Fetch as fetch, SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 export const VIDEO_SOURCE_URL = "http://file-server/test-video.mp4";
+export const VIDEO_LC_SOURCE_URL = "http://file-server/test-video-lc.mp4";
+export const VIDEO_NOAUDIO_SOURCE_URL =
+  "http://file-server/test-video-noaudio.mp4";
+export const WEBM_SOURCE_URL = "http://file-server/test-video.webm";
+
+const avcItems = AVC.getAllItems();
+const avItems = AV.getAllItems();
+
+export async function probeCodecs(buf: Buffer): Promise<string[]> {
+  const mi = await MediaInfoFactory();
+  const result: MediaInfoResult = await mi.analyzeData(
+    () => buf.length,
+    (size: number, offset: number) => new Uint8Array(buf.buffer, offset, size),
+  );
+  mi.close();
+
+  const tracks = result.media?.track ?? [];
+  const codecs: string[] = [];
+  for (const track of tracks) {
+    if (track["@type"] === "Video") {
+      const vt = track as VideoTrack;
+      if (vt.Format === "AVC") {
+        const name = `AVC ${vt.Format_Profile} Profile Level ${vt.Format_Level}`;
+        const item = avcItems.find((i) => i.name === name);
+        if (item) codecs.push(item.codec);
+      } else if (vt.Format === "AV1") {
+        const name = `AV1 ${vt.Format_Profile} Profile Level ${vt.Format_Level} Tier Main BitDepth ${vt.BitDepth}`;
+        const item = avItems.find((i) => i.name === name);
+        if (item) codecs.push(item.codec);
+      }
+    } else if (track["@type"] === "Audio") {
+      const at = track as AudioTrack;
+      if (at.Format === "Opus") {
+        codecs.push("opus");
+      } else if (at.Format === "AAC") {
+        const mp4aMatch = at.CodecID?.match(/mp4a-\d+-\d+/);
+        codecs.push(
+          mp4aMatch ? mp4aMatch[0].replaceAll("-", ".") : "mp4a.40.2",
+        );
+      }
+    }
+  }
+
+  return codecs;
+}
 
 export interface VideoMeta {
   width: number;

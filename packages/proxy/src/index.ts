@@ -407,7 +407,10 @@ async function processAndRespond(
         processVideo(sourceUrl, parsed, key),
       );
 
-      const contentType = CONTENT_TYPES[result.outputFormat] || "video/mp4";
+      const baseType = CONTENT_TYPES[result.outputFormat] || "video/mp4";
+      const contentType = result.codecs
+        ? `${baseType}; codecs="${result.codecs}"`
+        : baseType;
       reply.header("Content-Type", contentType);
       reply.header("Cache-Control", env.CACHE_CONTROL);
       setContentDisposition(reply, parsed, result.outputFormat);

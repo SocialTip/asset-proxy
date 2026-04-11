@@ -9,7 +9,29 @@ const encodeProcs: Array<{
 let spawnCallIndex = 0;
 
 vi.mock("node:child_process", () => ({
-  execFile: vi.fn(),
+  execFile: vi.fn(
+    (
+      _cmd: string,
+      _args: string[],
+      cb: (err: null, result: { stdout: string; stderr: string }) => void,
+    ) => {
+      cb(null, {
+        stdout: JSON.stringify({
+          streams: [
+            {
+              codec_type: "video",
+              codec_name: "h264",
+              width: 1920,
+              height: 1080,
+              r_frame_rate: "30/1",
+            },
+            { codec_type: "audio", codec_name: "aac", profile: "LC" },
+          ],
+        }),
+        stderr: "",
+      });
+    },
+  ),
   spawn: vi.fn(() => {
     spawnCallIndex++;
     const stdout = new Readable({ read() {} });
