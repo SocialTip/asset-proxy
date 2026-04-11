@@ -5,7 +5,6 @@
 
 ## Documentation
 
-- Do not ever add newlines in comments, except for starting a new paragraph.
 - **JSDoc:** Write JSDoc as sentences, separated by paragraphs where appropriate. NEVER insert newlines into sentences for formatting purposes.
   - Bad:
 
