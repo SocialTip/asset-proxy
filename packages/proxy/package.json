@@ -38,6 +38,8 @@
     "@types/node": "^25.5.0",
     "@types/range-parser": "^1.2.7",
     "jest-image-snapshot": "^6.5.2",
+    "media-codecs": "^2.0.2",
+    "mediainfo.js": "^0.3.7",
     "sharp": "^0.34.5",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

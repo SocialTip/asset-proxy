@@ -12,7 +12,12 @@ vi.mock("node:child_process", () => ({
       _args: string[],
       cb: (err: null, result: { stdout: string; stderr: string }) => void,
     ) => {
-      cb(null, { stdout: "aac\n", stderr: "" });
+      cb(null, {
+        stdout: JSON.stringify({
+          streams: [{ codec_name: "aac", profile: "LC" }],
+        }),
+        stderr: "",
+      });
     },
   ),
 }));

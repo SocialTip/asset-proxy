@@ -64,18 +64,18 @@ describe("info endpoint", () => {
       const body = await res.json();
       expect(body).toMatchInlineSnapshot(`
         {
-          "duration": 0.9,
+          "duration": 30.138095,
           "format": "mov",
-          "height": 852,
+          "height": 640,
           "mime_type": "video/quicktime",
           "orientation": 1,
-          "size": 137586,
+          "size": 2931063,
           "video_meta": {
-            "bitrate": 1213324,
+            "bitrate": 705732,
             "codec": "h264",
-            "framerate": 30,
+            "framerate": 29.98,
           },
-          "width": 480,
+          "width": 360,
         }
       `);
     });
