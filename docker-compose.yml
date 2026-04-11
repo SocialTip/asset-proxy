@@ -12,6 +12,9 @@ services:
       - ALLOWED_ORIGINS=http://file-server
       - BEST_FORMAT_MAX_RESOLUTION=0.005
       - STORAGE_EMULATOR_HOST=http://fake-gcs:4443
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_BSP_SCHEDULE_DELAY=100
     ports:
       - "8080:8080"
       - "8082:8082"
@@ -29,13 +32,14 @@ services:
       - -c
       - |
         if [ -n "$$NODE_V8_COVERAGE" ]; then
-          cd packages/proxy && exec node --conditions source --import tsx src/index.ts
+          cd packages/proxy && exec node --conditions source --import tsx --import ./src/instrument.ts src/index.ts
         else
-          exec pnpm --filter proxy exec tsx --watch src/index.ts
+          cd packages/proxy && exec pnpm exec tsx --watch --import ./src/instrument.ts src/index.ts
         fi
     depends_on:
       - file-server
       - fake-gcs
+      - jaeger
 
   cache-proxy:
     build: .
@@ -78,6 +82,12 @@ services:
       - ./packages/proxy/tests/fixtures/fake-gcs:/data:ro
     ports:
       - "4443:4443"
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+      - "4318:4318"
 
   file-server:
     image: nginx:alpine
