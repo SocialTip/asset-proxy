@@ -1,10 +1,11 @@
 import assert from "node:assert";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createReadStream, mkdtempSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, type Readable } from "node:stream";
+import { promisify } from "node:util";
 
 import sharp from "sharp";
 
@@ -25,6 +26,7 @@ import {
   type VideoUrl,
 } from "@socialtip/asset-proxy-url-parser";
 
+import { type AudioProbe, videoCodecString } from "./codec.js";
 import { logger } from "./logger.js";
 import { recordException, tracer } from "./tracing.js";
 
@@ -188,7 +190,33 @@ function rejectImageOnlyOptions(parsed: ParsedUrl) {
   }
 }
 
-export type VideoResult = { stream: Readable; outputFormat: string };
+export type VideoResult = {
+  stream: Readable;
+  outputFormat: string;
+  codecs?: string;
+};
+
+async function probeAudio(sourceUrl: string): Promise<AudioProbe | undefined> {
+  try {
+    const { stdout } = await promisify(execFile)("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "a:0",
+      "-show_entries",
+      "stream=codec_name,profile",
+      "-of",
+      "json",
+      sourceUrl,
+    ]);
+    const parsed = JSON.parse(stdout);
+    const stream = parsed.streams?.[0];
+    if (!stream?.codec_name) return undefined;
+    return { codec: stream.codec_name, profile: stream.profile };
+  } catch {
+    return undefined;
+  }
+}
 
 export async function processVideo(
   sourceUrl: string,
@@ -197,7 +225,10 @@ export async function processVideo(
 ): Promise<VideoResult> {
   rejectImageOnlyOptions(parsed);
 
-  const useGpu = await gpuReady;
+  const [useGpu, sourceAudio] = await Promise.all([
+    gpuReady,
+    parsed.mute ? undefined : probeAudio(sourceUrl),
+  ]);
   const params = {
     resizingType: parsed.resize?.type,
     resizingAlgorithm: parsed.resizingAlgorithm,
@@ -216,16 +247,38 @@ export async function processVideo(
     mute: parsed.mute,
     outputFormat: parsed.outputFormat,
     gpu: useGpu,
+    sourceAudioCodec: sourceAudio?.codec,
   };
+
+  const codecs = videoCodecString({
+    outputFormat: parsed.outputFormat,
+    mute: parsed.mute,
+    width: parsed.resize?.width,
+    height: parsed.resize?.height,
+    fps: parsed.framerate,
+    sourceAudio,
+  });
 
   if (parsed.outputFormat === "mp4") {
     if (useGpu) {
       using _lock = await acquireGpuLock(key);
       logger.verbose("[processor] processMp4", { key, gpu: true });
-      return await processMp4(sourceUrl, params, parsed.outputFormat, key);
+      const result = await processMp4(
+        sourceUrl,
+        params,
+        parsed.outputFormat,
+        key,
+      );
+      return { ...result, codecs };
     }
     logger.verbose("[processor] processMp4", { key, gpu: false });
-    return await processMp4(sourceUrl, params, parsed.outputFormat, key);
+    const result = await processMp4(
+      sourceUrl,
+      params,
+      parsed.outputFormat,
+      key,
+    );
+    return { ...result, codecs };
   }
 
   // WebM and fMP4 stream directly from ffmpeg — no moov atom concern, so we
@@ -236,11 +289,15 @@ export async function processVideo(
     const args = buildVideoArgs(sourceUrl, params);
     const stream = runFfmpeg(args, key);
     stream.on("close", () => lock[Symbol.dispose]());
-    return { stream, outputFormat: parsed.outputFormat };
+    return { stream, outputFormat: parsed.outputFormat, codecs };
   }
 
   const args = buildVideoArgs(sourceUrl, params);
-  return { stream: runFfmpeg(args, key), outputFormat: parsed.outputFormat };
+  return {
+    stream: runFfmpeg(args, key),
+    outputFormat: parsed.outputFormat,
+    codecs,
+  };
 }
 
 async function processMp4(
@@ -1046,6 +1103,7 @@ export interface VideoParams {
   mute?: boolean;
   outputFormat: OutputFormat;
   gpu: boolean;
+  sourceAudioCodec?: string;
 }
 
 /** @internal Exported for testing only. */
@@ -1209,8 +1267,10 @@ export function buildVideoArgs(
     }
     if (params.mute) {
       args.push("-an");
-    } else {
+    } else if (params.sourceAudioCodec === "aac") {
       args.push("-c:a", "copy");
+    } else {
+      args.push("-c:a", "aac");
     }
     if (outputFormat === "fmp4") {
       args.push("-movflags", "+frag_keyframe+empty_moov+default_base_moof");
