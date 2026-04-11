@@ -63,6 +63,11 @@ describe("videoCodecString", () => {
         expected: "avc1.64000a",
       },
       {
+        desc: "128x128 @ 15fps no source audio omits audio codec",
+        o: opts({ width: 128, height: 128, fps: 15 }),
+        expected: "avc1.64000a",
+      },
+      {
         desc: "480x360 @ 30fps (level 3.0)",
         o: opts({
           width: 480,
@@ -147,6 +152,11 @@ describe("videoCodecString", () => {
           fps: 15,
           mute: true,
         }),
+        expected: "av01.0.00M.08",
+      },
+      {
+        desc: "128x128 @ 15fps no source audio omits audio codec",
+        o: opts({ outputFormat: "webm", width: 128, height: 128, fps: 15 }),
         expected: "av01.0.00M.08",
       },
       {

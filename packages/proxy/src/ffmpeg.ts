@@ -1220,7 +1220,7 @@ export function buildVideoArgs(
         args.push("-crf", String(Math.round(63 - (quality / 100) * 63)));
       }
     }
-    if (params.mute) {
+    if (params.mute || !params.sourceAudioCodec) {
       args.push("-an");
     } else {
       args.push("-c:a", "libopus");
@@ -1241,7 +1241,7 @@ export function buildVideoArgs(
         args.push("-crf", String(Math.round(51 - (quality / 100) * 51)));
       }
     }
-    if (params.mute) {
+    if (params.mute || !params.sourceAudioCodec) {
       args.push("-an");
     } else if (params.sourceAudioCodec === "aac") {
       args.push("-c:a", "copy");

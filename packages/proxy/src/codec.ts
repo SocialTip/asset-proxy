@@ -134,9 +134,9 @@ export type VideoCodecStringOptions = Pick<
 /**
  * Build an RFC 6381 codec string for a video output based on the output format, dimensions, framerate, and source audio codec.
  *
- * For MP4/fMP4, produces H.264 High profile with a level computed from the output dimensions and framerate, plus an AAC audio codec (passthrough profile if source is AAC, otherwise AAC-LC from re-encoding).
+ * For MP4/fMP4, produces H.264 High profile with a level computed from the output dimensions and framerate. If the source has audio, appends an AAC codec (passthrough profile if source is AAC, otherwise AAC-LC from re-encoding).
  *
- * For WebM, produces AV1 Main profile with a computed level, plus Opus audio.
+ * For WebM, produces AV1 Main profile with a computed level. Appends Opus audio if the source has an audio track.
  *
  * Returns undefined for unrecognised output formats.
  */
@@ -147,18 +147,17 @@ export function videoCodecString(
   const width = opts.resize?.width ?? 1920;
   const height = opts.resize?.height ?? 1080;
   const fps = opts.framerate ?? 30;
+  const hasAudio = !mute && sourceAudio !== undefined;
+
   if (outputFormat === "fmp4" || outputFormat === "mp4") {
     const video = h264CodecString(width, height, fps);
-    const isPassthrough = sourceAudio?.codec === "aac";
-    const audio = mute
-      ? undefined
-      : aacCodecString(sourceAudio?.profile, isPassthrough);
-    return audio ? `${video}, ${audio}` : video;
+    if (!hasAudio) return video;
+    const isPassthrough = sourceAudio.codec === "aac";
+    return `${video}, ${aacCodecString(sourceAudio.profile, isPassthrough)}`;
   }
   if (outputFormat === "webm") {
     const video = av1CodecString(width, height, fps);
-    const audio = mute ? undefined : "opus";
-    return audio ? `${video}, ${audio}` : video;
+    return hasAudio ? `${video}, opus` : video;
   }
   return undefined;
 }

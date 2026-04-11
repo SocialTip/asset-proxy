@@ -16,6 +16,8 @@ import { h2Fetch as fetch, SERVICE_URL, URL_CONFIG } from "./setup.js";
 
 export const VIDEO_SOURCE_URL = "http://file-server/test-video.mp4";
 export const VIDEO_LC_SOURCE_URL = "http://file-server/test-video-lc.mp4";
+export const VIDEO_NOAUDIO_SOURCE_URL =
+  "http://file-server/test-video-noaudio.mp4";
 export const WEBM_SOURCE_URL = "http://file-server/test-video.webm";
 
 const avcItems = AVC.getAllItems();
