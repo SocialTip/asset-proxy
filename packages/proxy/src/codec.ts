@@ -1,3 +1,31 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+/** Probe the source audio codec name and profile via ffprobe. */
+export async function probeAudio(
+  sourceUrl: string,
+): Promise<AudioProbe | undefined> {
+  try {
+    const { stdout } = await promisify(execFile)("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "a:0",
+      "-show_entries",
+      "stream=codec_name,profile",
+      "-of",
+      "json",
+      sourceUrl,
+    ]);
+    const parsed = JSON.parse(stdout);
+    const stream = parsed.streams?.[0];
+    if (!stream?.codec_name) return undefined;
+    return { codec: stream.codec_name, profile: stream.profile };
+  } catch {
+    return undefined;
+  }
+}
+
 // H.264 levels: [max_macroblocks_per_second, max_frame_macroblocks, level_idc]
 // Source: https://github.com/FFmpeg/FFmpeg/blob/master/libavcodec/h264_levels.c
 const H264_LEVELS: [number, number, number][] = [

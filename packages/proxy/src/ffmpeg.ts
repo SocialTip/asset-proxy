@@ -1,11 +1,10 @@
 import assert from "node:assert";
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createReadStream, mkdtempSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, type Readable } from "node:stream";
-import { promisify } from "node:util";
 
 import sharp from "sharp";
 
@@ -26,7 +25,7 @@ import {
   type VideoUrl,
 } from "@socialtip/asset-proxy-url-parser";
 
-import { type AudioProbe, videoCodecString } from "./codec.js";
+import { probeAudio, videoCodecString } from "./codec.js";
 import { logger } from "./logger.js";
 import { recordException, tracer } from "./tracing.js";
 
@@ -195,28 +194,6 @@ export type VideoResult = {
   outputFormat: string;
   codecs?: string;
 };
-
-async function probeAudio(sourceUrl: string): Promise<AudioProbe | undefined> {
-  try {
-    const { stdout } = await promisify(execFile)("ffprobe", [
-      "-v",
-      "error",
-      "-select_streams",
-      "a:0",
-      "-show_entries",
-      "stream=codec_name,profile",
-      "-of",
-      "json",
-      sourceUrl,
-    ]);
-    const parsed = JSON.parse(stdout);
-    const stream = parsed.streams?.[0];
-    if (!stream?.codec_name) return undefined;
-    return { codec: stream.codec_name, profile: stream.profile };
-  } catch {
-    return undefined;
-  }
-}
 
 export async function processVideo(
   sourceUrl: string,
