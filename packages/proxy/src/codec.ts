@@ -3,6 +3,9 @@ import { promisify } from "node:util";
 
 import { z } from "zod/v4";
 
+import { logger } from "./logger.js";
+import { recordException, tracer } from "./tracing.js";
+
 /** Information about an audio stream probed from a video. */
 interface AudioProbe {
   /** E.g. aac, opus */
@@ -43,6 +46,7 @@ const ffprobeResultSchema = z
 
 /** Probe source video dimensions, framerate, and audio codec via ffprobe. */
 export async function probeSource(sourceUrl: string): Promise<SourceProbe> {
+  const span = tracer.startSpan("exec.ffprobe.source");
   try {
     const { stdout } = await promisify(execFile)("ffprobe", [
       "-v",
@@ -68,9 +72,23 @@ export async function probeSource(sourceUrl: string): Promise<SourceProbe> {
       ? { codec: audioStream.codec_name, profile: audioStream.profile }
       : undefined;
 
-    return { audio, width, height, fps };
-  } catch {
+    const result = { audio, width, height, fps };
+    span.setAttributes({
+      "probe.width": width,
+      "probe.height": height,
+      "probe.fps": fps,
+      "probe.audio_codec": audio?.codec ?? "none",
+    });
+    return result;
+  } catch (err) {
+    recordException(span, err);
+    logger.error("[codec] probeSource failed, using defaults", {
+      sourceUrl,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return { audio: undefined, width: 1920, height: 1080, fps: 30 };
+  } finally {
+    span.end();
   }
 }
 
