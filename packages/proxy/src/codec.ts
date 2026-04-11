@@ -1,6 +1,12 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+interface AudioProbe {
+  codec: string;
+  /** Audio codec profile, e.g. LC, HE-ACC */
+  profile: string;
+}
+
 /** Probe the source audio codec name and profile via ffprobe. */
 export async function probeAudio(
   sourceUrl: string,
@@ -113,11 +119,6 @@ function aacCodecString(
   }
   // When re-encoding with -c:a aac, ffmpeg defaults to AAC-LC
   return "mp4a.40.2";
-}
-
-export interface AudioProbe {
-  codec: string;
-  profile?: string;
 }
 
 export interface VideoCodecStringOptions {
