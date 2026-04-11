@@ -17,7 +17,9 @@ process.env.OTEL_RESOURCE_ATTRIBUTES = existing
   ? `${existing},${envAttr}`
   : envAttr;
 
-export const fastifyOtelInstrumentation = new FastifyOtelInstrumentation();
+export const fastifyOtelInstrumentation = new FastifyOtelInstrumentation({
+  ignorePaths: "/health",
+});
 
 const sdk = new NodeSDK({
   traceExporter: new OTLPTraceExporter(),
@@ -34,6 +36,9 @@ const sdk = new NodeSDK({
   instrumentations: [
     getNodeAutoInstrumentations({
       "@opentelemetry/instrumentation-fastify": { enabled: false },
+      "@opentelemetry/instrumentation-http": {
+        ignoreIncomingRequestHook: (req) => req.url === "/health",
+      },
     }),
     fastifyOtelInstrumentation,
   ],
