@@ -19,6 +19,13 @@ process.env.OTEL_RESOURCE_ATTRIBUTES = existing
 
 export const fastifyOtelInstrumentation = new FastifyOtelInstrumentation({
   ignorePaths: "/health",
+  requestHook: (span) => {
+    // @fastify/otel emits spans with kind=INTERNAL. Sentry only infers
+    // descriptions from HTTP attributes (http.route, url.path) for spans
+    // with origin starting with "auto". Without this, the description
+    // stays as the raw span name ("request").
+    span.setAttribute("sentry.origin", "auto.http.otel.fastify");
+  },
 });
 
 const sdk = new NodeSDK({
