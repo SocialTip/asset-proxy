@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+import { z } from "zod/v4";
+
 /** Information about an audio stream probed from a video. */
 interface AudioProbe {
   /** E.g. aac, opus */
@@ -17,6 +19,28 @@ export interface SourceProbe {
   fps: number;
 }
 
+const ffprobeStreamSchema = z
+  .object({
+    codec_type: z.string(),
+    codec_name: z.string().optional(),
+    profile: z.string().optional(),
+    width: z.number().optional(),
+    height: z.number().optional(),
+    r_frame_rate: z
+      .string()
+      .transform((v) =>
+        /^\d+\/\d+$/.test(v) ? (v as `${number}/${number}`) : undefined,
+      )
+      .optional(),
+  })
+  .passthrough();
+
+const ffprobeResultSchema = z
+  .object({
+    streams: z.array(ffprobeStreamSchema).default([]),
+  })
+  .passthrough();
+
 /** Probe source video dimensions, framerate, and audio codec via ffprobe. */
 export async function probeSource(sourceUrl: string): Promise<SourceProbe> {
   try {
@@ -29,22 +53,19 @@ export async function probeSource(sourceUrl: string): Promise<SourceProbe> {
       "json",
       sourceUrl,
     ]);
-    const parsed = JSON.parse(stdout);
-    const streams: Array<Record<string, unknown>> = parsed.streams ?? [];
+    const { streams } = ffprobeResultSchema.parse(JSON.parse(stdout));
     const videoStream = streams.find((s) => s.codec_type === "video");
     const audioStream = streams.find((s) => s.codec_type === "audio");
 
-    const width = (videoStream?.width as number) || 1920;
-    const height = (videoStream?.height as number) || 1080;
-    const rFrameRate = (videoStream?.r_frame_rate as string) ?? "30/1";
-    const [num, den] = rFrameRate.split("/").map(Number);
-    const fps = den ? num / den : 30;
+    const width = videoStream?.width || 1920;
+    const height = videoStream?.height || 1080;
+    const fps = videoStream?.r_frame_rate
+      ? Number(videoStream.r_frame_rate.split("/")[0]) /
+        Number(videoStream.r_frame_rate.split("/")[1])
+      : 30;
 
     const audio = audioStream?.codec_name
-      ? {
-          codec: audioStream.codec_name as string,
-          profile: audioStream.profile as string | undefined,
-        }
+      ? { codec: audioStream.codec_name, profile: audioStream.profile }
       : undefined;
 
     return { audio, width, height, fps };
