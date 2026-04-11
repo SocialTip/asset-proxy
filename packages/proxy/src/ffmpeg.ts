@@ -25,7 +25,7 @@ import {
   type VideoUrl,
 } from "@socialtip/asset-proxy-url-parser";
 
-import { probeAudio, videoCodecString } from "./codec.js";
+import { probeSource, videoCodecString } from "./codec.js";
 import { logger } from "./logger.js";
 import { recordException, tracer } from "./tracing.js";
 
@@ -202,9 +202,9 @@ export async function processVideo(
 ): Promise<VideoResult> {
   rejectImageOnlyOptions(parsed);
 
-  const [useGpu, sourceAudio] = await Promise.all([
+  const [useGpu, source] = await Promise.all([
     gpuReady,
-    parsed.mute ? undefined : probeAudio(sourceUrl),
+    probeSource(sourceUrl),
   ]);
   const params = {
     resizingType: parsed.resize?.type,
@@ -224,7 +224,7 @@ export async function processVideo(
     mute: parsed.mute,
     outputFormat: parsed.outputFormat,
     gpu: useGpu,
-    sourceAudioCodec: sourceAudio?.codec,
+    sourceAudioCodec: source.audio?.codec,
   };
 
   const codecs = videoCodecString({
@@ -232,7 +232,7 @@ export async function processVideo(
     mute: parsed.mute,
     resize: parsed.resize,
     framerate: parsed.framerate,
-    sourceAudio,
+    source,
   });
 
   if (parsed.outputFormat === "mp4") {

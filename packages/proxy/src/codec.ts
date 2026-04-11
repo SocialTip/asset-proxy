@@ -1,36 +1,55 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-/** Information about an audio stream probed from a video */
+/** Information about an audio stream probed from a video. */
 interface AudioProbe {
   /** E.g. aac, opus */
   codec: string;
-  /** Audio codec profile, e.g. LC, HE-ACC */
+  /** Audio codec profile, e.g. LC, HE-AAC */
   profile: string | undefined;
 }
 
-/** Probe the source audio codec name and profile via ffprobe. */
-export async function probeAudio(
-  sourceUrl: string,
-): Promise<AudioProbe | undefined> {
+/** Probed source media information. */
+export interface SourceProbe {
+  audio: AudioProbe | undefined;
+  width: number;
+  height: number;
+  fps: number;
+}
+
+/** Probe source video dimensions, framerate, and audio codec via ffprobe. */
+export async function probeSource(sourceUrl: string): Promise<SourceProbe> {
   try {
     const { stdout } = await promisify(execFile)("ffprobe", [
       "-v",
       "error",
-      "-select_streams",
-      "a:0",
       "-show_entries",
-      "stream=codec_name,profile",
+      "stream=codec_type,codec_name,profile,width,height,r_frame_rate",
       "-of",
       "json",
       sourceUrl,
     ]);
     const parsed = JSON.parse(stdout);
-    const stream = parsed.streams?.[0];
-    if (!stream?.codec_name) return undefined;
-    return { codec: stream.codec_name, profile: stream.profile };
+    const streams: Array<Record<string, unknown>> = parsed.streams ?? [];
+    const videoStream = streams.find((s) => s.codec_type === "video");
+    const audioStream = streams.find((s) => s.codec_type === "audio");
+
+    const width = (videoStream?.width as number) || 1920;
+    const height = (videoStream?.height as number) || 1080;
+    const rFrameRate = (videoStream?.r_frame_rate as string) ?? "30/1";
+    const [num, den] = rFrameRate.split("/").map(Number);
+    const fps = den ? num / den : 30;
+
+    const audio = audioStream?.codec_name
+      ? {
+          codec: audioStream.codec_name as string,
+          profile: audioStream.profile as string | undefined,
+        }
+      : undefined;
+
+    return { audio, width, height, fps };
   } catch {
-    return undefined;
+    return { audio: undefined, width: 1920, height: 1080, fps: 30 };
   }
 }
 
@@ -127,8 +146,8 @@ export type VideoCodecStringOptions = Pick<
   import("@socialtip/asset-proxy-url-parser").ParsedUrl,
   "outputFormat" | "mute" | "resize" | "framerate"
 > & {
-  /** Source audio codec/profile from ffprobe. Undefined if the source has no audio track. */
-  sourceAudio: AudioProbe | undefined;
+  /** Probed source media information from ffprobe. */
+  source: SourceProbe;
 };
 
 /**
@@ -143,17 +162,17 @@ export type VideoCodecStringOptions = Pick<
 export function videoCodecString(
   opts: VideoCodecStringOptions,
 ): string | undefined {
-  const { outputFormat, mute, sourceAudio } = opts;
-  const width = opts.resize?.width ?? 1920;
-  const height = opts.resize?.height ?? 1080;
-  const fps = opts.framerate ?? 30;
-  const hasAudio = !mute && sourceAudio !== undefined;
+  const { outputFormat, mute, source } = opts;
+  const width = opts.resize?.width || source.width;
+  const height = opts.resize?.height || source.height;
+  const fps = opts.framerate ?? source.fps;
+  const hasAudio = !mute && source.audio !== undefined;
 
   if (outputFormat === "fmp4" || outputFormat === "mp4") {
     const video = h264CodecString(width, height, fps);
     if (!hasAudio) return video;
-    const isPassthrough = sourceAudio.codec === "aac";
-    return `${video}, ${aacCodecString(sourceAudio.profile, isPassthrough)}`;
+    const isPassthrough = source.audio!.codec === "aac";
+    return `${video}, ${aacCodecString(source.audio!.profile, isPassthrough)}`;
   }
   if (outputFormat === "webm") {
     const video = av1CodecString(width, height, fps);

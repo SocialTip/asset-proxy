@@ -14,7 +14,16 @@ vi.mock("node:child_process", () => ({
     ) => {
       cb(null, {
         stdout: JSON.stringify({
-          streams: [{ codec_name: "aac", profile: "LC" }],
+          streams: [
+            {
+              codec_type: "video",
+              codec_name: "h264",
+              width: 1920,
+              height: 1080,
+              r_frame_rate: "30/1",
+            },
+            { codec_type: "audio", codec_name: "aac", profile: "LC" },
+          ],
         }),
         stderr: "",
       });
@@ -841,7 +850,7 @@ describe("video ffmpeg args", () => {
     expect(args).not.toContain("-c:a");
   });
 
-  it("probes source audio codec via ffprobe", async () => {
+  it("probes source via ffprobe", async () => {
     await videoArgs(vplain("/rs:force:480:360"));
     expect(mockExecFile.mock.calls).toHaveLength(1);
     expect(mockExecFile.mock.calls[0]).toMatchInlineSnapshot(`
@@ -850,10 +859,8 @@ describe("video ffmpeg args", () => {
         [
           "-v",
           "error",
-          "-select_streams",
-          "a:0",
           "-show_entries",
-          "stream=codec_name,profile",
+          "stream=codec_type,codec_name,profile,width,height,r_frame_rate",
           "-of",
           "json",
           "https://example.com/video.mp4",
@@ -863,9 +870,9 @@ describe("video ffmpeg args", () => {
     `);
   });
 
-  it("skips audio probe when muted", async () => {
+  it("probes source even when muted (needs dimensions)", async () => {
     await videoArgs(vplain("/rs:force:480:360/mu:1"));
-    expect(mockExecFile.mock.calls).toHaveLength(0);
+    expect(mockExecFile.mock.calls).toHaveLength(1);
   });
 });
 

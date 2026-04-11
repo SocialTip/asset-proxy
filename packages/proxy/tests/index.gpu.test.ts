@@ -17,7 +17,16 @@ vi.mock("node:child_process", () => ({
     ) => {
       cb(null, {
         stdout: JSON.stringify({
-          streams: [{ codec_name: "aac", profile: "LC" }],
+          streams: [
+            {
+              codec_type: "video",
+              codec_name: "h264",
+              width: 1920,
+              height: 1080,
+              r_frame_rate: "30/1",
+            },
+            { codec_type: "audio", codec_name: "aac", profile: "LC" },
+          ],
         }),
         stderr: "",
       });

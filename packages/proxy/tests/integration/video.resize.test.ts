@@ -158,6 +158,27 @@ describe("video resize", () => {
     }
   });
 
+  it("no resize uses source dimensions for codec level", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/fr:15/ct:1/plain/${VIDEO_SOURCE_URL}`,
+    );
+    const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
+    const res = await fetch(url);
+
+    expect(res.status).toBe(200);
+    const contentType = res.headers.get("content-type")!;
+    // Source is 360x640 @ 15fps — level should reflect that, not default 1920x1080
+    expect(contentType).toMatchInlineSnapshot(
+      `"video/mp4; codecs="avc1.640016, mp4a.40.5""`,
+    );
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const actualCodecs = await probeCodecs(buffer);
+    for (const codec of parseCodecs(contentType)) {
+      expect(actualCodecs).toContain(codec);
+    }
+  });
+
   it("crop_aspect_ratio crops video to 1:1", async () => {
     const { videoPath } = await fetchVideo(
       "/resize:force:128:128/car:1:1/fr:15/ct:1",

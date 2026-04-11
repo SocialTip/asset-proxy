@@ -1,16 +1,18 @@
 import {
+  type SourceProbe,
   videoCodecString,
   type VideoCodecStringOptions,
 } from "../src/codec.js";
 
 function opts(
-  overrides: Partial<VideoCodecStringOptions> & {
+  overrides: Omit<Partial<VideoCodecStringOptions>, "source"> & {
     width?: number;
     height?: number;
     fps?: number;
+    sourceAudio?: SourceProbe["audio"];
   },
 ): VideoCodecStringOptions {
-  const { width, height, fps, ...rest } = overrides;
+  const { width, height, fps, sourceAudio, ...rest } = overrides;
   return {
     outputFormat: "mp4",
     mute: undefined,
@@ -19,7 +21,12 @@ function opts(
         ? { type: "force" as const, width: width ?? 0, height: height ?? 0 }
         : undefined,
     framerate: fps,
-    sourceAudio: undefined,
+    source: {
+      audio: sourceAudio,
+      width: width ?? 1920,
+      height: height ?? 1080,
+      fps: fps ?? 30,
+    },
     ...rest,
   };
 }
@@ -108,7 +115,7 @@ describe("videoCodecString", () => {
         expected: "avc1.64003c, mp4a.40.2",
       },
       {
-        desc: "defaults to 1920x1080 @ 30fps when dimensions omitted",
+        desc: "defaults to source dimensions when no resize",
         o: opts({ sourceAudio: { codec: "aac", profile: "LC" } }),
         expected: "avc1.640028, mp4a.40.2",
       },
@@ -120,8 +127,9 @@ describe("videoCodecString", () => {
   describe("fmp4", () => {
     it("same codecs as mp4", () => {
       const shared = {
-        resize: { type: "force" as const, width: 1920, height: 1080 },
-        framerate: 30,
+        width: 1920,
+        height: 1080,
+        fps: 30,
         sourceAudio: { codec: "aac", profile: "LC" } as const,
       };
       expect(videoCodecString(opts({ ...shared, outputFormat: "fmp4" }))).toBe(
@@ -193,7 +201,7 @@ describe("videoCodecString", () => {
         expected: "av01.0.13M.08, opus",
       },
       {
-        desc: "defaults to 1920x1080 @ 30fps when dimensions omitted",
+        desc: "defaults to source dimensions when no resize",
         o: opts({
           outputFormat: "webm",
           sourceAudio: { codec: "opus", profile: undefined },
