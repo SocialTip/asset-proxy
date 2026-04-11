@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createCipheriv, randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
 
@@ -34,6 +34,7 @@ vi.mock("@google-cloud/storage", () => {
 });
 
 const mockSpawn = vi.mocked(spawn);
+const mockExecFile = vi.mocked(execFile);
 
 function setupSpawnMock() {
   const stdout = new Readable({ read() {} });
@@ -128,6 +129,7 @@ const vplain = (opts: string) => `${opts}/plain/${VSRC}`;
 
 beforeEach(() => {
   mockSpawn.mockReset();
+  mockExecFile.mockClear();
 });
 
 describe("error handling", () => {
@@ -837,6 +839,33 @@ describe("video ffmpeg args", () => {
     const args = await videoArgs(vplain("/rs:force:480:360/mu:1") + "@webm");
     expect(args).toContain("-an");
     expect(args).not.toContain("-c:a");
+  });
+
+  it("probes source audio codec via ffprobe", async () => {
+    await videoArgs(vplain("/rs:force:480:360"));
+    expect(mockExecFile.mock.calls).toHaveLength(1);
+    expect(mockExecFile.mock.calls[0]).toMatchInlineSnapshot(`
+      [
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-select_streams",
+          "a:0",
+          "-show_entries",
+          "stream=codec_name,profile",
+          "-of",
+          "json",
+          "https://example.com/video.mp4",
+        ],
+        [Function],
+      ]
+    `);
+  });
+
+  it("skips audio probe when muted", async () => {
+    await videoArgs(vplain("/rs:force:480:360/mu:1"));
+    expect(mockExecFile.mock.calls).toHaveLength(0);
   });
 });
 
