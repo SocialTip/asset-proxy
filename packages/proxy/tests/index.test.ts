@@ -6,7 +6,15 @@ import { request } from "./setup.js";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
-  execFile: vi.fn(),
+  execFile: vi.fn(
+    (
+      _cmd: string,
+      _args: string[],
+      cb: (err: null, result: { stdout: string; stderr: string }) => void,
+    ) => {
+      cb(null, { stdout: "aac\n", stderr: "" });
+    },
+  ),
 }));
 vi.mock("@google-cloud/storage", () => {
   return {
@@ -839,6 +847,7 @@ describe("video ffmpeg args (GPU)", () => {
     quality?: number;
     mute?: boolean;
     outputFormat?: string;
+    sourceAudioCodec?: string;
   }): string[] {
     return buildVideoArgs("https://example.com/video.mp4", {
       resizingType: (opts.resizingType ?? "force") as never,
@@ -852,6 +861,7 @@ describe("video ffmpeg args (GPU)", () => {
       mute: opts.mute,
       outputFormat: (opts.outputFormat ?? "mp4") as never,
       gpu: true,
+      sourceAudioCodec: opts.sourceAudioCodec ?? "aac",
     });
   }
 
