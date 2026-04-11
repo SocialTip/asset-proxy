@@ -123,20 +123,13 @@ function aacCodecString(
   return "mp4a.40.2";
 }
 
-export interface VideoCodecStringOptions {
-  /** Output format: mp4, fmp4, or webm. */
-  outputFormat: string;
-  /** When true, audio is stripped and the codec string contains only the video codec. */
-  mute: boolean | undefined;
-  /** Output width in pixels. Defaults to 1920. */
-  width: number | undefined;
-  /** Output height in pixels. Defaults to 1080. */
-  height: number | undefined;
-  /** Output framerate. Defaults to 30. */
-  fps: number | undefined;
-  /** Source audio codec/profile from ffprobe. Used to determine AAC passthrough vs re-encode. */
+export type VideoCodecStringOptions = Pick<
+  import("@socialtip/asset-proxy-url-parser").ParsedUrl,
+  "outputFormat" | "mute" | "resize" | "framerate"
+> & {
+  /** Source audio codec/profile from ffprobe. Undefined if the source has no audio track. */
   sourceAudio: AudioProbe | undefined;
-}
+};
 
 /**
  * Build an RFC 6381 codec string for a video output based on the output format, dimensions, framerate, and source audio codec.
@@ -151,10 +144,9 @@ export function videoCodecString(
   opts: VideoCodecStringOptions,
 ): string | undefined {
   const { outputFormat, mute, sourceAudio } = opts;
-  const width = opts.width ?? 1920;
-  const height = opts.height ?? 1080;
-  const fps = opts.fps ?? 30;
-
+  const width = opts.resize?.width ?? 1920;
+  const height = opts.resize?.height ?? 1080;
+  const fps = opts.framerate ?? 30;
   if (outputFormat === "fmp4" || outputFormat === "mp4") {
     const video = h264CodecString(width, height, fps);
     const isPassthrough = sourceAudio?.codec === "aac";

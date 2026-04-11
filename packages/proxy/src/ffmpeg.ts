@@ -230,9 +230,8 @@ export async function processVideo(
   const codecs = videoCodecString({
     outputFormat: parsed.outputFormat,
     mute: parsed.mute,
-    width: parsed.resize?.width,
-    height: parsed.resize?.height,
-    fps: parsed.framerate,
+    resize: parsed.resize,
+    framerate: parsed.framerate,
     sourceAudio,
   });
 
