@@ -265,6 +265,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Build packages
+        run: pnpm -r run build
+
       - name: Install Playwright Chromium
         working-directory: packages/video-player
         run: pnpm exec playwright install --with-deps chromium
