@@ -1,96 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import type { SourceProbe } from "./ffprobe.js";
 
-import { z } from "zod/v4";
-
-import { logger } from "./logger.js";
-import { recordException, tracer } from "./tracing.js";
-
-/** Information about an audio stream probed from a video. */
-interface AudioProbe {
-  /** E.g. aac, opus */
-  codec: string;
-  /** Audio codec profile, e.g. LC, HE-AAC */
-  profile: string | undefined;
-}
-
-/** Probed source media information. */
-export interface SourceProbe {
-  audio: AudioProbe | undefined;
-  width: number;
-  height: number;
-  fps: number;
-}
-
-const ffprobeStreamSchema = z
-  .object({
-    codec_type: z.string(),
-    codec_name: z.string().optional(),
-    profile: z.string().optional(),
-    width: z.number().optional(),
-    height: z.number().optional(),
-    r_frame_rate: z
-      .string()
-      .transform((v) =>
-        /^\d+\/\d+$/.test(v) ? (v as `${number}/${number}`) : undefined,
-      )
-      .optional(),
-  })
-  .passthrough();
-
-const ffprobeResultSchema = z
-  .object({
-    streams: z.array(ffprobeStreamSchema).default([]),
-  })
-  .passthrough();
-
-/** Probe source video dimensions, framerate, and audio codec via ffprobe. */
-export async function probeSource(sourceUrl: string): Promise<SourceProbe> {
-  const span = tracer.startSpan("exec.ffprobe.source");
-  try {
-    const { stdout } = await promisify(execFile)("ffprobe", [
-      "-v",
-      "error",
-      "-show_entries",
-      "stream=codec_type,codec_name,profile,width,height,r_frame_rate",
-      "-of",
-      "json",
-      sourceUrl,
-    ]);
-    const { streams } = ffprobeResultSchema.parse(JSON.parse(stdout));
-    const videoStream = streams.find((s) => s.codec_type === "video");
-    const audioStream = streams.find((s) => s.codec_type === "audio");
-
-    const width = videoStream?.width || 1920;
-    const height = videoStream?.height || 1080;
-    const fps = videoStream?.r_frame_rate
-      ? Number(videoStream.r_frame_rate.split("/")[0]) /
-        Number(videoStream.r_frame_rate.split("/")[1])
-      : 30;
-
-    const audio = audioStream?.codec_name
-      ? { codec: audioStream.codec_name, profile: audioStream.profile }
-      : undefined;
-
-    const result = { audio, width, height, fps };
-    span.setAttributes({
-      "probe.width": width,
-      "probe.height": height,
-      "probe.fps": fps,
-      "probe.audio_codec": audio?.codec ?? "none",
-    });
-    return result;
-  } catch (err) {
-    recordException(span, err);
-    logger.error("[codec] probeSource failed, using defaults", {
-      sourceUrl,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return { audio: undefined, width: 1920, height: 1080, fps: 30 };
-  } finally {
-    span.end();
-  }
-}
+export type { SourceProbe };
 
 // H.264 levels: [max_macroblocks_per_second, max_frame_macroblocks, level_idc]
 // Source: https://github.com/FFmpeg/FFmpeg/blob/master/libavcodec/h264_levels.c
@@ -192,8 +102,8 @@ export type VideoCodecStringOptions = Pick<
   import("@socialtip/asset-proxy-url-parser").ParsedUrl,
   "outputFormat" | "mute" | "resize" | "framerate"
 > & {
-  /** Probed source media information from ffprobe. */
-  source: SourceProbe;
+  /** Probed source media information from ffprobe. Null if the probe failed; defaults are used. */
+  source: SourceProbe | null;
 };
 
 /**
@@ -205,20 +115,24 @@ export type VideoCodecStringOptions = Pick<
  *
  * Returns undefined for unrecognised output formats.
  */
+const DEFAULT_WIDTH = 1920;
+const DEFAULT_HEIGHT = 1080;
+const DEFAULT_FPS = 30;
+
 export function videoCodecString(
   opts: VideoCodecStringOptions,
 ): string | undefined {
   const { outputFormat, mute, source } = opts;
-  const width = opts.resize?.width || source.width;
-  const height = opts.resize?.height || source.height;
-  const fps = opts.framerate ?? source.fps;
-  const hasAudio = !mute && source.audio !== undefined;
+  const width = opts.resize?.width || source?.width || DEFAULT_WIDTH;
+  const height = opts.resize?.height || source?.height || DEFAULT_HEIGHT;
+  const fps = opts.framerate ?? source?.fps ?? DEFAULT_FPS;
+  const hasAudio = !mute && !!source?.audio;
 
   if (outputFormat === "fmp4" || outputFormat === "mp4") {
     const video = h264CodecString(width, height, fps);
     if (!hasAudio) return video;
-    const isPassthrough = source.audio!.codec === "aac";
-    return `${video}, ${aacCodecString(source.audio!.profile, isPassthrough)}`;
+    const isPassthrough = source.audio?.codec === "aac";
+    return `${video}, ${aacCodecString(source.audio?.profile, isPassthrough)}`;
   }
   if (outputFormat === "webm") {
     const video = av1CodecString(width, height, fps);

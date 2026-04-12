@@ -1,11 +1,17 @@
 import { configureToMatchImageSnapshot } from "jest-image-snapshot";
-import { expect } from "vitest";
+import { afterEach, expect } from "vitest";
+
 const toMatchImageSnapshot = configureToMatchImageSnapshot({
   failureThresholdType: "percent",
   failureThreshold: 0.5,
 });
 
 expect.extend({ toMatchImageSnapshot });
+
+afterEach(async () => {
+  const { clearProbeCache } = await import("../src/ffprobe.js");
+  clearProbeCache();
+});
 
 interface InjectableApp {
   inject(opts: {

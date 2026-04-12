@@ -25,7 +25,8 @@ import {
   type VideoUrl,
 } from "@socialtip/asset-proxy-url-parser";
 
-import { probeSource, videoCodecString } from "./codec.js";
+import { videoCodecString } from "./codec.js";
+import { probeSource } from "./ffprobe.js";
 import { logger } from "./logger.js";
 import { recordException, tracer } from "./tracing.js";
 
@@ -209,7 +210,15 @@ export async function processVideo(
   const needsProbe = !parsed.mute || parsed.codec;
   const [useGpu, source] = await Promise.all([
     gpuReady,
-    needsProbe ? probeSource(sourceUrl) : undefined,
+    needsProbe
+      ? probeSource(sourceUrl).catch((err) => {
+          logger.error("[processor] probeSource failed, using defaults", {
+            sourceUrl,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return null;
+        })
+      : undefined,
   ]);
   const params = {
     resizingType: parsed.resize?.type,
@@ -234,7 +243,10 @@ export async function processVideo(
 
   let codecs: string | undefined;
   if (parsed.codec) {
-    assert(source, "probeSource required when codec signalling is enabled");
+    assert(
+      source !== undefined,
+      "probeSource required when codec signalling is enabled",
+    );
     codecs = videoCodecString({
       outputFormat: parsed.outputFormat,
       mute: parsed.mute,
