@@ -22,6 +22,7 @@ export default defineConfig({
   test: {
     projects: [
       "packages/astro",
+      "packages/url-parser",
       "packages/url-generator",
       {
         resolve: {

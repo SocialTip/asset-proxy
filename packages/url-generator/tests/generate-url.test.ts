@@ -313,6 +313,14 @@ describe("generateUrl", () => {
     expect(parsed.codec).toBe(true);
   });
 
+  it("generates and round-trips cors option", () => {
+    const url = generateUrl({ sourceUrl: SRC, cors: true });
+    expect(url).toContain("cors:1");
+    const pathAfterSig = url.slice(url.indexOf("/", 1));
+    const parsed = parseProcessingUrl(pathAfterSig);
+    expect(parsed.cors).toBe(true);
+  });
+
   it("generates CPU resizing algorithm", () => {
     const url = generateUrl({
       sourceUrl: SRC,

@@ -282,6 +282,7 @@ export const SHORTHANDS: Record<string, string> = {
   hs: "hashsum",
   mu: "mute",
   cdc: "codec",
+  cors: "cors",
   msr: "max_src_resolution",
   msfs: "max_src_file_size",
   maf: "max_animation_frames",
@@ -432,6 +433,8 @@ const rawOptionsSchema = z
     mute: zBool.optional(),
     /** Include RFC 6381 codec string in the Content-Type header for video output. */
     codec: zBool.optional(),
+    /** Include `Access-Control-Allow-Origin: *` in the response. Required for MSE playback cross-origin. */
+    cors: zBool.optional(),
 
     /** Remove uniform borders. Format: `<threshold>[:<colour>[:<equal_hor>[:<equal_vert>]]]`. */
     trim: z
@@ -845,6 +848,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     cut: data.cut,
     mute: data.mute,
     codec: data.codec,
+    cors: data.cors,
     trim: data.trim,
     brightness: data.brightness ?? data.adjust?.brightness ?? 0,
     contrast: data.contrast ?? data.adjust?.contrast ?? 1,
@@ -930,6 +934,8 @@ export interface ParsedUrlInput {
   mute?: boolean;
   /** Include RFC 6381 codec string in the Content-Type header for video output. */
   codec?: boolean;
+  /** Include `Access-Control-Allow-Origin: *` in the response. Required for MSE playback cross-origin. */
+  cors?: boolean;
   /** Remove uniform borders from an image via cropdetect. */
   trim?: {
     /** Colour similarity tolerance (0–255). */
@@ -1111,6 +1117,7 @@ export const parsedUrlSchema = z.object({
   cut: z.number().optional(),
   mute: z.boolean().optional(),
   codec: z.boolean().optional(),
+  cors: z.boolean().optional(),
   trim: z
     .object({
       threshold: z.number(),
@@ -1277,6 +1284,34 @@ export interface ParseOptions {
   encryptionKey?: Buffer;
 }
 
+/**
+ * Extracts raw URL options from a signed or unsigned processing URL into a `{ name: value }` record. Shorthand names are expanded to their canonical form. The signature segment (if present) is included as a key with an empty value and can be ignored.
+ *
+ * Returns `undefined` if the path does not contain `/plain/` or `/enc/`.
+ */
+export function extractUrlOptions(
+  path: string,
+): Record<string, string> | undefined {
+  const withoutPrefix = path.replace(/^\//, "");
+  const plainIdx = withoutPrefix.indexOf("/plain/");
+  const encIdx = withoutPrefix.indexOf("/enc/");
+  const splitIdx = plainIdx !== -1 ? plainIdx : encIdx;
+  if (splitIdx === -1) return undefined;
+  const optionsPart = withoutPrefix.slice(0, splitIdx);
+  return Object.fromEntries(
+    optionsPart
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => {
+        const idx = segment.indexOf(":");
+        if (idx === -1) return [segment, ""];
+        const name = segment.slice(0, idx);
+        const value = segment.slice(idx + 1);
+        return [SHORTHANDS[name] ?? name, value];
+      }),
+  );
+}
+
 /** Parses an imgproxy-format processing path (after signature has been stripped). Supports `/<options>/plain/<source_url>[@<format>]` and `/<options>/enc/<encrypted_source_url>[@<format>]`. */
 export function parseProcessingUrl(
   path: string,
@@ -1287,15 +1322,12 @@ export function parseProcessingUrl(
   const plainIdx = withoutPrefix.indexOf("/plain/");
   const encIdx = withoutPrefix.indexOf("/enc/");
 
-  let optionsPart: string;
   let sourceUrl: string;
   let encrypted = false;
 
   if (plainIdx !== -1) {
-    optionsPart = withoutPrefix.slice(0, plainIdx);
     sourceUrl = withoutPrefix.slice(plainIdx + "/plain/".length);
   } else if (encIdx !== -1) {
-    optionsPart = withoutPrefix.slice(0, encIdx);
     sourceUrl = withoutPrefix.slice(encIdx + "/enc/".length);
     encrypted = true;
   } else {
@@ -1336,19 +1368,7 @@ export function parseProcessingUrl(
     sourceUrl = decryptSourceUrl(sourceUrl, options.encryptionKey);
   }
 
-  // Parse option segments into a { name: value } record, then validate with Zod
-  const raw = Object.fromEntries(
-    optionsPart
-      .split("/")
-      .filter(Boolean)
-      .map((segment) => {
-        const idx = segment.indexOf(":");
-        if (idx === -1) return [segment, ""];
-        const name = segment.slice(0, idx);
-        const value = segment.slice(idx + 1);
-        return [SHORTHANDS[name] ?? name, value];
-      }),
-  );
+  const raw = extractUrlOptions(path)!;
 
   const parsedOptions = optionsSchema.parse(raw);
 
@@ -1399,6 +1419,7 @@ export function parseProcessingUrl(
     cut: parsedOptions.cut,
     mute: parsedOptions.mute,
     codec: parsedOptions.codec,
+    cors: parsedOptions.cors,
     trim: parsedOptions.trim,
     brightness: parsedOptions.brightness,
     contrast: parsedOptions.contrast,
