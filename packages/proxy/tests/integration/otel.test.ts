@@ -89,12 +89,9 @@ describe("otel configuration", () => {
     // Span name remains "request" (from @fastify/otel)
     expect(requestSpan.operationName).toBe("request");
 
-    // sentry.origin must start with "auto" so Sentry infers the description from HTTP attributes rather than using the raw span name
-    expect(attrs["sentry.origin"]).toBe("auto.http.otel.fastify");
-
-    // Sentry constructs the description as "{method} {http.route}" when http.route is present
-    expect(attrs["http.request.method"]).toBe("GET");
-    expect(attrs["http.route"]).toBe("/:signature/*");
+    // Sentry's OTLP ingestion uses sentry.description for the trace
+    // explorer description column, not the OTEL span name.
+    expect(attrs["sentry.description"]).toBe("GET /:signature/*");
   });
 
   it("cache.serveFromCache span has cache key as Sentry description", async () => {
