@@ -201,6 +201,17 @@ describe("videoCodecString", () => {
         expected: "av01.0.13M.08, opus",
       },
       {
+        desc: "360x640 @ 15fps exceeds level 2.0 MaxPicSize, selects level 2.1",
+        o: opts({
+          outputFormat: "webm",
+          width: 360,
+          height: 640,
+          fps: 15,
+          sourceAudio: { codec: "opus", profile: undefined },
+        }),
+        expected: "av01.0.01M.08, opus",
+      },
+      {
         desc: "defaults to source dimensions when no resize",
         o: opts({
           outputFormat: "webm",

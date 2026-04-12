@@ -132,29 +132,36 @@ function h264CodecString(width: number, height: number, fps: number): string {
   return `avc1.6400${levelIdc.toString(16).padStart(2, "0")}`;
 }
 
-// AV1 levels: [max_h_size, max_v_size, max_display_rate, seq_level_idx]
+// AV1 levels: [max_pic_size, max_h_size, max_v_size, max_display_rate, seq_level_idx]
 // Source: https://github.com/AOMediaCodec/av1-spec/blob/master/annex.a.levels.md
-const AV1_LEVELS: [number, number, number, number][] = [
-  [2048, 1152, 4_423_680, 0],
-  [2816, 1584, 8_363_520, 1],
-  [4352, 2448, 19_975_680, 4],
-  [5504, 3096, 31_950_720, 5],
-  [6144, 3456, 70_778_880, 8],
-  [6144, 3456, 141_557_760, 9],
-  [8192, 4352, 267_386_880, 12],
-  [8192, 4352, 534_773_760, 13],
-  [8192, 4352, 1_069_547_520, 14],
-  [8192, 4352, 1_069_547_520, 15],
-  [16384, 8704, 1_069_547_520, 16],
-  [16384, 8704, 2_139_095_040, 17],
-  [16384, 8704, 4_278_190_080, 18],
-  [16384, 8704, 4_278_190_080, 19],
+const AV1_LEVELS: [number, number, number, number, number][] = [
+  [147_456, 2048, 1152, 4_423_680, 0],
+  [278_784, 2816, 1584, 8_363_520, 1],
+  [665_856, 4352, 2448, 19_975_680, 4],
+  [1_065_024, 5504, 3096, 31_950_720, 5],
+  [2_359_296, 6144, 3456, 70_778_880, 8],
+  [2_359_296, 6144, 3456, 141_557_760, 9],
+  [8_912_896, 8192, 4352, 267_386_880, 12],
+  [8_912_896, 8192, 4352, 534_773_760, 13],
+  [8_912_896, 8192, 4352, 1_069_547_520, 14],
+  [8_912_896, 8192, 4352, 1_069_547_520, 15],
+  [35_651_584, 16384, 8704, 1_069_547_520, 16],
+  [35_651_584, 16384, 8704, 2_139_095_040, 17],
+  [35_651_584, 16384, 8704, 4_278_190_080, 18],
+  [35_651_584, 16384, 8704, 4_278_190_080, 19],
 ];
 
 function av1SeqLevelIdx(width: number, height: number, fps: number): number {
-  const displayRate = width * height * fps;
-  for (const [maxW, maxH, maxRate, idx] of AV1_LEVELS) {
-    if (width <= maxW && height <= maxH && displayRate <= maxRate) return idx;
+  const picSize = width * height;
+  const displayRate = picSize * fps;
+  for (const [maxPicSize, maxW, maxH, maxRate, idx] of AV1_LEVELS) {
+    if (
+      picSize <= maxPicSize &&
+      width <= maxW &&
+      height <= maxH &&
+      displayRate <= maxRate
+    )
+      return idx;
   }
   return 19;
 }
