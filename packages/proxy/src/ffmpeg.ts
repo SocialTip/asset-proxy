@@ -422,8 +422,10 @@ export async function processImage(
 
   // Extract embedded thumbnail if requested and source is available
   if (enforceThumbnail && sourceTempPath) {
-    const thumbPath = await extractThumbnail(sourceTempPath);
-    if (thumbPath) {
+    const thumbBuffer = await extractThumbnail(sourceTempPath);
+    if (thumbBuffer) {
+      const thumbPath = join(sourceTempDir!, "thumbnail");
+      await writeFile(thumbPath, thumbBuffer);
       ffmpegInput = thumbPath;
     }
   }
@@ -567,20 +569,18 @@ export async function processImage(
 /** Extract embedded thumbnail from an image. Tries exiftool (EXIF/AVIF) then heif-thumbnailer (HEIC). */
 async function extractThumbnail(
   sourcePath: string,
-): Promise<string | undefined> {
+): Promise<Buffer | undefined> {
   const span = tracer.startSpan("extractThumbnail");
   try {
-    const dir = mkdtempSync(join(tmpdir(), "asset-proxy-thumb-"));
-
-    // Try exiftool first (works for AVIF/JPEG EXIF thumbnails)
-    const exifThumb = join(dir, "thumbnail.jpg");
+    // Try exiftool first (works for AVIF/JPEG EXIF thumbnails).
+    // exiftool writes the thumbnail to stdout so no temp file is needed.
     try {
       const exiftoolExtractArgs = ["-b", "-ThumbnailImage", sourcePath];
       logger.verbose("Running exiftool", {
         args: exiftoolExtractArgs.join(" "),
       });
       const exifSpan = tracer.startSpan("exec.exiftool.thumbnail");
-      await new Promise<void>((resolve, reject) => {
+      const buffer = await new Promise<Buffer>((resolve, reject) => {
         const proc = spawn("exiftool", exiftoolExtractArgs);
         const chunks: Buffer[] = [];
         proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -593,9 +593,8 @@ async function extractThumbnail(
             reject(err);
             return;
           }
-          await writeFile(exifThumb, Buffer.concat(chunks));
           exifSpan.end();
-          resolve();
+          resolve(Buffer.concat(chunks));
         });
         proc.on("error", (err) => {
           recordException(exifSpan, err);
@@ -604,14 +603,16 @@ async function extractThumbnail(
         });
       });
       span.setAttribute("thumbnail.source", "exiftool");
-      return exifThumb;
+      return buffer;
     } catch {
       // Fall through to heif-thumbnailer
     }
 
-    // Try heif-thumbnailer (works for HEIC container thumbnails)
-    const heifThumb = join(dir, "thumbnail.png");
+    // Try heif-thumbnailer (works for HEIC container thumbnails).
+    // heif-thumbnailer requires an output file path, so use a temp dir.
+    const dir = mkdtempSync(join(tmpdir(), "asset-proxy-thumb-"));
     try {
+      const heifThumb = join(dir, "thumbnail.png");
       const heifArgs = [sourcePath, heifThumb];
       logger.verbose("Running heif-thumbnailer", { args: heifArgs.join(" ") });
       const heifSpan = tracer.startSpan("exec.heif-thumbnailer");
@@ -635,17 +636,17 @@ async function extractThumbnail(
           reject(err);
         });
       });
-      // Verify the file was created and is non-empty
-      const stat = await readFile(heifThumb);
-      if (stat.length > 0) {
+      const buffer = await readFile(heifThumb);
+      if (buffer.length > 0) {
         span.setAttribute("thumbnail.source", "heif-thumbnailer");
-        return heifThumb;
+        return buffer;
       }
     } catch {
       // No thumbnail found
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
 
-    await rm(dir, { recursive: true, force: true });
     return undefined;
   } finally {
     span.end();
