@@ -166,7 +166,7 @@ async function checkSourceLimits(
         const mp = (width * height) / 1_000_000;
         if (mp > maxResolution) {
           throw new HTTPError(
-            `Source resolution ${mp.toFixed(1)}MP exceeds limit of ${maxResolution}MP`,
+            `Source resolution ${mp.toFixed(3)}MP exceeds limit of ${maxResolution}MP`,
             { code: "UNPROCESSABLE_ENTITY" },
           );
         }
