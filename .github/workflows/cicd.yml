@@ -126,6 +126,7 @@ jobs:
           PORT: "8081"
           FORWARD_URL: "http://localhost:8080"
           CACHE_BUCKET: "test-cache"
+          CORS_ALLOW_ORIGIN: "http://test-origin.example.com"
           GCS_API_ENDPOINT: "http://localhost:4443"
           NODE_V8_COVERAGE: /tmp/coverage-cache-proxy
           OTEL_SERVICE_NAME: "cache-proxy"

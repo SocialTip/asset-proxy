@@ -109,6 +109,19 @@ describe("video codec", () => {
     );
   });
 
+  it("fmp4 omits CORS header for non-allowed origin", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/cb:${CACHE_BUSTER}/fr:15/ct:1/cdc:1/plain/${VIDEO_SOURCE_URL}@fmp4`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`, {
+      headers: { origin: "http://evil.example.com" },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
   it("mp4 from webm source re-encodes audio to aac", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/cb:${CACHE_BUSTER}/fr:15/ct:1/cdc:1/plain/${WEBM_SOURCE_URL}@mp4`,
