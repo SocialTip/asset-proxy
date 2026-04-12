@@ -111,6 +111,7 @@ jobs:
           BEST_FORMAT_MAX_RESOLUTION: "0.005"
           STORAGE_EMULATOR_HOST: "http://localhost:4443"
           NODE_V8_COVERAGE: /tmp/coverage-asset-proxy
+          OTEL_SERVICE_NAME: "asset-proxy"
           OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318"
           OTEL_TRACES_SAMPLER: "always_on"
           OTEL_BSP_SCHEDULE_DELAY: "100"
@@ -132,6 +133,7 @@ jobs:
           CACHE_BUCKET: "test-cache"
           GCS_API_ENDPOINT: "http://localhost:4443"
           NODE_V8_COVERAGE: /tmp/coverage-cache-proxy
+          OTEL_SERVICE_NAME: "cache-proxy"
           OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318"
           OTEL_TRACES_SAMPLER: "always_on"
           OTEL_BSP_SCHEDULE_DELAY: "100"
