@@ -6,7 +6,7 @@
   "scripts": {
     "start": "pnpm --filter proxy start",
     "dev": "pnpm --filter proxy dev",
-    "build": "pnpm --filter @socialtip/asset-proxy-url-parser build && pnpm --filter proxy build && pnpm --filter @socialtip/asset-proxy-url-generator build && pnpm --filter @socialtip/asset-proxy-astro build",
+    "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest",
     "test:up": "docker compose up -d --build --wait",
