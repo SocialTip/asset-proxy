@@ -30,11 +30,11 @@ export function playVideoWithMediaSource(
     );
   }
 
-  if (!url.includes("f:fmp4")) {
+  if (!url.includes("f:fmp4") && !url.includes("@fmp4")) {
     throw new Error(
-      `playVideoWithMediaSource: the URL must include "f:fmp4". Plain mp4 is ` +
-        `not streamable on cache miss, and webm does not require MSE. ` +
-        `Received: ${url}`,
+      `playVideoWithMediaSource: the URL must include "f:fmp4" (or "@fmp4"). ` +
+        `Plain mp4 is not streamable on cache miss, and webm does not require ` +
+        `MSE. Received: ${url}`,
     );
   }
 
