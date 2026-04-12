@@ -142,7 +142,7 @@ This repository is a pnpm monorepo with the following packages:
 | -------------------------------------- | ------------------------ | --------- | ---------------------------------------------------------------------------------- |
 | `@socialtip/asset-proxy-url-parser`    | `packages/url-parser`    | Yes       | Shared URL schema, parsing, signature verification/generation, and encryption      |
 | `@socialtip/asset-proxy-url-generator` | `packages/url-generator` | Yes       | Generates asset-proxy-compatible URL paths with encryption and signing             |
-| `@socialtip/asset-proxy-video-player`  | `packages/video-player`  | Yes       | React component for playing fragmented MP4 videos with streaming support           |
+| `@socialtip/asset-proxy-video-player`  | `packages/video-player`  | Yes       | MediaSource video player with optional React component                             |
 | `proxy`                                | `packages/proxy`         | No        | The image/video processing service (Fastify + ffmpeg + sharp), deployed via Docker |
 
 ## Development
