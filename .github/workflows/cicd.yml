@@ -93,6 +93,12 @@ jobs:
           curl -sf -X POST http://localhost:4443/storage/v1/b \
             -H 'Content-Type: application/json' -d '{"name":"test-cache"}'
 
+      - name: Wait for Jaeger
+        run: |
+          timeout 30 bash -c 'until curl -sf http://localhost:16686/api/services; do sleep 1; done'
+          echo "Jaeger query API ready"
+          curl -sf -X POST http://localhost:4318/v1/traces -H 'Content-Type: application/json' -d '{}' || echo "OTLP endpoint reachable (405 expected for empty body)"
+
       - name: Start asset-proxy (processing mode)
         run: cd packages/proxy && nohup node --conditions source --import tsx --import ./src/instrument.ts src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
@@ -236,6 +242,12 @@ jobs:
           cat /tmp/asset-proxy.log
           echo "=== cache-proxy ==="
           cat /tmp/cache-proxy.log
+          echo "=== jaeger services ==="
+          curl -sf http://localhost:16686/api/services || echo "Jaeger query failed"
+          echo "=== jaeger traces (asset-proxy) ==="
+          curl -sf "http://localhost:16686/api/traces?service=asset-proxy&limit=1" | head -c 2000 || echo "No traces"
+          echo "=== jaeger container logs ==="
+          docker logs "$(docker ps -qf 'ancestor=jaegertracing/all-in-one:latest')" 2>&1 | tail -50 || echo "No jaeger container found"
 
   docker-build:
     if: github.event_name == 'pull_request'
