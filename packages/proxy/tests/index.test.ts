@@ -776,9 +776,13 @@ describe("video ffmpeg args", () => {
   });
 
   it("webm output with opus source copies audio through", async () => {
-    mockExecFile.mockImplementationOnce(
-      (_cmd: unknown, _args: unknown, cb: unknown) => {
-        (cb as (...a: unknown[]) => void)(null, {
+    (mockExecFile as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      (
+        _cmd: string,
+        _args: string[],
+        cb: (err: null, result: { stdout: string; stderr: string }) => void,
+      ) => {
+        cb(null, {
           stdout: JSON.stringify({
             streams: [
               {
