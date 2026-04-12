@@ -142,16 +142,9 @@ jobs:
         if: failure() && steps.wait-cache.outcome == 'failure'
         run: tail -100 /tmp/cache-proxy.log
 
-      - name: Install Playwright Chromium
-        working-directory: packages/video-player
-        run: pnpm exec playwright install --with-deps chromium
-
       - name: Run tests
         id: tests
         run: pnpm -w run test --coverage
-
-      - name: Run video-player browser tests
-        run: pnpm --filter @socialtip/asset-proxy-video-player test
 
       - name: Update snapshots
         if: failure() && steps.tests.outcome == 'failure'
@@ -254,6 +247,45 @@ jobs:
           echo "=== jaeger container logs ==="
           docker logs "$(docker ps -qf 'ancestor=jaegertracing/all-in-one:latest')" 2>&1 | tail -50 || echo "No jaeger container found"
 
+  test-video-player:
+    if: needs.changes.outputs.video-player == 'true'
+    needs: [changes]
+    runs-on: warp-ubuntu-latest-x64-2x
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        working-directory: packages/video-player
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run video-player browser tests
+        run: pnpm --filter @socialtip/asset-proxy-video-player test
+
+  changes:
+    runs-on: warp-ubuntu-latest-x64-2x
+    permissions:
+      contents: read
+    outputs:
+      video-player: ${{ github.event_name == 'push' || steps.filter.outputs.video-player == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          filters: |
+            video-player:
+              - 'packages/video-player/**'
+
   docker-build:
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/docker-build.yml
@@ -275,7 +307,7 @@ jobs:
 
   required:
     if: always() && !cancelled()
-    needs: [test, docker-build, cd]
+    needs: [test, test-video-player, docker-build, cd]
     permissions: {}
     runs-on: warp-ubuntu-latest-x64-2x
     steps:
@@ -283,6 +315,10 @@ jobs:
         run: |
           if [ "${{ needs.test.result }}" != "success" ]; then
             echo "test: ${{ needs.test.result }}"
+            exit 1
+          fi
+          if [ "${{ needs.test-video-player.result }}" != "success" ] && [ "${{ needs.test-video-player.result }}" != "skipped" ]; then
+            echo "test-video-player: ${{ needs.test-video-player.result }}"
             exit 1
           fi
           if [ "${{ needs.docker-build.result }}" != "success" ] && [ "${{ needs.docker-build.result }}" != "skipped" ]; then
