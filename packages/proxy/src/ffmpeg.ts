@@ -1231,6 +1231,8 @@ export function buildVideoArgs(
     }
     if (params.mute || !params.sourceAudioCodec) {
       args.push("-an");
+    } else if (params.sourceAudioCodec === "opus") {
+      args.push("-c:a", "copy");
     } else {
       args.push("-c:a", "libopus");
     }

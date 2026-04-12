@@ -775,6 +775,50 @@ describe("video ffmpeg args", () => {
       `);
   });
 
+  it("webm output with opus source copies audio through", async () => {
+    mockExecFile.mockImplementationOnce(
+      (_cmd: unknown, _args: unknown, cb: unknown) => {
+        (cb as (...a: unknown[]) => void)(null, {
+          stdout: JSON.stringify({
+            streams: [
+              {
+                codec_type: "video",
+                codec_name: "vp9",
+                width: 1920,
+                height: 1080,
+                r_frame_rate: "30/1",
+              },
+              { codec_type: "audio", codec_name: "opus" },
+            ],
+          }),
+          stderr: "",
+        });
+      },
+    );
+    expect(await videoArgs(vplain("/rs:force:480:360") + "@webm"))
+      .toMatchInlineSnapshot(`
+        [
+          "-hide_banner",
+          "-y",
+          "-i",
+          "https://example.com/video.mp4",
+          "-vf",
+          "scale=480:360,crop=trunc(iw/2)*2:trunc(ih/2)*2",
+          "-c:v",
+          "libsvtav1",
+          "-preset",
+          "8",
+          "-crf",
+          "13",
+          "-c:a",
+          "copy",
+          "-f",
+          "webm",
+          "pipe:1",
+        ]
+      `);
+  });
+
   it("fmp4 output uses fragmented movflags", async () => {
     expect(await videoArgs(vplain("/rs:force:480:360") + "@fmp4"))
       .toMatchInlineSnapshot(`

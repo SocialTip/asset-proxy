@@ -176,6 +176,26 @@ describe("video codec", () => {
     expect(res2.headers.get("content-type")).toBe(contentType1);
   });
 
+  it("webm from webm source passes opus audio through", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/fr:15/ct:1/cdc:1/plain/${WEBM_SOURCE_URL}@webm`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(res.status).toBe(200);
+    const contentType = res.headers.get("content-type")!;
+    expect(contentType).toMatchInlineSnapshot(
+      `"video/webm; codecs="av01.0.01M.08, opus""`,
+    );
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const actualCodecs = await probeCodecs(buffer);
+    for (const codec of parseCodecs(contentType)) {
+      expect(actualCodecs).toContain(codec);
+    }
+  });
+
   it("omits codec from content-type without codec flag", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/fr:15/ct:1/plain/${VIDEO_SOURCE_URL}`,
