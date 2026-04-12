@@ -11,7 +11,7 @@ type Props = {
   config?: AssetProxyServiceConfig;
   /** Asset-proxy processing options — resize, crop, quality, format, effects, video options, etc. See `ParsedUrlInput` for the full list of available fields. */
   options?: Partial<Omit<ParsedUrlInput, "sourceUrl">>;
-  /** When true, use the MediaSource API for streaming playback. The URL must include `cors:1` and a codec option. Implies `autoplay` — the video will begin playing as soon as enough data has been buffered. */
+  /** When true, use the MediaSource API for streaming playback. The URL must include `cors:1` and `codec:1` (or `cdc:1`). Implies `autoplay` — the video will begin playing as soon as enough data has been buffered. */
   mse?: boolean;
 } & Omit<HTMLAttributes<"video">, "src">;
 

@@ -7,7 +7,7 @@ import { playVideoWithMediaSource } from "../src/play-video-with-media-source.js
 const serverUrl = inject("fmp4ServerUrl");
 
 it("plays a fragmented mp4 video", async () => {
-  const src = `${serverUrl}/cors:1/codec:avc1/test.mp4`;
+  const src = `${serverUrl}/cors:1/cdc:1/test.mp4`;
   const screen = await render(
     <MediaSourceVideo src={src} autoPlay muted data-testid="video" />,
   );
@@ -26,7 +26,7 @@ it("plays a fragmented mp4 video", async () => {
 });
 
 it("throws when url is missing cors:1", () => {
-  const url = `${serverUrl}/codec:avc1/test.mp4`;
+  const url = `${serverUrl}/cdc:1/test.mp4`;
   const video = document.createElement("video");
   expect(() => playVideoWithMediaSource(video, url)).toThrow("cors:1");
 });

@@ -5,7 +5,7 @@ const FALLBACK_MIME = 'video/mp4; codecs="avc1.640028, mp4a.40.2"';
  *
  * Uses ManagedMediaSource on iPhone Safari (17.1+), MediaSource on desktop browsers and iPad Safari, and falls back to plain `<video src>` for unsupported browsers.
  *
- * The proxy sets the codec string in the Content-Type header per RFC 6381, e.g. `video/mp4; codecs="avc1.640028, mp4a.40.2"`. The player reads this from the response headers to configure the source buffer.
+ * The `codec:1` (or `cdc:1`) option tells the proxy to include the codec string in the Content-Type header per RFC 6381, e.g. `video/mp4; codecs="avc1.640028, mp4a.40.2"`. The player reads this from the response headers to configure the source buffer.
  *
  */
 export function playVideoWithMediaSource(
@@ -25,8 +25,8 @@ export function playVideoWithMediaSource(
 
   if (!url.includes("codec:") && !url.includes("cdc:")) {
     throw new Error(
-      `playVideoWithMediaSource: the URL must include a "codec:" (or "cdc:") ` +
-        `option so the player can configure the MediaSource buffer. Received: ${url}`,
+      `playVideoWithMediaSource: the URL must include "codec:1" (or "cdc:1") ` +
+        `so the proxy exposes codec info for the MediaSource buffer. Received: ${url}`,
     );
   }
 
@@ -58,7 +58,7 @@ export function playVideoWithMediaSource(
         console.warn(
           `playVideoWithMediaSource: Content-Type header does not include a ` +
             `codecs parameter (got "${contentType}"). Falling back to ` +
-            `"${FALLBACK_MIME}". Ensure the proxy is configured with a codec option.`,
+            `"${FALLBACK_MIME}". Ensure the URL includes "codec:1" (or "cdc:1").`,
         );
       }
       const mimeType = contentType.includes("codecs=")

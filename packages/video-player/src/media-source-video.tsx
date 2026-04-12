@@ -18,7 +18,7 @@ export function MediaSourceVideo({
   ref,
   ...videoProps
 }: Omit<ComponentProps<"video">, "src"> & {
-  /** Asset-proxy URL for the video. Must include `cors:1` and specify codec. */
+  /** Asset-proxy URL for the video. Must include `cors:1` and `codec:1` (or `cdc:1`). */
   src: string;
   ref?: Ref<HTMLVideoElement>;
 }) {

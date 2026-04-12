@@ -26,7 +26,7 @@ const controller = new AbortController();
 
 playVideoWithMediaSource(
   video,
-  "/cors:1/codec:avc1/f:fmp4/video.mp4",
+  "/cors:1/cdc:1/f:fmp4/video.mp4",
   controller.signal,
 );
 ```
@@ -38,12 +38,7 @@ Requires `react` as a peer dependency.
 ```tsx
 import { MediaSourceVideo } from "@socialtip/asset-proxy-video-player/react";
 
-<MediaSourceVideo
-  src="/cors:1/codec:avc1/f:fmp4/video.mp4"
-  autoPlay
-  muted
-  loop
-/>;
+<MediaSourceVideo src="/cors:1/cdc:1/f:fmp4/video.mp4" autoPlay muted loop />;
 ```
 
 ## URL requirements
@@ -51,6 +46,6 @@ import { MediaSourceVideo } from "@socialtip/asset-proxy-video-player/react";
 The source URL must include:
 
 - **`cors:1`** — enables CORS headers so the player can fetch the video
-- **`codec:` or `cdc:`** — includes codec info in the Content-Type header, used to configure the MediaSource buffer
+- **`codec:1` or `cdc:1`** — tells the proxy to expose codec info in the Content-Type header, needed to configure the MediaSource buffer
 
 The source URL should use **`f:fmp4`** to enable cache-miss streaming.
