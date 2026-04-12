@@ -144,7 +144,7 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: packages/video-player
-        run: pnpm exec playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Run tests
         id: tests
