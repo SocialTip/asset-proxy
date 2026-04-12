@@ -126,7 +126,7 @@ describe("otel configuration", () => {
 
     expect(cacheSpan.operationName).toBe("cache.serveFromCache");
     const attrs = spanAttrs(cacheSpan);
-    expect(attrs["sentry.custom_span_name"]).toMatchInlineSnapshot(
+    expect(attrs["cache.key"]).toMatchInlineSnapshot(
       `"gBhXjyg-Ny3we6cqSRSatA2W_V37gXeWZU5hZmcEhaw/f:jpg/rs:fit:128:0/enc/NzMyYzQzZGJhYjk5ZDBlZtBKi-Id0FYxlGQ7-9wXDkM3s2zCBr3Da1CfeTUcMhYe03RhgH0EO99c6crVLSXM_A"`,
     );
   });
