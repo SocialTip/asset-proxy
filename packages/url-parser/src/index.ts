@@ -13,6 +13,7 @@ export {
 } from "./info-parse.js";
 export {
   type CompassGravity,
+  extractUrlOptions,
   type FocusPointGravity,
   type Gravity,
   type ImageFormat,

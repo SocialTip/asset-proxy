@@ -286,6 +286,7 @@ function serializeOptions(options: UrlGeneratorOptions): string[] {
   if (options.cut !== undefined) segments.push(`ct:${options.cut}`);
   if (options.mute !== undefined) segments.push(`mu:${bool(options.mute)}`);
   if (options.codec !== undefined) segments.push(`cdc:${bool(options.codec)}`);
+  if (options.cors !== undefined) segments.push(`cors:${bool(options.cors)}`);
 
   if (options.trim) {
     const parts = [String(options.trim.threshold)];
