@@ -305,6 +305,14 @@ describe("generateUrl", () => {
     expect(parsed.mute).toBe(true);
   });
 
+  it("generates and round-trips codec option", () => {
+    const url = generateUrl({ sourceUrl: SRC, codec: true });
+    expect(url).toContain("cdc:1");
+    const pathAfterSig = url.slice(url.indexOf("/", 1));
+    const parsed = parseProcessingUrl(pathAfterSig);
+    expect(parsed.codec).toBe(true);
+  });
+
   it("generates CPU resizing algorithm", () => {
     const url = generateUrl({
       sourceUrl: SRC,

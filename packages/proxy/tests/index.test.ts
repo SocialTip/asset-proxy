@@ -870,8 +870,13 @@ describe("video ffmpeg args", () => {
     `);
   });
 
-  it("probes source even when muted (needs dimensions)", async () => {
+  it("skips probe when muted without codec signalling", async () => {
     await videoArgs(vplain("/rs:force:480:360/mu:1"));
+    expect(mockExecFile.mock.calls).toHaveLength(0);
+  });
+
+  it("probes source when muted with codec signalling", async () => {
+    await videoArgs(vplain("/rs:force:480:360/mu:1/cdc:1"));
     expect(mockExecFile.mock.calls).toHaveLength(1);
   });
 });

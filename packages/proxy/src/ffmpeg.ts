@@ -202,9 +202,14 @@ export async function processVideo(
 ): Promise<VideoResult> {
   rejectImageOnlyOptions(parsed);
 
+  // Probing is needed to detect the source audio codec so ffmpeg can decide
+  // whether to copy AAC through or re-encode to a compatible format. When the
+  // output is muted we strip audio entirely, so the probe can be skipped
+  // unless codec signalling is requested (which needs dimensions and fps).
+  const needsProbe = !parsed.mute || parsed.codec;
   const [useGpu, source] = await Promise.all([
     gpuReady,
-    probeSource(sourceUrl),
+    needsProbe ? probeSource(sourceUrl) : undefined,
   ]);
   const params = {
     resizingType: parsed.resize?.type,
@@ -224,16 +229,20 @@ export async function processVideo(
     mute: parsed.mute,
     outputFormat: parsed.outputFormat,
     gpu: useGpu,
-    sourceAudioCodec: source.audio?.codec,
+    sourceAudioCodec: source?.audio?.codec,
   };
 
-  const codecs = videoCodecString({
-    outputFormat: parsed.outputFormat,
-    mute: parsed.mute,
-    resize: parsed.resize,
-    framerate: parsed.framerate,
-    source,
-  });
+  let codecs: string | undefined;
+  if (parsed.codec) {
+    assert(source, "probeSource required when codec signalling is enabled");
+    codecs = videoCodecString({
+      outputFormat: parsed.outputFormat,
+      mute: parsed.mute,
+      resize: parsed.resize,
+      framerate: parsed.framerate,
+      source,
+    });
+  }
 
   if (parsed.outputFormat === "mp4") {
     if (useGpu) {

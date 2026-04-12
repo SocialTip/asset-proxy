@@ -285,6 +285,7 @@ function serializeOptions(options: UrlGeneratorOptions): string[] {
   if (options.framerate !== undefined) segments.push(`fr:${options.framerate}`);
   if (options.cut !== undefined) segments.push(`ct:${options.cut}`);
   if (options.mute !== undefined) segments.push(`mu:${bool(options.mute)}`);
+  if (options.codec !== undefined) segments.push(`cdc:${bool(options.codec)}`);
 
   if (options.trim) {
     const parts = [String(options.trim.threshold)];
