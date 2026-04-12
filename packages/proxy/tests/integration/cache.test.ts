@@ -13,24 +13,39 @@ const FAKE_GCS_URL = process.env.FAKE_GCS_URL ?? "http://localhost:4443";
 const gcs = new Storage({ apiEndpoint: FAKE_GCS_URL });
 const bucket = gcs.bucket("test-cache");
 
+const CACHE_BUSTER = "cache-test";
+
 async function fetchCachedObject(urlPath: string): Promise<Buffer> {
   const [contents] = await bucket.file(urlPath).download();
   return contents;
 }
 
-async function clearCache(): Promise<void> {
+async function waitForCacheWrite(urlPath: string): Promise<void> {
+  const key = urlPath.startsWith("/") ? urlPath.slice(1) : urlPath;
+  const file = bucket.file(key);
+  await vi.waitFor(async () => {
+    const [exists] = await file.exists();
+    expect(exists).toBe(true);
+  });
+}
+
+async function clearOwnCacheEntries(): Promise<void> {
   const [files] = await bucket.getFiles();
-  await Promise.all(files.map((f) => f.delete()));
+  await Promise.all(
+    files
+      .filter((f) => f.name.includes(`cb:${CACHE_BUSTER}`))
+      .map((f) => f.delete()),
+  );
 }
 
 beforeEach(async () => {
-  await clearCache();
+  await clearOwnCacheEntries();
 });
 
 describe("cache proxy", () => {
   it("forwards to processing proxy on cache miss and caches the result", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:100/plain/${SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
@@ -38,10 +53,10 @@ describe("cache proxy", () => {
     expect(res.headers.get("content-type")).toBe("image/jpeg");
     const responseBuffer = Buffer.from(await res.arrayBuffer());
 
-    await new Promise((r) => setTimeout(r, 500));
+    await waitForCacheWrite(urlPath);
 
     expect(urlPath).toMatchInlineSnapshot(
-      `"/IIda0ksDQePflaC8768xYO1JkL2PZXX3IoM9eKxi79Q/f:jpg/rs:fit:100:100/enc/NzMyYzQzZGJhYjk5ZDBlZtBKi-Id0FYxlGQ7-9wXDkM3s2zCBr3Da1CfeTUcMhYe03RhgH0EO99c6crVLSXM_A"`,
+      `"/DgBSiDeCcr6Egllmc0dbiFDMe8j3ZmlAvTDKaG8Buos/cb:cache-test/f:jpg/rs:fit:100:100/enc/NzMyYzQzZGJhYjk5ZDBlZtBKi-Id0FYxlGQ7-9wXDkM3s2zCBr3Da1CfeTUcMhYe03RhgH0EO99c6crVLSXM_A"`,
     );
 
     const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
@@ -51,14 +66,14 @@ describe("cache proxy", () => {
 
   it("serves from cache on cache hit", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:100/plain/${SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
 
     const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res1.status).toBe(200);
 
-    await new Promise((r) => setTimeout(r, 500));
+    await waitForCacheWrite(urlPath);
 
     // Overwrite the cached object with sentinel content to prove the next request reads from the bucket
     const key = urlPath.slice(1);
@@ -82,7 +97,7 @@ describe("cache proxy", () => {
 
   it("caches video result and matches response", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fill:200:200/plain/${VIDEO_SOURCE_URL}`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fill:200:200/plain/${VIDEO_SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
@@ -90,10 +105,10 @@ describe("cache proxy", () => {
     expect(res.headers.get("content-type")).toMatch(/^video\/mp4/);
     const responseBuffer = Buffer.from(await res.arrayBuffer());
 
-    await new Promise((r) => setTimeout(r, 1000));
+    await waitForCacheWrite(urlPath);
 
     expect(urlPath).toMatchInlineSnapshot(
-      `"/Gz_DDAOd5yjP1O-If1JuZC6yE7axb-p-WmttOL6yjEM/f:mp4/rs:fill:200:200/enc/N2NhNmFkMmYzOTFhNWJlMG-aK85gpH2N6VXLBfdqOMaeRyBpwhFQE9cJlUg88UAo_oU1deehUVUo4kSOlAitLA"`,
+      `"/YvOqUdvwQexxIxMB5WNLwqNJ8tcFeRj29_B5500D1c4/cb:cache-test/f:mp4/rs:fill:200:200/enc/N2NhNmFkMmYzOTFhNWJlMG-aK85gpH2N6VXLBfdqOMaeRyBpwhFQE9cJlUg88UAo_oU1deehUVUo4kSOlAitLA"`,
     );
 
     const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
@@ -102,7 +117,7 @@ describe("cache proxy", () => {
 
   it("caches with signed plain URL as key", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:100:140/plain/${SOURCE_URL}`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:140/plain/${SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, {
       signingKey: URL_CONFIG.signingKey,
@@ -113,10 +128,10 @@ describe("cache proxy", () => {
     expect(res.headers.get("content-type")).toBe("image/jpeg");
     const responseBuffer = Buffer.from(await res.arrayBuffer());
 
-    await new Promise((r) => setTimeout(r, 500));
+    await waitForCacheWrite(urlPath);
 
     expect(urlPath).toMatchInlineSnapshot(
-      `"/lHGJr0YJhuqvTx_55RFqTJSGXM2mzgokm59PvP1xS68/f:jpg/rs:fit:100:140/plain/http://file-server/test-image.png"`,
+      `"/sFAS-fYXkZnMlrBhSgn6uGfDLA6Wpszvp9O-u2QX7VU/cb:cache-test/f:jpg/rs:fit:100:140/plain/http://file-server/test-image.png"`,
     );
 
     const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
@@ -125,7 +140,7 @@ describe("cache proxy", () => {
 
   it("caches with signed encrypted URL as key", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:100:120/plain/${SOURCE_URL}`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:120/plain/${SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
@@ -133,10 +148,10 @@ describe("cache proxy", () => {
     expect(res.headers.get("content-type")).toBe("image/jpeg");
     const responseBuffer = Buffer.from(await res.arrayBuffer());
 
-    await new Promise((r) => setTimeout(r, 500));
+    await waitForCacheWrite(urlPath);
 
     expect(urlPath).toMatchInlineSnapshot(
-      `"/eozMtxu0mSVarkeij1lPW8n5dv9k_VVOf4ssZumiVQc/f:jpg/rs:fit:100:120/enc/NzMyYzQzZGJhYjk5ZDBlZtBKi-Id0FYxlGQ7-9wXDkM3s2zCBr3Da1CfeTUcMhYe03RhgH0EO99c6crVLSXM_A"`,
+      `"/0tVwZqCGvJBiW4PxHrJR_Tv7rbuD9kmuncj7q6ooniI/cb:cache-test/f:jpg/rs:fit:100:120/enc/NzMyYzQzZGJhYjk5ZDBlZtBKi-Id0FYxlGQ7-9wXDkM3s2zCBr3Da1CfeTUcMhYe03RhgH0EO99c6crVLSXM_A"`,
     );
 
     const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
@@ -145,7 +160,7 @@ describe("cache proxy", () => {
 
   it("returns 206 with correct range on cache hit", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:100/plain/${SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
 
@@ -154,7 +169,7 @@ describe("cache proxy", () => {
     expect(res1.headers.get("content-type")).toBe("image/jpeg");
     const fullBody = Buffer.from(await res1.arrayBuffer());
 
-    await new Promise((r) => setTimeout(r, 500));
+    await waitForCacheWrite(urlPath);
 
     const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`, {
       headers: { Range: "bytes=0-9" },
@@ -172,7 +187,7 @@ describe("cache proxy", () => {
 
   it("returns 206 for suffix range on cache hit", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:100/plain/${SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
 
@@ -181,7 +196,7 @@ describe("cache proxy", () => {
     expect(res1.headers.get("content-type")).toBe("image/jpeg");
     const fullBody = Buffer.from(await res1.arrayBuffer());
 
-    await new Promise((r) => setTimeout(r, 500));
+    await waitForCacheWrite(urlPath);
 
     const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`, {
       headers: { Range: "bytes=-5" },
@@ -199,7 +214,7 @@ describe("cache proxy", () => {
 
   it("returns 416 for unsatisfiable range on cache hit", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:100/plain/${SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
 
@@ -208,7 +223,7 @@ describe("cache proxy", () => {
     expect(res1.headers.get("content-type")).toBe("image/jpeg");
     const fullBody = Buffer.from(await res1.arrayBuffer());
 
-    await new Promise((r) => setTimeout(r, 500));
+    await waitForCacheWrite(urlPath);
 
     const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`, {
       headers: {
@@ -223,12 +238,12 @@ describe("cache proxy", () => {
 
   it("returns Accept-Ranges header on cache hit without Range request", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:100/plain/${SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
 
     await fetch(`${CACHE_PROXY_URL}${urlPath}`);
-    await new Promise((r) => setTimeout(r, 500));
+    await waitForCacheWrite(urlPath);
 
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(res.status).toBe(200);
@@ -279,7 +294,7 @@ describe("cache proxy", () => {
       }
     `);
 
-    await new Promise((r) => setTimeout(r, 500));
+    await waitForCacheWrite(urlPath);
 
     const cachedBuffer = await fetchCachedObject(urlPath.slice(1));
     expect(JSON.parse(cachedBuffer.toString())).toEqual(body);
@@ -287,7 +302,7 @@ describe("cache proxy", () => {
 
   it("does not cache error responses", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:100:100/plain/http://file-server/nonexistent.png`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:100/plain/http://file-server/nonexistent.png`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
@@ -299,7 +314,7 @@ describe("cache proxy", () => {
 
   it("forwards 403 for invalid signature", async () => {
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fit:100:100/plain/${SOURCE_URL}`,
+      `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:100/plain/${SOURCE_URL}`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
     // Corrupt the signature (first path segment) so the processor rejects it

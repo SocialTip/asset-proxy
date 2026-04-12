@@ -20,7 +20,8 @@
   "lint-staged": {
     "*.{ts,js}": [
       "eslint --fix",
-      "prettier --write"
+      "prettier --write",
+      "vitest related --run"
     ],
     "*.{json,yml,yaml,md}": [
       "prettier --write"

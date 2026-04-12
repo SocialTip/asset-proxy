@@ -281,6 +281,7 @@ export const SHORTHANDS: Record<string, string> = {
   fiu: "fallback_image_url",
   hs: "hashsum",
   mu: "mute",
+  cdc: "codec",
   msr: "max_src_resolution",
   msfs: "max_src_file_size",
   maf: "max_animation_frames",
@@ -429,6 +430,8 @@ const rawOptionsSchema = z
     cut: zPositiveFloat.optional(),
     /** Strip audio from video output. */
     mute: zBool.optional(),
+    /** Include RFC 6381 codec string in the Content-Type header for video output. */
+    codec: zBool.optional(),
 
     /** Remove uniform borders. Format: `<threshold>[:<colour>[:<equal_hor>[:<equal_vert>]]]`. */
     trim: z
@@ -841,6 +844,7 @@ const optionsSchema = rawOptionsSchema.transform((data) => {
     framerate: data.framerate,
     cut: data.cut,
     mute: data.mute,
+    codec: data.codec,
     trim: data.trim,
     brightness: data.brightness ?? data.adjust?.brightness ?? 0,
     contrast: data.contrast ?? data.adjust?.contrast ?? 1,
@@ -924,6 +928,8 @@ export interface ParsedUrlInput {
   cut?: number;
   /** Strip audio from video output. */
   mute?: boolean;
+  /** Include RFC 6381 codec string in the Content-Type header for video output. */
+  codec?: boolean;
   /** Remove uniform borders from an image via cropdetect. */
   trim?: {
     /** Colour similarity tolerance (0–255). */
@@ -1104,6 +1110,7 @@ export const parsedUrlSchema = z.object({
   framerate: z.number().optional(),
   cut: z.number().optional(),
   mute: z.boolean().optional(),
+  codec: z.boolean().optional(),
   trim: z
     .object({
       threshold: z.number(),
@@ -1391,6 +1398,7 @@ export function parseProcessingUrl(
     framerate: parsedOptions.framerate,
     cut: parsedOptions.cut,
     mute: parsedOptions.mute,
+    codec: parsedOptions.codec,
     trim: parsedOptions.trim,
     brightness: parsedOptions.brightness,
     contrast: parsedOptions.contrast,

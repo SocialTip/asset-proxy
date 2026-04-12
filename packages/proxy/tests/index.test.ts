@@ -775,6 +775,54 @@ describe("video ffmpeg args", () => {
       `);
   });
 
+  it("webm output with opus source copies audio through", async () => {
+    (mockExecFile as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      (
+        _cmd: string,
+        _args: string[],
+        cb: (err: null, result: { stdout: string; stderr: string }) => void,
+      ) => {
+        cb(null, {
+          stdout: JSON.stringify({
+            streams: [
+              {
+                codec_type: "video",
+                codec_name: "vp9",
+                width: 1920,
+                height: 1080,
+                r_frame_rate: "30/1",
+              },
+              { codec_type: "audio", codec_name: "opus" },
+            ],
+          }),
+          stderr: "",
+        });
+      },
+    );
+    expect(await videoArgs(vplain("/rs:force:480:360") + "@webm"))
+      .toMatchInlineSnapshot(`
+        [
+          "-hide_banner",
+          "-y",
+          "-i",
+          "https://example.com/video.mp4",
+          "-vf",
+          "scale=480:360,crop=trunc(iw/2)*2:trunc(ih/2)*2",
+          "-c:v",
+          "libsvtav1",
+          "-preset",
+          "8",
+          "-crf",
+          "13",
+          "-c:a",
+          "copy",
+          "-f",
+          "webm",
+          "pipe:1",
+        ]
+      `);
+  });
+
   it("fmp4 output uses fragmented movflags", async () => {
     expect(await videoArgs(vplain("/rs:force:480:360") + "@fmp4"))
       .toMatchInlineSnapshot(`
@@ -870,8 +918,13 @@ describe("video ffmpeg args", () => {
     `);
   });
 
-  it("probes source even when muted (needs dimensions)", async () => {
+  it("skips probe when muted without codec signalling", async () => {
     await videoArgs(vplain("/rs:force:480:360/mu:1"));
+    expect(mockExecFile.mock.calls).toHaveLength(0);
+  });
+
+  it("probes source when muted with codec signalling", async () => {
+    await videoArgs(vplain("/rs:force:480:360/mu:1/cdc:1"));
     expect(mockExecFile.mock.calls).toHaveLength(1);
   });
 });
