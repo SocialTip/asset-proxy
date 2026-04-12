@@ -142,9 +142,15 @@ jobs:
         if: failure() && steps.wait-cache.outcome == 'failure'
         run: tail -100 /tmp/cache-proxy.log
 
+      - name: Install Playwright Chromium
+        run: pnpm --filter @socialtip/asset-proxy-video-player exec playwright install --with-deps chromium
+
       - name: Run tests
         id: tests
         run: pnpm -w run test --coverage
+
+      - name: Run video-player browser tests
+        run: pnpm --filter @socialtip/asset-proxy-video-player test
 
       - name: Update snapshots
         if: failure() && steps.tests.outcome == 'failure'

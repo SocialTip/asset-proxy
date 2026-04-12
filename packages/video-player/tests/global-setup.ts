@@ -26,6 +26,7 @@ export async function setup(project: TestProject) {
     res.end(data);
   });
   await new Promise<void>((resolve) => server.listen(0, resolve));
+  server.unref();
   const addr = server.address();
   if (!addr || typeof addr === "string") throw new Error("No address");
   project.provide("fmp4ServerUrl", `http://localhost:${addr.port}`);
