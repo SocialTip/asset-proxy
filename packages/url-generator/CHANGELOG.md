@@ -1,3 +1,7 @@
+## 0.7.1
+
+Version bump only (no changes).
+
 ## 0.7.0
 
 - feat: make codec header opt-in via `codec:1` (shorthand `cdc`)

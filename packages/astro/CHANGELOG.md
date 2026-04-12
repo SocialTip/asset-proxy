@@ -1,3 +1,7 @@
+## 0.4.4
+
+Version bump only (no changes).
+
 ## 0.4.3
 
 - fix: exclude source files from published npm packages
