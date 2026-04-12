@@ -178,7 +178,7 @@ Include the [RFC 6381](https://www.rfc-editor.org/rfc/rfc6381) codec string in t
 
 ### CORS — `cors:1`
 
-Include the `Access-Control-Allow-Origin` response header. This is required when using MSE (MediaSource or ManagedMediaSource) to play video cross-origin, since MSE fetches the stream via JavaScript and the browser enforces CORS on the response. The header value defaults to `*` and can be restricted via the `CORS_ALLOW_ORIGIN` environment variable (see [Configuration](Configuration.md)). This option works for all media types, not just video. Example: `cors:1`.
+Include `Access-Control-Allow-Origin: *` in the response. This is required when using MSE (MediaSource or ManagedMediaSource) to play video cross-origin, since MSE fetches the stream via JavaScript and the browser enforces CORS on the response. This option works for all media types, not just video. Example: `cors:1`.
 
 ### Video Thumbnail Second — `video_thumbnail_second:<seconds>` (shorthand `vts`)
 

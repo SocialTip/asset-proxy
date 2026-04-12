@@ -344,7 +344,7 @@ async function processAndRespond(
   key: string,
 ): Promise<void> {
   if (parsed.cors) {
-    reply.header("Access-Control-Allow-Origin", env.CORS_ALLOW_ORIGIN);
+    reply.header("Access-Control-Allow-Origin", "*");
   }
 
   if (shouldSkipProcessing(parsed)) {

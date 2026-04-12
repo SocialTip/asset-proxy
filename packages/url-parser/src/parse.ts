@@ -433,7 +433,7 @@ const rawOptionsSchema = z
     mute: zBool.optional(),
     /** Include RFC 6381 codec string in the Content-Type header for video output. */
     codec: zBool.optional(),
-    /** Include the `Access-Control-Allow-Origin` response header. Required for MSE playback cross-origin. */
+    /** Include `Access-Control-Allow-Origin: *` in the response. Required for MSE playback cross-origin. */
     cors: zBool.optional(),
 
     /** Remove uniform borders. Format: `<threshold>[:<colour>[:<equal_hor>[:<equal_vert>]]]`. */
@@ -934,7 +934,7 @@ export interface ParsedUrlInput {
   mute?: boolean;
   /** Include RFC 6381 codec string in the Content-Type header for video output. */
   codec?: boolean;
-  /** Include the `Access-Control-Allow-Origin` response header. Required for MSE playback cross-origin. */
+  /** Include `Access-Control-Allow-Origin: *` in the response. Required for MSE playback cross-origin. */
   cors?: boolean;
   /** Remove uniform borders from an image via cropdetect. */
   trim?: {
