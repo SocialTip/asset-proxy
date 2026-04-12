@@ -20,6 +20,8 @@ Append a format suffix to the source URL to choose the output format:
 
 **Codec signalling:** When the `codec:1` option is present, video responses include the codec string in the `Content-Type` header per [RFC 6381](https://www.rfc-editor.org/rfc/rfc6381), e.g. `video/mp4; codecs="avc1.640028, mp4a.40.2"`. This allows MSE players to configure the source buffer without hardcoding codec assumptions. Without `codec:1`, the `Content-Type` is the plain MIME type (e.g. `video/mp4`). Audio is always AAC for MP4/fMP4 (passthrough if the source is AAC, re-encoded otherwise) and Opus for WebM. See [Codec](#codec--codec1-shorthand-cdc).
 
+**CORS:** MSE playback requires fetching the video via JavaScript (`fetch` / `XMLHttpRequest`). When the player and the asset proxy are on different origins, browsers block the response unless it includes the `Access-Control-Allow-Origin` header. Add `cors:1` to the URL to include this header. See [CORS](#cors--cors1).
+
 You can also extract a still image from a video by using an image format suffix (`@jpg`, `@png`, etc.). See [Video Thumbnail Second](#video-thumbnail-second--video_thumbnail_secondseconds-shorthand-vts) for controlling which frame is extracted.
 
 **Examples:**
@@ -173,6 +175,10 @@ Strip audio from video output. The resulting video will have no audio track. Exa
 ### Codec — `codec:1` (shorthand `cdc`)
 
 Include the [RFC 6381](https://www.rfc-editor.org/rfc/rfc6381) codec string in the `Content-Type` response header for video output. When enabled, the response includes e.g. `video/mp4; codecs="avc1.640028, mp4a.40.2"` instead of plain `video/mp4`. Clients using [MSE](https://developer.mozilla.org/en-US/docs/Web/API/MediaSource) or [ManagedMediaSource](https://developer.mozilla.org/en-US/docs/Web/API/ManagedMediaSource) with fMP4 should specify this option to configure source buffers correctly. Example: `cdc:1`.
+
+### CORS — `cors:1`
+
+Include the `Access-Control-Allow-Origin` response header. This is required when using MSE (MediaSource or ManagedMediaSource) to play video cross-origin, since MSE fetches the stream via JavaScript and the browser enforces CORS on the response. The header value defaults to `*` and can be restricted via the `CORS_ALLOW_ORIGIN` environment variable (see [Configuration](Configuration.md)). This option works for all media types, not just video. Example: `cors:1`.
 
 ### Video Thumbnail Second — `video_thumbnail_second:<seconds>` (shorthand `vts`)
 

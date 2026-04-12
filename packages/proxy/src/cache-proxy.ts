@@ -2,7 +2,10 @@ import type { Http2Server } from "node:http2";
 import { PassThrough, type Readable } from "node:stream";
 
 import { Storage } from "@google-cloud/storage";
-import { HTTPError } from "@socialtip/asset-proxy-url-parser";
+import {
+  extractUrlOptions,
+  HTTPError,
+} from "@socialtip/asset-proxy-url-parser";
 import Fastify, {
   type FastifyReply,
   type FastifyRequest,
@@ -123,15 +126,6 @@ export async function createCacheProxyApp() {
   const app = Fastify({ http2: true });
   await app.register(fastifyOtelInstrumentation.plugin());
 
-  if (env.CORS_ALLOW_ORIGIN) {
-    const origins = env.CORS_ALLOW_ORIGIN;
-    const headerValue = origins.has("*") ? "*" : [...origins].join(", ");
-    app.addHook("onSend", (_request, reply, _payload, done) => {
-      reply.header("Access-Control-Allow-Origin", headerValue);
-      done();
-    });
-  }
-
   app.get("/health", async (_request, reply) => {
     return reply.send("ok");
   });
@@ -196,6 +190,10 @@ export async function createCacheProxyApp() {
 
   app.get("/*", async (request, reply) => {
     const path = request.url.split("?")[0];
+    const urlOptions = extractUrlOptions(path);
+    if (urlOptions?.cors === "1") {
+      reply.header("Access-Control-Allow-Origin", env.CORS_ALLOW_ORIGIN);
+    }
     const gcsKey = cacheKey(path);
     if (!gcsKey) {
       return reply.code(404).header("Content-Type", "text/plain").send();
