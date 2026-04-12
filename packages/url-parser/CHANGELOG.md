@@ -1,3 +1,7 @@
+## 0.9.0
+
+- feat: add extractUrlOptions() and cors URL option to url-parser
+
 ## 0.8.1
 
 Version bump only (no changes).
