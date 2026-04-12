@@ -144,6 +144,19 @@ describe("enforce_thumbnail", () => {
     expect(await toPng(buffer)).toMatchImageSnapshot();
   });
 
+  it("works with trim", async () => {
+    const parsed = parseProcessingUrl(
+      "/insecure/eth:1/tr:20/plain/http://file-server/test-image-with-thumbnail.avif@jpg",
+    );
+    const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const meta = await sharp(buffer).metadata();
+    expect(meta.width).toBeGreaterThan(0);
+    expect(meta.height).toBeGreaterThan(0);
+  });
+
   it("falls back gracefully when no thumbnail exists", async () => {
     const filePath = await fetchToFile("/eth:1/w:100");
     const exif = getExif(filePath);

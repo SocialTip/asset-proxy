@@ -420,19 +420,20 @@ export async function processImage(
     }
   }
 
-  // Extract embedded thumbnail if requested and source is available
+  // Extract embedded thumbnail if requested and source is available.
+  // The buffer is piped to ffmpeg via stdin to avoid writing a temp file.
+  let ffmpegInputBuffer: Buffer | undefined;
   if (enforceThumbnail && sourceTempPath) {
-    const thumbBuffer = await extractThumbnail(sourceTempPath);
-    if (thumbBuffer) {
-      const thumbPath = join(sourceTempDir!, "thumbnail");
-      await writeFile(thumbPath, thumbBuffer);
-      ffmpegInput = thumbPath;
-    }
+    ffmpegInputBuffer = await extractThumbnail(sourceTempPath);
   }
 
   let trimFilter: string | undefined;
   if (parsed.trim) {
     trimFilter = await detectTrimCrop(ffmpegInput, parsed.trim);
+  }
+
+  if (ffmpegInputBuffer) {
+    ffmpegInput = "pipe:0";
   }
 
   // Determine if best format selection is active
@@ -470,7 +471,7 @@ export async function processImage(
       outputPath: outPath,
       trimFilter,
     });
-    const stream = runFfmpeg(args);
+    const stream = runFfmpeg(args, undefined, ffmpegInputBuffer);
     await new Promise<void>((resolve, reject) => {
       stream.on("end", resolve);
       stream.on("error", reject);
@@ -481,6 +482,8 @@ export async function processImage(
   } else {
     const stream = runFfmpeg(
       buildImageArgs(ffmpegInput, ffmpegParsed, { trimFilter }),
+      undefined,
+      ffmpegInputBuffer,
     );
     buffer = await new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
@@ -967,10 +970,11 @@ async function runExiftool(
   }
 }
 
-function runFfmpeg(args: string[], key?: string): Readable {
+function runFfmpeg(args: string[], key?: string, stdin?: Buffer): Readable {
   logger.verbose("[processor] runFfmpeg", { key, args: args.join(" ") });
   const span = tracer.startSpan("exec.ffmpeg");
   const proc = spawn("ffmpeg", args);
+  if (stdin) proc.stdin.end(stdin);
   const output = new PassThrough();
 
   // Pipe stdout but don't let it end the PassThrough — we control
