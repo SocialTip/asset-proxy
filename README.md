@@ -136,12 +136,13 @@ const url = generateUrl(
 
 ## Project structure
 
-This repository is a pnpm monorepo with three packages:
+This repository is a pnpm monorepo with the following packages:
 
 | Package                                | Path                     | Published | Description                                                                        |
 | -------------------------------------- | ------------------------ | --------- | ---------------------------------------------------------------------------------- |
 | `@socialtip/asset-proxy-url-parser`    | `packages/url-parser`    | Yes       | Shared URL schema, parsing, signature verification/generation, and encryption      |
 | `@socialtip/asset-proxy-url-generator` | `packages/url-generator` | Yes       | Generates asset-proxy-compatible URL paths with encryption and signing             |
+| `@socialtip/asset-proxy-video-player`  | `packages/video-player`  | Yes       | React component for playing fragmented MP4 videos with streaming support           |
 | `proxy`                                | `packages/proxy`         | No        | The image/video processing service (Fastify + ffmpeg + sharp), deployed via Docker |
 
 ## Development
@@ -177,7 +178,7 @@ Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud
 
 ## Deployment
 
-CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`). The `@socialtip/asset-proxy-url-parser` and `@socialtip/asset-proxy-url-generator` packages are published to GitHub Packages on release.
+CI/CD runs automatically on pushes to `main` and on pull requests. After tests pass, the CD job builds a Docker image and pushes it to GitHub Container Registry (`ghcr.io/socialtip/asset-proxy`). The `@socialtip/asset-proxy-url-parser`, `@socialtip/asset-proxy-url-generator`, and `@socialtip/asset-proxy-video-player` packages are published to GitHub Packages on release.
 
 Images are tagged with the commit SHA. Pushes to `main` are additionally tagged `latest`.
 

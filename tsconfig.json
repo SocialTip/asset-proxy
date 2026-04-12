@@ -13,7 +13,8 @@
     { "path": "packages/url-parser" },
     { "path": "packages/url-generator" },
     { "path": "packages/proxy" },
-    { "path": "packages/astro" }
+    { "path": "packages/astro" },
+    { "path": "packages/video-player" }
   ],
   "files": []
 }
