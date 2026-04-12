@@ -18,11 +18,15 @@ interface JaegerTrace {
 async function getTraces(
   service: string,
   since: number,
-  limit = 10,
+  opts?: { limit?: number; tags?: Record<string, string> },
 ): Promise<JaegerTrace[]> {
-  const res = await globalThis.fetch(
-    `${JAEGER_URL}/api/traces?service=${service}&limit=${limit}&start=${since}`,
-  );
+  const params = new URLSearchParams({
+    service,
+    limit: String(opts?.limit ?? 10),
+    start: String(since),
+  });
+  if (opts?.tags) params.set("tags", JSON.stringify(opts.tags));
+  const res = await globalThis.fetch(`${JAEGER_URL}/api/traces?${params}`);
   const data = (await res.json()) as { data: JaegerTrace[] };
   return data.data ?? [];
 }
@@ -69,24 +73,20 @@ describe("otel configuration", () => {
     const parsed = parseProcessingUrl(
       `/insecure/rs:fill:128:128/fr:15/ct:1/cb:${marker}/plain/${VIDEO_SOURCE_URL}`,
     );
-    const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
-    const res = await fetch(url);
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+    const res = await fetch(`${SERVICE_URL}${urlPath}`);
     expect(res.status).toBe(200);
     await res.arrayBuffer();
 
     const requestSpan = await vi.waitFor(async () => {
-      const spans = allSpans(await getTraces("asset-proxy", testStart));
-      const span = spans.find(
-        (s) =>
-          s.tags.some(
-            (t) => t.key === "otel.scope.name" && t.value === "@fastify/otel",
-          ) &&
-          s.tags.some(
-            (t) =>
-              t.key === "url.path" &&
-              typeof t.value === "string" &&
-              t.value.includes(marker),
-          ),
+      const traces = await getTraces("asset-proxy", testStart, {
+        tags: { "url.path": urlPath },
+      });
+      const spans = allSpans(traces);
+      const span = spans.find((s) =>
+        s.tags.some(
+          (t) => t.key === "otel.scope.name" && t.value === "@fastify/otel",
+        ),
       );
       expect(span).toBeDefined();
       return span!;
