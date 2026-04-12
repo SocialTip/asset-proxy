@@ -102,8 +102,8 @@ export type VideoCodecStringOptions = Pick<
   import("@socialtip/asset-proxy-url-parser").ParsedUrl,
   "outputFormat" | "mute" | "resize" | "framerate"
 > & {
-  /** Probed source media information from ffprobe. */
-  source: SourceProbe;
+  /** Probed source media information from ffprobe. Null if the probe failed; defaults are used. */
+  source: SourceProbe | null;
 };
 
 /**
@@ -115,20 +115,24 @@ export type VideoCodecStringOptions = Pick<
  *
  * Returns undefined for unrecognised output formats.
  */
+const DEFAULT_WIDTH = 1920;
+const DEFAULT_HEIGHT = 1080;
+const DEFAULT_FPS = 30;
+
 export function videoCodecString(
   opts: VideoCodecStringOptions,
 ): string | undefined {
   const { outputFormat, mute, source } = opts;
-  const width = opts.resize?.width || source.width;
-  const height = opts.resize?.height || source.height;
-  const fps = opts.framerate ?? source.fps;
-  const hasAudio = !mute && source.audio !== undefined;
+  const width = opts.resize?.width || source?.width || DEFAULT_WIDTH;
+  const height = opts.resize?.height || source?.height || DEFAULT_HEIGHT;
+  const fps = opts.framerate ?? source?.fps ?? DEFAULT_FPS;
+  const hasAudio = !mute && !!source?.audio;
 
   if (outputFormat === "fmp4" || outputFormat === "mp4") {
     const video = h264CodecString(width, height, fps);
     if (!hasAudio) return video;
-    const isPassthrough = source.audio!.codec === "aac";
-    return `${video}, ${aacCodecString(source.audio!.profile, isPassthrough)}`;
+    const isPassthrough = source.audio?.codec === "aac";
+    return `${video}, ${aacCodecString(source.audio?.profile, isPassthrough)}`;
   }
   if (outputFormat === "webm") {
     const video = av1CodecString(width, height, fps);

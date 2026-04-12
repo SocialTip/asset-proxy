@@ -4,7 +4,6 @@ import { promisify } from "node:util";
 import { LRUCache } from "lru-cache";
 import { z } from "zod/v4";
 
-import { logger } from "./logger.js";
 import { recordException, tracer } from "./tracing.js";
 
 /** Information about an audio stream probed from a video. */
@@ -78,6 +77,7 @@ export async function probeSource(sourceUrl: string): Promise<SourceProbe> {
     });
     return result;
   } catch (err) {
+    cache.delete(sourceUrl);
     recordException(span, err);
     throw err;
   } finally {
@@ -86,37 +86,29 @@ export async function probeSource(sourceUrl: string): Promise<SourceProbe> {
 }
 
 async function probeSourceImpl(sourceUrl: string): Promise<SourceProbe> {
-  try {
-    const { stdout } = await promisify(execFile)("ffprobe", [
-      "-v",
-      "error",
-      "-show_entries",
-      "stream=codec_type,codec_name,profile,width,height,r_frame_rate",
-      "-of",
-      "json",
-      sourceUrl,
-    ]);
-    const { streams } = ffprobeResultSchema.parse(JSON.parse(stdout));
-    const videoStream = streams.find((s) => s.codec_type === "video");
-    const audioStream = streams.find((s) => s.codec_type === "audio");
+  const { stdout } = await promisify(execFile)("ffprobe", [
+    "-v",
+    "error",
+    "-show_entries",
+    "stream=codec_type,codec_name,profile,width,height,r_frame_rate",
+    "-of",
+    "json",
+    sourceUrl,
+  ]);
+  const { streams } = ffprobeResultSchema.parse(JSON.parse(stdout));
+  const videoStream = streams.find((s) => s.codec_type === "video");
+  const audioStream = streams.find((s) => s.codec_type === "audio");
 
-    const width = videoStream?.width || 1920;
-    const height = videoStream?.height || 1080;
-    const fps = videoStream?.r_frame_rate
-      ? Number(videoStream.r_frame_rate.split("/")[0]) /
-        Number(videoStream.r_frame_rate.split("/")[1])
-      : 30;
+  const width = videoStream?.width || 1920;
+  const height = videoStream?.height || 1080;
+  const fps = videoStream?.r_frame_rate
+    ? Number(videoStream.r_frame_rate.split("/")[0]) /
+      Number(videoStream.r_frame_rate.split("/")[1])
+    : 30;
 
-    const audio = audioStream?.codec_name
-      ? { codec: audioStream.codec_name, profile: audioStream.profile }
-      : undefined;
+  const audio = audioStream?.codec_name
+    ? { codec: audioStream.codec_name, profile: audioStream.profile }
+    : undefined;
 
-    return { audio, width, height, fps };
-  } catch (cause) {
-    logger.error("[ffprobe] probeSource failed, using defaults", {
-      sourceUrl,
-      cause,
-    });
-    return { audio: undefined, width: 1920, height: 1080, fps: 30 };
-  }
+  return { audio, width, height, fps };
 }

@@ -146,37 +146,40 @@ async function checkSourceLimits(
 
   if (!maxFileSize && !maxResolution) return;
 
-  if (maxFileSize) {
-    const response = await fetch(sourceUrl, { method: "HEAD" });
-    if (response.ok) {
-      const contentLength = response.headers.get("content-length");
-      if (contentLength && parseInt(contentLength, 10) > maxFileSize) {
-        throw new HTTPError(
-          `Source file size ${contentLength} exceeds limit of ${maxFileSize} bytes`,
-          { code: "UNPROCESSABLE_ENTITY" },
-        );
+  return withSpan("checkSourceLimits", {}, async (span) => {
+    if (maxFileSize) {
+      const response = await fetch(sourceUrl, { method: "HEAD" });
+      if (response.ok) {
+        const contentLength = response.headers.get("content-length");
+        if (contentLength && parseInt(contentLength, 10) > maxFileSize) {
+          throw new HTTPError(
+            `Source file size ${contentLength} exceeds limit of ${maxFileSize} bytes`,
+            { code: "UNPROCESSABLE_ENTITY" },
+          );
+        }
       }
     }
-  }
 
-  if (maxResolution) {
-    try {
-      const { width, height } = await probeSource(sourceUrl);
-      const mp = (width * height) / 1_000_000;
-      if (mp > maxResolution) {
-        throw new HTTPError(
-          `Source resolution ${mp.toFixed(1)}MP exceeds limit of ${maxResolution}MP`,
-          { code: "UNPROCESSABLE_ENTITY" },
-        );
+    if (maxResolution) {
+      try {
+        const { width, height } = await probeSource(sourceUrl);
+        const mp = (width * height) / 1_000_000;
+        if (mp > maxResolution) {
+          throw new HTTPError(
+            `Source resolution ${mp.toFixed(1)}MP exceeds limit of ${maxResolution}MP`,
+            { code: "UNPROCESSABLE_ENTITY" },
+          );
+        }
+      } catch (err) {
+        if (err instanceof HTTPError) throw err;
+        recordException(span, err);
+        logger.warn("Failed to probe source resolution", {
+          error: err instanceof Error ? err.message : String(err),
+          sourceUrl,
+        });
       }
-    } catch (err) {
-      if (err instanceof HTTPError) throw err;
-      logger.warn("Failed to probe source resolution", {
-        error: err instanceof Error ? err.message : String(err),
-        sourceUrl,
-      });
     }
-  }
+  });
 }
 
 function checkResultLimits(
