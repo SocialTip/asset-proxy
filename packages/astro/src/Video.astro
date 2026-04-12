@@ -11,12 +11,28 @@ type Props = {
   config?: AssetProxyServiceConfig;
   /** Asset-proxy processing options — resize, crop, quality, format, effects, video options, etc. See `ParsedUrlInput` for the full list of available fields. */
   options?: Partial<Omit<ParsedUrlInput, "sourceUrl">>;
+  /** When true, use the MediaSource API for streaming playback. The URL must include `cors:1` and a codec option. */
+  mse?: boolean;
 } & Omit<HTMLAttributes<"video">, "src">;
 
-const { src, config, options, ...htmlAttrs } = Astro.props;
+const { src, config, options, mse, ...htmlAttrs } = Astro.props;
 
 const resolvedConfig = config ?? imageConfig.service.config as AssetProxyServiceConfig;
 const videoUrl = getImageUrl({ src, ...options }, resolvedConfig);
 ---
 
-<video src={videoUrl} {...htmlAttrs} />
+<video src={videoUrl} data-mse={mse ? "" : undefined} {...htmlAttrs} />
+
+{mse && (
+  <script>
+    import { playVideoWithMediaSource } from "@socialtip/asset-proxy-video-player";
+
+    document.querySelectorAll<HTMLVideoElement>("video[data-mse]").forEach((video) => {
+      const src = video.getAttribute("src");
+      if (src) {
+        video.removeAttribute("src");
+        playVideoWithMediaSource(video, src);
+      }
+    });
+  </script>
+)}
