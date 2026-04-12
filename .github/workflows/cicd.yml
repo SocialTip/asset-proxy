@@ -251,6 +251,8 @@ jobs:
     if: needs.changes.outputs.video-player == 'true'
     needs: [changes]
     runs-on: warp-ubuntu-latest-x64-2x
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
