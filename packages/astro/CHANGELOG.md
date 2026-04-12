@@ -1,3 +1,11 @@
+## 0.5.0
+
+- fix(astro): use data attribute for mse src to prevent premature fetch
+- feat: require f:fmp4 format for MSE playback
+- fix: correct codec option docs — it's a boolean (codec:1), not a value
+- docs(astro): note that mse implies autoplay
+- feat(astro): add mse prop to Video component for MediaSource playback
+
 ## 0.4.4
 
 Version bump only (no changes).
