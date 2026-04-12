@@ -1,3 +1,7 @@
+## 0.7.0
+
+- feat: make codec header opt-in via `codec:1` (shorthand `cdc`)
+
 ## 0.6.2
 
 - fix: lint
