@@ -47,5 +47,4 @@ The source URL must include:
 
 - **`cors:1`** — enables CORS headers so the player can fetch the video
 - **`codec:1` or `cdc:1`** — tells the proxy to expose codec info in the Content-Type header, needed to configure the MediaSource buffer
-
-The source URL should use **`f:fmp4`** to enable cache-miss streaming.
+- **`f:fmp4`** — required for cache-miss streaming. Plain mp4 is not streamable on cache miss, and webm does not require MSE.

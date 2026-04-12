@@ -1,7 +1,7 @@
 const FALLBACK_MIME = 'video/mp4; codecs="avc1.640028, mp4a.40.2"';
 
 /**
- * Plays a video using the MediaSource API, with support for streaming even on cache miss. The source URL should use `f:fmp4` to enable cache-miss streaming.
+ * Plays a video using the MediaSource API, with support for streaming even on cache miss. The source URL must use `f:fmp4` — plain mp4 is not streamable on cache miss, and webm does not require MSE.
  *
  * Uses ManagedMediaSource on iPhone Safari (17.1+), MediaSource on desktop browsers and iPad Safari, and falls back to plain `<video src>` for unsupported browsers.
  *
@@ -27,6 +27,14 @@ export function playVideoWithMediaSource(
     throw new Error(
       `playVideoWithMediaSource: the URL must include "codec:1" (or "cdc:1") ` +
         `so the proxy exposes codec info for the MediaSource buffer. Received: ${url}`,
+    );
+  }
+
+  if (!url.includes("f:fmp4")) {
+    throw new Error(
+      `playVideoWithMediaSource: the URL must include "f:fmp4". Plain mp4 is ` +
+        `not streamable on cache miss, and webm does not require MSE. ` +
+        `Received: ${url}`,
     );
   }
 
