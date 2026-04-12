@@ -122,6 +122,9 @@ importers:
       fastify:
         specifier: ^5.8.4
         version: 5.8.4
+      lru-cache:
+        specifier: ^11.3.3
+        version: 11.3.3
       range-parser:
         specifier: ^1.2.1
         version: 1.2.1
@@ -4837,6 +4840,13 @@ packages:
     resolution:
       {
         integrity: sha512-aY/R+aEsRelme17KGQa/1ZSIpLpNYYrhcrepKTZgE+W3WM16YMCaPwOHLHsmopZHELU0Ojin1lPVxKR0MihncA==,
+      }
+    engines: { node: 20 || >=22 }
+
+  lru-cache@11.3.3:
+    resolution:
+      {
+        integrity: sha512-JvNw9Y81y33E+BEYPr0U7omo+U9AySnsMsEiXgwT6yqd31VQWTLNQqmT4ou5eqPFUrTfIDFta2wKhB1hyohtAQ==,
       }
     engines: { node: 20 || >=22 }
 
@@ -9882,6 +9892,8 @@ snapshots:
   longest-streak@3.1.0: {}
 
   lru-cache@11.2.7: {}
+
+  lru-cache@11.3.3: {}
 
   magic-string@0.30.21:
     dependencies:

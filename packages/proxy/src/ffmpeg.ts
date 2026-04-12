@@ -25,7 +25,8 @@ import {
   type VideoUrl,
 } from "@socialtip/asset-proxy-url-parser";
 
-import { probeSource, videoCodecString } from "./codec.js";
+import { videoCodecString } from "./codec.js";
+import { probeSource } from "./ffprobe.js";
 import { logger } from "./logger.js";
 import { recordException, tracer } from "./tracing.js";
 

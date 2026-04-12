@@ -1,8 +1,6 @@
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import type { Http2Server } from "node:http2";
 import { Readable } from "node:stream";
-import { promisify } from "node:util";
 
 import { Storage } from "@google-cloud/storage";
 import {
@@ -31,12 +29,11 @@ import {
   processVideo,
   type VideoResult,
 } from "./ffmpeg.js";
+import { probeSource } from "./ffprobe.js";
 import { handleInfoRequest } from "./info.js";
 import { logger } from "./logger.js";
 import { requestKey } from "./request-key.js";
 import { recordException, tracer, withSpan } from "./tracing.js";
-
-const execFileAsync = promisify(execFile);
 
 const CONTENT_TYPES: Record<string, string> = {
   mp4: "video/mp4",
@@ -164,29 +161,13 @@ async function checkSourceLimits(
 
   if (maxResolution) {
     try {
-      const { stdout } = await withSpan("exec.ffprobe.resolution", {}, () =>
-        execFileAsync("ffprobe", [
-          "-v",
-          "error",
-          "-select_streams",
-          "v:0",
-          "-show_entries",
-          "stream=width,height",
-          "-of",
-          "json",
-          sourceUrl,
-        ]),
-      );
-      const probe = JSON.parse(stdout);
-      const stream = probe.streams?.[0];
-      if (stream?.width && stream?.height) {
-        const mp = (stream.width * stream.height) / 1_000_000;
-        if (mp > maxResolution) {
-          throw new HTTPError(
-            `Source resolution ${mp.toFixed(1)}MP exceeds limit of ${maxResolution}MP`,
-            { code: "UNPROCESSABLE_ENTITY" },
-          );
-        }
+      const { width, height } = await probeSource(sourceUrl);
+      const mp = (width * height) / 1_000_000;
+      if (mp > maxResolution) {
+        throw new HTTPError(
+          `Source resolution ${mp.toFixed(1)}MP exceeds limit of ${maxResolution}MP`,
+          { code: "UNPROCESSABLE_ENTITY" },
+        );
       }
     } catch (err) {
       if (err instanceof HTTPError) throw err;
