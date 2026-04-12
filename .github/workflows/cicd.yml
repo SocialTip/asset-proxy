@@ -143,7 +143,8 @@ jobs:
         run: tail -100 /tmp/cache-proxy.log
 
       - name: Install Playwright Chromium
-        run: pnpm --filter @socialtip/asset-proxy-video-player exec playwright install --with-deps chromium
+        working-directory: packages/video-player
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Run tests
         id: tests
