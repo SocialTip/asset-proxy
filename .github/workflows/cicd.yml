@@ -26,6 +26,11 @@ jobs:
           - 80:80
         volumes:
           - /tmp/nginx:/usr/share/nginx
+      jaeger:
+        image: jaegertracing/all-in-one:latest
+        ports:
+          - 4318:4318
+          - 16686:16686
     steps:
       - uses: actions/checkout@v4
         with:
@@ -89,7 +94,7 @@ jobs:
             -H 'Content-Type: application/json' -d '{"name":"test-cache"}'
 
       - name: Start asset-proxy (processing mode)
-        run: cd packages/proxy && nohup node --conditions source --import tsx src/index.ts > /tmp/asset-proxy.log 2>&1 &
+        run: cd packages/proxy && nohup node --conditions source --import tsx --import ./src/instrument.ts src/index.ts > /tmp/asset-proxy.log 2>&1 &
         env:
           HEALTH_PORT: "8082"
           SKIP_GPU: "1"
@@ -100,6 +105,10 @@ jobs:
           BEST_FORMAT_MAX_RESOLUTION: "0.005"
           STORAGE_EMULATOR_HOST: "http://localhost:4443"
           NODE_V8_COVERAGE: /tmp/coverage-asset-proxy
+          OTEL_SERVICE_NAME: "asset-proxy"
+          OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318"
+          OTEL_TRACES_SAMPLER: "always_on"
+          OTEL_BSP_SCHEDULE_DELAY: "100"
 
       - name: Wait for asset-proxy
         id: wait
@@ -110,7 +119,7 @@ jobs:
         run: tail -100 /tmp/asset-proxy.log
 
       - name: Start cache-proxy
-        run: cd packages/proxy && nohup node --conditions source --import tsx src/index.ts > /tmp/cache-proxy.log 2>&1 &
+        run: cd packages/proxy && nohup node --conditions source --import tsx --import ./src/instrument.ts src/index.ts > /tmp/cache-proxy.log 2>&1 &
         env:
           HEALTH_PORT: "8083"
           PORT: "8081"
@@ -118,6 +127,10 @@ jobs:
           CACHE_BUCKET: "test-cache"
           GCS_API_ENDPOINT: "http://localhost:4443"
           NODE_V8_COVERAGE: /tmp/coverage-cache-proxy
+          OTEL_SERVICE_NAME: "cache-proxy"
+          OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318"
+          OTEL_TRACES_SAMPLER: "always_on"
+          OTEL_BSP_SCHEDULE_DELAY: "100"
 
       - name: Wait for cache-proxy
         id: wait-cache
@@ -225,6 +238,12 @@ jobs:
           cat /tmp/asset-proxy.log
           echo "=== cache-proxy ==="
           cat /tmp/cache-proxy.log
+          echo "=== jaeger services ==="
+          curl -sf http://localhost:16686/api/services || echo "Jaeger query failed"
+          echo "=== jaeger traces (asset-proxy) ==="
+          curl -sf "http://localhost:16686/api/traces?service=asset-proxy&limit=1" | head -c 2000 || echo "No traces"
+          echo "=== jaeger container logs ==="
+          docker logs "$(docker ps -qf 'ancestor=jaegertracing/all-in-one:latest')" 2>&1 | tail -50 || echo "No jaeger container found"
 
   docker-build:
     if: github.event_name == 'pull_request'

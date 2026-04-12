@@ -133,6 +133,7 @@ export async function createCacheProxyApp() {
     file: ReturnType<typeof cacheBucket.file>,
   ): Promise<void> {
     const span = tracer.startSpan("cache.serveFromCache");
+    span.setAttribute("cache.key", file.name);
     const metadataSpan = tracer.startSpan("cache.bucket.getMetadata");
     const [metadata] = await file.getMetadata();
     metadataSpan.end();

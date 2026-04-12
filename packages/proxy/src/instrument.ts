@@ -17,7 +17,16 @@ process.env.OTEL_RESOURCE_ATTRIBUTES = existing
   ? `${existing},${envAttr}`
   : envAttr;
 
-export const fastifyOtelInstrumentation = new FastifyOtelInstrumentation();
+export const fastifyOtelInstrumentation = new FastifyOtelInstrumentation({
+  ignorePaths: "/health",
+  requestHook: (span, request) => {
+    // Sentry's OTLP ingestion maps the OTEL span name to span.name, but
+    // span.description (shown in the trace explorer) comes from the
+    // sentry.description attribute. Without this, the description is empty.
+    const route = request.routeOptions.url ?? request.url;
+    span.setAttribute("sentry.description", `${request.method} ${route}`);
+  },
+});
 
 const sdk = new NodeSDK({
   traceExporter: new OTLPTraceExporter(),
@@ -34,6 +43,9 @@ const sdk = new NodeSDK({
   instrumentations: [
     getNodeAutoInstrumentations({
       "@opentelemetry/instrumentation-fastify": { enabled: false },
+      "@opentelemetry/instrumentation-http": {
+        ignoreIncomingRequestHook: (req) => req.url === "/health",
+      },
     }),
     fastifyOtelInstrumentation,
   ],
