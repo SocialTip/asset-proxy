@@ -38,7 +38,7 @@ Requires `react` as a peer dependency.
 ```tsx
 import { MediaSourceVideo } from "@socialtip/asset-proxy-video-player/react";
 
-<MediaSourceVideo src="/cors:1/cdc:1/f:fmp4/video.mp4" autoPlay muted loop />;
+<MediaSourceVideo src="/cors:1/cdc:1/f:fmp4/video.mp4" muted loop />;
 ```
 
 ## URL requirements
