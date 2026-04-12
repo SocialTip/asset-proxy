@@ -42,6 +42,11 @@ ENV CACHE_BUCKET=
 # When set, container will run in cache mode
 ENV FORWARD_URL=
 
+# Comma-separated origins for the Access-Control-Allow-Origin response header.
+# Use "*" to allow all origins. Required for MSE (Media Source Extensions)
+# players to fetch fmp4/WebM streams cross-origin.
+ENV CORS_ALLOW_ORIGIN=
+
 # Default quality for lossy formats (1–100). Per-request quality overrides this.
 ENV QUALITY=80
 # Format-specific default quality, e.g. "avif=63,webp=79".

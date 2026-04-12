@@ -123,6 +123,22 @@ export async function createCacheProxyApp() {
   const app = Fastify({ http2: true });
   await app.register(fastifyOtelInstrumentation.plugin());
 
+  if (env.CORS_ALLOW_ORIGIN) {
+    const origins = env.CORS_ALLOW_ORIGIN;
+    const allowAll = origins.has("*");
+    app.addHook("onSend", (_request, reply, _payload, done) => {
+      if (allowAll) {
+        reply.header("Access-Control-Allow-Origin", "*");
+      } else {
+        const requestOrigin = _request.headers.origin;
+        if (requestOrigin && origins.has(requestOrigin)) {
+          reply.header("Access-Control-Allow-Origin", requestOrigin);
+        }
+      }
+      done();
+    });
+  }
+
   app.get("/health", async (_request, reply) => {
     return reply.send("ok");
   });

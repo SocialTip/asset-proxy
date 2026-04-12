@@ -191,6 +191,21 @@ const cacheModeSchema = z.object({
 
   /** GCS bucket name for the cache. */
   CACHE_BUCKET: z.string(),
+
+  /** Comma-separated list of origins for the Access-Control-Allow-Origin response header (e.g. "https://example.com,https://app.example.com"). Use "*" to allow all origins. When set, every successful response includes this header. Required for browsers using MSE (Media Source Extensions) to play fmp4/WebM streams cross-origin. */
+  CORS_ALLOW_ORIGIN: z
+    .string()
+    .optional()
+    .transform((v) =>
+      v
+        ? new Set(
+            v
+              .split(",")
+              .map((o) => o.trim())
+              .filter(Boolean),
+          )
+        : undefined,
+    ),
 });
 
 export type ProcessingEnv = z.infer<typeof processingModeSchema>;
