@@ -109,7 +109,7 @@ describe("video codec", () => {
     );
   });
 
-  it("fmp4 omits CORS header for non-allowed origin", async () => {
+  it("fmp4 returns full allowed origins list regardless of request origin", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/cb:${CACHE_BUSTER}/fr:15/ct:1/cdc:1/plain/${VIDEO_SOURCE_URL}@fmp4`,
     );
@@ -119,7 +119,9 @@ describe("video codec", () => {
       headers: { origin: "http://evil.example.com" },
     });
     expect(res.status).toBe(200);
-    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+    expect(res.headers.get("access-control-allow-origin")).toBe(
+      "http://test-origin.example.com",
+    );
   });
 
   it("mp4 from webm source re-encodes audio to aac", async () => {

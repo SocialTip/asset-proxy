@@ -125,16 +125,9 @@ export async function createCacheProxyApp() {
 
   if (env.CORS_ALLOW_ORIGIN) {
     const origins = env.CORS_ALLOW_ORIGIN;
-    const allowAll = origins.has("*");
+    const headerValue = origins.has("*") ? "*" : [...origins].join(", ");
     app.addHook("onSend", (_request, reply, _payload, done) => {
-      if (allowAll) {
-        reply.header("Access-Control-Allow-Origin", "*");
-      } else {
-        const requestOrigin = _request.headers.origin;
-        if (requestOrigin && origins.has(requestOrigin)) {
-          reply.header("Access-Control-Allow-Origin", requestOrigin);
-        }
-      }
+      reply.header("Access-Control-Allow-Origin", headerValue);
       done();
     });
   }
