@@ -30,8 +30,19 @@ process.env.OTEL_RESOURCE_ATTRIBUTES = existing
 
 const sampleRate = env.TRACE_SAMPLE_RATE;
 
+/** Hash a trace ID the same way as OTEL's TraceIdRatioBasedSampler: XOR all 8-char hex chunks together. */
+function traceIdHash(traceId: string): number {
+  let acc = 0;
+  for (let i = 0; i < traceId.length; i += 8) {
+    acc = (acc ^ parseInt(traceId.slice(i, i + 8), 16)) >>> 0;
+  }
+  return acc;
+}
+
+const upperBound = Math.floor(sampleRate * 0xffffffff);
+
 /**
- * Span processor that forwards all error traces and a configurable ratio of successful traces to the exporter. Uses the trace ID to make deterministic sampling decisions so all spans in a trace are either kept or dropped together.
+ * Span processor that forwards all error traces and a configurable ratio of successful traces to the exporter. Uses the same trace ID hashing as OTEL's TraceIdRatioBasedSampler for deterministic per-trace decisions.
  */
 class SamplingSpanProcessor implements SpanProcessor {
   private readonly delegate: BatchSpanProcessor;
@@ -46,9 +57,7 @@ class SamplingSpanProcessor implements SpanProcessor {
 
   onEnd(span: ReadableSpan): void {
     const hasError = span.status.code === SpanStatusCode.ERROR;
-    const traceId = span.spanContext().traceId;
-    const hash = parseInt(traceId.slice(-8), 16) / 0x100000000;
-    if (hasError || hash < sampleRate) {
+    if (hasError || traceIdHash(span.spanContext().traceId) < upperBound) {
       this.delegate.onEnd(span);
     }
   }
