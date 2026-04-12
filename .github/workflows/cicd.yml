@@ -275,11 +275,10 @@ jobs:
     permissions:
       contents: read
     outputs:
-      video-player: ${{ github.event_name == 'push' || steps.filter.outputs.video-player == 'true' }}
+      video-player: ${{ steps.filter.outputs.video-player }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
-        if: github.event_name == 'pull_request'
         id: filter
         with:
           filters: |
