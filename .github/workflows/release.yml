@@ -54,6 +54,8 @@ jobs:
 
       - name: Publish to npm
         working-directory: ${{ steps.detect.outputs.directory }}
-        run: npm publish --access public
+        run: |
+          pnpm pack
+          npm publish *.tgz --access public
 
       - run: echo "::notice::Published ${{ steps.detect.outputs.tag }}"
