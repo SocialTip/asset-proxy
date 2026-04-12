@@ -78,11 +78,16 @@ describe("video codec", () => {
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
 
-    const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    const res1 = await fetch(`${CACHE_PROXY_URL}${urlPath}`, {
+      headers: { origin: "http://test-origin.example.com" },
+    });
     expect(res1.status).toBe(200);
     const contentType1 = res1.headers.get("content-type")!;
     expect(contentType1).toMatchInlineSnapshot(
       `"video/mp4; codecs="avc1.640016, mp4a.40.5""`,
+    );
+    expect(res1.headers.get("access-control-allow-origin")).toBe(
+      "http://test-origin.example.com",
     );
 
     const buffer = Buffer.from(await res1.arrayBuffer());
@@ -93,10 +98,28 @@ describe("video codec", () => {
 
     await waitForCacheWrite(urlPath);
 
-    const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    const res2 = await fetch(`${CACHE_PROXY_URL}${urlPath}`, {
+      headers: { origin: "http://test-origin.example.com" },
+    });
     expect(res2.status).toBe(200);
     expect(res2.headers.get("accept-ranges")).toBe("bytes");
     expect(res2.headers.get("content-type")).toBe(contentType1);
+    expect(res2.headers.get("access-control-allow-origin")).toBe(
+      "http://test-origin.example.com",
+    );
+  });
+
+  it("fmp4 omits CORS header for non-allowed origin", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/cb:${CACHE_BUSTER}/fr:15/ct:1/cdc:1/plain/${VIDEO_SOURCE_URL}@fmp4`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`, {
+      headers: { origin: "http://evil.example.com" },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
   });
 
   it("mp4 from webm source re-encodes audio to aac", async () => {
