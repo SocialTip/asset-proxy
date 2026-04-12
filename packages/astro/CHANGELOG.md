@@ -1,3 +1,7 @@
+## 0.5.0
+
+- feat(astro): add mse prop to Video component for MediaSource playback
+
 ## 0.4.4
 
 Version bump only (no changes).
