@@ -927,6 +927,33 @@ describe("video ffmpeg args", () => {
     await videoArgs(vplain("/rs:force:480:360/mu:1/cdc:1"));
     expect(mockExecFile.mock.calls).toHaveLength(1);
   });
+
+  it("runs ffprobe only once when max source resolution and codec probe both needed", async () => {
+    setupSpawnMock();
+    const res = await request(app).get(
+      `/insecure/rs:force:480:360/msr:25/plain/${VSRC}@webm`,
+    );
+    expect(res.status).toBe(200);
+    // checkSourceLimits probes resolution and processVideo probes codec info,
+    // but the memoised probeSource should only invoke ffprobe once.
+    expect(mockExecFile.mock.calls).toHaveLength(1);
+
+    expect(mockExecFile.mock.calls[0]).toMatchInlineSnapshot(`
+      [
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-show_entries",
+          "stream=codec_type,codec_name,profile,width,height,r_frame_rate",
+          "-of",
+          "json",
+          "https://example.com/video.mp4",
+        ],
+        [Function],
+      ]
+    `);
+  });
 });
 
 describe("video ffmpeg args (GPU)", () => {
