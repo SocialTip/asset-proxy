@@ -98,9 +98,7 @@ describe("video codec", () => {
     expect(res2.status).toBe(200);
     expect(res2.headers.get("accept-ranges")).toBe("bytes");
     expect(res2.headers.get("content-type")).toBe(contentType1);
-    expect(
-      res2.headers.get("access-control-allow-origin"),
-    ).toMatchInlineSnapshot(`"http://test-origin.example.com"`);
+    expect(res2.headers.get("access-control-allow-origin")).toBe("*");
   });
 
   it("fmp4 omits CORS header without cors option", async () => {

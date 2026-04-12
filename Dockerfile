@@ -42,10 +42,6 @@ ENV CACHE_BUCKET=
 # When set, container will run in cache mode
 ENV FORWARD_URL=
 
-# Comma-separated origins for the Access-Control-Allow-Origin response header
-# when the cors:1 URL option is present. Defaults to "*".
-ENV CORS_ALLOW_ORIGIN=*
-
 # Default quality for lossy formats (1–100). Per-request quality overrides this.
 ENV QUALITY=80
 # Format-specific default quality, e.g. "avif=63,webp=79".

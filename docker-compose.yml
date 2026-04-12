@@ -50,7 +50,6 @@ services:
       - NODE_V8_COVERAGE
       - FORWARD_URL=http://asset-proxy:8080
       - CACHE_BUCKET=test-cache
-      - CORS_ALLOW_ORIGIN=http://test-origin.example.com
       - GCS_API_ENDPOINT=http://fake-gcs:4443
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_TRACES_SAMPLER=always_on

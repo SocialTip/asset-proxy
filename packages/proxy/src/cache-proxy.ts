@@ -192,7 +192,7 @@ export async function createCacheProxyApp() {
     const path = request.url.split("?")[0];
     const urlOptions = extractUrlOptions(path);
     if (urlOptions?.cors === "1") {
-      reply.header("Access-Control-Allow-Origin", env.CORS_ALLOW_ORIGIN);
+      reply.header("Access-Control-Allow-Origin", "*");
     }
     const gcsKey = cacheKey(path);
     if (!gcsKey) {

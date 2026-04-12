@@ -36,18 +36,6 @@ const commonFields = {
 
   /** Minimum log level. Defaults to "info". */
   LOG_LEVEL: z.enum(logLevels).default("info"),
-
-  /** Comma-separated list of origins for the `Access-Control-Allow-Origin` response header when the `cors:1` URL option is present (e.g. `https://example.com,https://app.example.com`). Defaults to `*`. */
-  CORS_ALLOW_ORIGIN: z
-    .string()
-    .default("*")
-    .transform((v) =>
-      v
-        .split(",")
-        .map((o) => o.trim())
-        .filter(Boolean)
-        .join(", "),
-    ),
 };
 
 const processingModeSchema = z
