@@ -103,8 +103,12 @@ ENV OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=
 ENV OTEL_EXPORTER_OTLP_TRACES_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
 ENV OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=
 ENV OTEL_EXPORTER_OTLP_LOGS_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
-ENV OTEL_TRACES_SAMPLER=parentbased_always_on
+# Must be always_on so all spans are recorded. The SamplingSpanProcessor
+# in instrument.ts decides what gets exported based on TRACE_SAMPLE_RATE.
+ENV OTEL_TRACES_SAMPLER=always_on
 ENV OTEL_TRACES_SAMPLER_ARG=
+# Fraction of traces to export (0–1). Error traces are always exported.
+ENV TRACE_SAMPLE_RATE=0.1
 ENV OTEL_RESOURCE_ATTRIBUTES=
 ENV OTEL_ENVIRONMENT=production
 

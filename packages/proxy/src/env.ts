@@ -31,6 +31,9 @@ const commonFields = {
   /** Cache-Control header value for successful responses. */
   CACHE_CONTROL: z.string().default("public, max-age=31536000, immutable"),
 
+  /** Trace sampling rate (0–1). Error traces are always exported regardless of this setting. Defaults to 0.1 (10%). */
+  TRACE_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
+
   /** Minimum log level. Defaults to "info". */
   LOG_LEVEL: z.enum(logLevels).default("info"),
 };

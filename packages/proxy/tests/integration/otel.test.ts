@@ -64,9 +64,10 @@ describe("otel configuration", () => {
 
   it("inbound request span has descriptive name and Sentry-compatible attributes", async () => {
     const testStart = Date.now() * 1000;
+    const marker = `otel-test-${Date.now()}`;
 
     const parsed = parseProcessingUrl(
-      `/insecure/rs:fill:128:128/fr:15/ct:1/plain/${VIDEO_SOURCE_URL}`,
+      `/insecure/rs:fill:128:128/fr:15/ct:1/cb:${marker}/plain/${VIDEO_SOURCE_URL}`,
     );
     const url = `${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`;
     const res = await fetch(url);
@@ -75,10 +76,17 @@ describe("otel configuration", () => {
 
     const requestSpan = await vi.waitFor(async () => {
       const spans = allSpans(await getTraces("asset-proxy", testStart));
-      const span = spans.find((s) =>
-        s.tags.some(
-          (t) => t.key === "otel.scope.name" && t.value === "@fastify/otel",
-        ),
+      const span = spans.find(
+        (s) =>
+          s.tags.some(
+            (t) => t.key === "otel.scope.name" && t.value === "@fastify/otel",
+          ) &&
+          s.tags.some(
+            (t) =>
+              t.key === "url.path" &&
+              typeof t.value === "string" &&
+              t.value.includes(marker),
+          ),
       );
       expect(span).toBeDefined();
       return span!;

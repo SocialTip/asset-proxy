@@ -12,10 +12,9 @@ File-system instrumentation is disabled by default to reduce noise.
 
 ## Configuration
 
-All configuration is done through the standard `OTEL_*` environment variables — no custom env vars are needed.
-
 | Variable                             | Purpose                                                              | Example                                                               |
 | ------------------------------------ | -------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `TRACE_SAMPLE_RATE`                  | Fraction of traces to export (0–1). Error traces are always exported | `0.1`                                                                 |
 | `OTEL_SERVICE_NAME`                  | Logical service name attached to all telemetry                       | `asset-proxy`                                                         |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`        | Base OTLP endpoint (used when signal-specific endpoints are not set) | `http://localhost:4318`                                               |
 | `OTEL_EXPORTER_OTLP_HEADERS`         | Headers sent with all OTLP exports                                   | `x-sentry-auth=sentry sentry_key=abc123`                              |
@@ -23,11 +22,11 @@ All configuration is done through the standard `OTEL_*` environment variables �
 | `OTEL_EXPORTER_OTLP_TRACES_HEADERS`  | Headers for trace exports (defaults to `OTEL_EXPORTER_OTLP_HEADERS`) | `x-sentry-auth=sentry sentry_key=abc123`                              |
 | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`   | Logs-specific OTLP endpoint                                          | `https://o123.ingest.us.sentry.io/api/456/integration/otlp/v1/logs`   |
 | `OTEL_EXPORTER_OTLP_LOGS_HEADERS`    | Headers for log exports (defaults to `OTEL_EXPORTER_OTLP_HEADERS`)   | `x-sentry-auth=sentry sentry_key=abc123`                              |
-| `OTEL_TRACES_SAMPLER`                | Sampling strategy                                                    | `parentbased_traceidratio`                                            |
-| `OTEL_TRACES_SAMPLER_ARG`            | Sampler argument (e.g. ratio)                                        | `0.1`                                                                 |
 | `OTEL_RESOURCE_ATTRIBUTES`           | Extra resource attributes                                            | `deployment.environment=production`                                   |
 
-See the [OpenTelemetry environment variable spec](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/) for the full list.
+`OTEL_TRACES_SAMPLER` must be `always_on` (the default in the Dockerfile) so all spans are recorded. Sampling is handled by a custom `SamplingSpanProcessor` that exports traces based on `TRACE_SAMPLE_RATE` while always exporting error traces.
+
+See the [OpenTelemetry environment variable spec](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/) for the full list of `OTEL_*` variables.
 
 ### Minimal example
 
