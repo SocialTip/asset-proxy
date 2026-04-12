@@ -21,16 +21,19 @@ const resolvedConfig = config ?? imageConfig.service.config as AssetProxyService
 const videoUrl = getImageUrl({ src, ...options }, resolvedConfig);
 ---
 
-<video src={videoUrl} data-mse={mse ? "" : undefined} {...htmlAttrs} />
+{mse ? (
+  <video data-mse-src={videoUrl} {...htmlAttrs} />
+) : (
+  <video src={videoUrl} {...htmlAttrs} />
+)}
 
 {mse && (
   <script>
     import { playVideoWithMediaSource } from "@socialtip/asset-proxy-video-player";
 
-    document.querySelectorAll<HTMLVideoElement>("video[data-mse]").forEach((video) => {
-      const src = video.getAttribute("src");
+    document.querySelectorAll<HTMLVideoElement>("video[data-mse-src]").forEach((video) => {
+      const src = video.dataset.mseSrc;
       if (src) {
-        video.removeAttribute("src");
         playVideoWithMediaSource(video, src);
       }
     });
