@@ -50,7 +50,7 @@ jobs:
             exit 1
           fi
 
-      - run: pnpm -w run build
+      - run: pnpm -r run build
 
       - name: Publish to npm
         working-directory: ${{ steps.detect.outputs.directory }}
