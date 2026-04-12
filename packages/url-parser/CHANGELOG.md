@@ -1,3 +1,8 @@
+## 0.8.0
+
+- feat: make codec header opt-in via `codec:1` (shorthand `cdc`)
+- feat: add fragmented MP4 (fmp4) output format
+
 ## 0.7.1
 
 - fix: exclude source files from published npm packages
