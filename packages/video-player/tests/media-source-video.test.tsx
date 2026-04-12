@@ -9,7 +9,7 @@ const serverUrl = inject("fmp4ServerUrl");
 it("plays a fragmented mp4 video", async () => {
   const src = `${serverUrl}/cors:1/cdc:1/f:fmp4/test.mp4`;
   const screen = await render(
-    <MediaSourceVideo src={src} autoPlay muted data-testid="video" />,
+    <MediaSourceVideo src={src} muted data-testid="video" />,
   );
 
   const video = screen.getByTestId("video");
