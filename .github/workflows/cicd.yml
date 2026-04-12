@@ -255,6 +255,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - run: corepack enable
 
@@ -264,9 +266,6 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-
-      - name: Build packages
-        run: pnpm -r run build
 
       - name: Install Playwright Chromium
         working-directory: packages/video-player

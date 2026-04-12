@@ -6,7 +6,7 @@ import { playVideoWithMediaSource } from "../src/play-video-with-media-source.js
 
 const serverUrl = inject("fmp4ServerUrl");
 
-it("plays a fragmented mp4 video", { retry: 2 }, async () => {
+it("plays a fragmented mp4 video", async () => {
   const src = `${serverUrl}/cors:1/cdc:1/f:fmp4/test.mp4`;
   const screen = await render(
     <MediaSourceVideo src={src} muted data-testid="video" />,
@@ -21,7 +21,7 @@ it("plays a fragmented mp4 video", { retry: 2 }, async () => {
       expect(el.readyState).toBeGreaterThanOrEqual(3);
       expect(el.currentTime).toBeGreaterThan(0.2);
     },
-    { timeout: 30_000 },
+    { timeout: 10_000 },
   );
 });
 
