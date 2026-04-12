@@ -109,6 +109,7 @@ jobs:
           OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318"
           OTEL_TRACES_SAMPLER: "always_on"
           OTEL_BSP_SCHEDULE_DELAY: "100"
+          TRACE_SAMPLE_RATE: "1"
 
       - name: Wait for asset-proxy
         id: wait
@@ -131,6 +132,7 @@ jobs:
           OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318"
           OTEL_TRACES_SAMPLER: "always_on"
           OTEL_BSP_SCHEDULE_DELAY: "100"
+          TRACE_SAMPLE_RATE: "1"
 
       - name: Wait for cache-proxy
         id: wait-cache

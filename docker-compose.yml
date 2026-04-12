@@ -15,6 +15,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_TRACES_SAMPLER=always_on
       - OTEL_BSP_SCHEDULE_DELAY=100
+      - TRACE_SAMPLE_RATE=1
     ports:
       - "8080:8080"
       - "8082:8082"
@@ -54,6 +55,7 @@ services:
       - OTEL_TRACES_SAMPLER=always_on
       - OTEL_BSP_SCHEDULE_DELAY=100
       - OTEL_SERVICE_NAME=cache-proxy
+      - TRACE_SAMPLE_RATE=1
     ports:
       - "8081:8080"
       - "8083:8082"
