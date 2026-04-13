@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ..:/workspaces/asset-proxy:cached
+      - ~/.gitconfig:/home/node/.gitconfig:ro
+      - ~/.config/gh:/home/node/.config/gh:ro
     command: sleep infinity
     environment:
       - SERVICE_URL=http://asset-proxy:8080

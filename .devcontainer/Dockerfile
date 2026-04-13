@@ -6,6 +6,7 @@ ARG FFMPEG_BUILD=n7.0.2-6-g7e69129d2f
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+      git-lfs \
       libimage-exiftool-perl \
       heif-thumbnailer \
       curl \
