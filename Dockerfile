@@ -37,6 +37,9 @@ ENV SKIP_GPU=
 ENV GPU_CONCURRENCY=1
 # Milliseconds to wait for a GPU slot before returning HTTP 429.
 ENV GPU_ACQUIRE_TIMEOUT_MS=5000
+# Minimum output frame dimensions for GPU encoding (<width>x<height>).
+# Falls back to CPU when output is smaller. Depends on GPU hardware.
+ENV GPU_MIN_FRAME_SIZE=192x192
 
 ENV CACHE_BUCKET=
 # When set, container will run in cache mode
