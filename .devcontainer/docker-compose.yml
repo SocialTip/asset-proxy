@@ -9,6 +9,8 @@ services:
     environment:
       - SERVICE_URL=http://asset-proxy:8080
       - CACHE_PROXY_URL=http://cache-proxy:8080
+      - HEALTH_URL=http://asset-proxy:8082
+      - JAEGER_URL=http://jaeger:16686
       - FAKE_GCS_URL=http://fake-gcs:4443
     depends_on:
       - asset-proxy
