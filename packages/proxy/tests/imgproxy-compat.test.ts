@@ -26,8 +26,21 @@ const { createCacheProxyApp } = await import("@/cache-proxy.js");
 const VSRC = "https://example.com/video.mp4";
 const ISRC = "https://example.com/photo.jpg";
 
+function mockFetchHead(contentType: string) {
+  return vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(
+      new Response(null, { headers: { "content-type": contentType } }),
+    );
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("imgproxy compat: video format best", () => {
   it("redirects video + f:best to webp thumbnail when compat header is set", async () => {
+    mockFetchHead("video/mp4");
     const app = await createCacheProxyApp();
     const res = await request(app)
       .get(`/insecure/f:best/rs:fill:480:360/plain/${VSRC}`)
@@ -40,6 +53,7 @@ describe("imgproxy compat: video format best", () => {
   });
 
   it("redirects video + @best suffix to webp thumbnail when compat header is set", async () => {
+    mockFetchHead("video/mp4");
     const app = await createCacheProxyApp();
     const res = await request(app)
       .get(`/insecure/rs:fill:480:360/plain/${VSRC}@best`)
@@ -60,7 +74,8 @@ describe("imgproxy compat: video format best", () => {
     expect(res.status).not.toBe(301);
   });
 
-  it("does not redirect image sources with f:best", async () => {
+  it("does not redirect image sources detected by Content-Type", async () => {
+    mockFetchHead("image/jpeg");
     const app = await createCacheProxyApp();
     const res = await request(app)
       .get(`/insecure/f:best/w:100/plain/${ISRC}`)
@@ -87,7 +102,8 @@ describe("imgproxy compat: video format best", () => {
     expect(res.status).not.toBe(301);
   });
 
-  it("redirects video with no extension + f:best", async () => {
+  it("redirects video with no extension when Content-Type is video", async () => {
+    mockFetchHead("video/mp4");
     const app = await createCacheProxyApp();
     const src = "https://example.com/media/12345";
     const res = await request(app)
@@ -98,7 +114,51 @@ describe("imgproxy compat: video format best", () => {
     expect(res.headers.location).toBe(`/insecure/f:webp/vts:0/plain/${src}`);
   });
 
+  it("does not redirect extensionless URL when Content-Type is image", async () => {
+    mockFetchHead("image/png");
+    const app = await createCacheProxyApp();
+    const src = "https://example.com/media/12345";
+    const res = await request(app)
+      .get(`/insecure/f:best/plain/${src}`)
+      .set("x-imgproxy-compat", "1");
+
+    expect(res.status).not.toBe(301);
+  });
+
+  it("sends HEAD request to source URL", async () => {
+    const fetchSpy = mockFetchHead("video/mp4");
+    const app = await createCacheProxyApp();
+    await request(app)
+      .get(`/insecure/f:best/plain/${VSRC}`)
+      .set("x-imgproxy-compat", "1");
+
+    expect(fetchSpy).toHaveBeenCalledWith(VSRC, { method: "HEAD" });
+  });
+
+  it("falls back to extension check when HEAD request fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network error"));
+    const app = await createCacheProxyApp();
+    const res = await request(app)
+      .get(`/insecure/f:best/plain/${VSRC}`)
+      .set("x-imgproxy-compat", "1");
+
+    // .mp4 is not an image extension, so falls back to treating as video → redirect
+    expect(res.status).toBe(301);
+  });
+
+  it("falls back to extension check for ambiguous Content-Type", async () => {
+    mockFetchHead("application/octet-stream");
+    const app = await createCacheProxyApp();
+    const res = await request(app)
+      .get(`/insecure/f:best/plain/${VSRC}`)
+      .set("x-imgproxy-compat", "1");
+
+    // .mp4 is not an image extension → redirect
+    expect(res.status).toBe(301);
+  });
+
   it("preserves all other options in the redirect URL", async () => {
+    mockFetchHead("video/mp4");
     const app = await createCacheProxyApp();
     const res = await request(app)
       .get(`/insecure/f:best/rs:fill:480:360/q:80/bl:5/plain/${VSRC}`)
@@ -111,6 +171,7 @@ describe("imgproxy compat: video format best", () => {
   });
 
   it("re-signs the redirect URL when signing keys are configured", async () => {
+    mockFetchHead("video/mp4");
     const { env } = await import("@/env.js");
     const signingKey = Buffer.from("736563726574", "hex");
     const signingSalt = Buffer.from("68656c6c6f", "hex");

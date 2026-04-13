@@ -117,11 +117,33 @@ function cacheKey(requestPath: string): string {
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|avif|gif|svg|bmp|tiff?)$/i;
 
 /**
+ * Determines whether a source URL points to a video by sending a HEAD request and inspecting the Content-Type header. Falls back to extension-based detection for non-HTTP URLs or when the request fails.
+ */
+async function isVideoSource(sourceUrl: string): Promise<boolean> {
+  if (!sourceUrl.startsWith("http://") && !sourceUrl.startsWith("https://")) {
+    return !IMAGE_EXTENSIONS.test(sourceUrl);
+  }
+
+  try {
+    const response = await fetch(sourceUrl, { method: "HEAD" });
+    if (!response.ok) return !IMAGE_EXTENSIONS.test(sourceUrl);
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.startsWith("video/")) return true;
+    if (contentType.startsWith("image/")) return false;
+    return !IMAGE_EXTENSIONS.test(sourceUrl);
+  } catch {
+    return !IMAGE_EXTENSIONS.test(sourceUrl);
+  }
+}
+
+/**
  * Returns a redirect path when an imgproxy-compat redirect is needed, or `undefined` if no redirect applies.
  *
  * Rule: video sources with `best` format are redirected to a webp thumbnail at second 0, matching imgproxy's behaviour of returning an image for video inputs.
  */
-function imgproxyCompatRedirect(requestPath: string): string | undefined {
+async function imgproxyCompatRedirect(
+  requestPath: string,
+): Promise<string | undefined> {
   const options = extractUrlOptions(requestPath);
   if (!options) return undefined;
 
@@ -142,7 +164,7 @@ function imgproxyCompatRedirect(requestPath: string): string | undefined {
     return undefined;
 
   const cleanSource = sourceUrl.replace(/@best$/, "");
-  if (IMAGE_EXTENSIONS.test(cleanSource)) return undefined;
+  if (!(await isVideoSource(cleanSource))) return undefined;
 
   const withoutLeadingSlash = requestPath.slice(1);
   const firstSlash = withoutLeadingSlash.indexOf("/");
@@ -254,7 +276,7 @@ export async function createCacheProxyApp() {
     }
 
     if (request.headers["x-imgproxy-compat"] === "1") {
-      const compatPath = imgproxyCompatRedirect(path);
+      const compatPath = await imgproxyCompatRedirect(path);
       if (compatPath) {
         return reply.redirect(compatPath, 301);
       }
