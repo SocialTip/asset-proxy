@@ -6,10 +6,12 @@ ARG FFMPEG_BUILD=n7.0.2-6-g7e69129d2f
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+      git-lfs \
       libimage-exiftool-perl \
       heif-thumbnailer \
       curl \
       xz-utils && \
+    git lfs install && \
     ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then FFMPEG_ARCH="linuxarm64"; \
     else FFMPEG_ARCH="linux64"; fi && \
