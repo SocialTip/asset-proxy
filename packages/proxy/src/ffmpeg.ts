@@ -431,21 +431,11 @@ export async function processVideo(
     const lock = await acquireGpuLock(key);
     const args = buildVideoArgs(sourceUrl, params);
     const stream = runFfmpeg(args, key);
-    try {
-      await waitForFirstDataOrError(stream);
-      stream.on("close", () => lock[Symbol.dispose]());
-      return { stream, outputFormat: parsed.outputFormat, codecs };
-    } catch (err) {
-      lock[Symbol.dispose]();
-      if (!isFrameSizeError(err)) throw err;
-      logger.warn(
-        "[processor] GPU encode failed due to frame size, retrying with CPU",
-        { key },
-      );
-    }
+    stream.on("close", () => lock[Symbol.dispose]());
+    return { stream, outputFormat: parsed.outputFormat, codecs };
   }
 
-  const args = buildVideoArgs(sourceUrl, { ...params, gpu: false });
+  const args = buildVideoArgs(sourceUrl, params);
   return {
     stream: runFfmpeg(args, key),
     outputFormat: parsed.outputFormat,
@@ -1187,23 +1177,6 @@ function isFrameSizeError(err: unknown): boolean {
     return FRAME_SIZE_PATTERN.test(String((err as { stderr: unknown }).stderr));
   }
   return false;
-}
-
-function waitForFirstDataOrError(stream: Readable): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const onData = (chunk: Buffer) => {
-      stream.removeListener("error", onError);
-      // Push the chunk back so the consumer doesn't miss it
-      stream.unshift(chunk);
-      resolve();
-    };
-    const onError = (err: Error) => {
-      stream.removeListener("data", onData);
-      reject(err);
-    };
-    stream.once("data", onData);
-    stream.once("error", onError);
-  });
 }
 
 interface TrimOptions {
