@@ -41,7 +41,7 @@ export const gpuReady: Promise<boolean> =
           "-f",
           "lavfi",
           "-i",
-          "nullsrc=s=192x192:d=0.1",
+          `nullsrc=s=${env.GPU_MIN_FRAME_SIZE.width}x${env.GPU_MIN_FRAME_SIZE.height}:d=0.1`,
           "-c:v",
           "h264_nvenc",
           "-f",
