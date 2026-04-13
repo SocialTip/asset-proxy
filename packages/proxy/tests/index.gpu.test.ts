@@ -138,8 +138,9 @@ describe("GPU concurrency limit", () => {
       url: "/insecure/w:480/plain/https://example.com/video.mp4@webm",
     });
 
-    // Give the first request time to acquire the GPU slot
-    await new Promise((r) => setTimeout(r, 50));
+    // Wait until the first request has actually acquired the GPU slot and
+    // started its encode — a fixed delay was flaky in slow CI environments.
+    await vi.waitFor(() => expect(encodeProcs.length).toBeGreaterThan(0));
 
     // Second request should timeout waiting for the GPU slot (5s)
     const second = await app.inject({
@@ -163,7 +164,7 @@ describe("GPU concurrency limit", () => {
       method: "GET",
       url: "/insecure/w:480/plain/https://example.com/video.mp4@webm",
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.waitFor(() => expect(encodeProcs.length).toBeGreaterThan(0));
     for (const proc of encodeProcs) proc.finish(0);
     const retry = await retryPromise;
 

@@ -126,7 +126,10 @@ describe("imgproxy compat: video format best", () => {
     );
 
     // Follow the redirect — the signed encrypted URL should produce a webp thumbnail
-    const redirectRes = await fetch(`${CACHE_PROXY_URL}${location}`);
+    const redirectRes = await fetch(`${CACHE_PROXY_URL}${location}`, {
+      // In practice, this header would still be here if it was injected e.g. by a load balancer
+      headers: COMPAT_HEADER,
+    });
     expect(redirectRes.status).toBe(200);
     expect(redirectRes.headers.get("content-type")).toBe("image/webp");
     const buffer = Buffer.from(await redirectRes.arrayBuffer());
