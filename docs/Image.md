@@ -8,14 +8,14 @@ See also: [Video Processing](Video.md), [Metadata](Metadata.md)
 
 Append a format suffix to the source URL to choose the output format:
 
-| Format  | Suffix  | Notes                    |
-| ------- | ------- | ------------------------ |
-| JPEG    | `@jpg`  | Default for image output |
-| PNG     | `@png`  |                          |
-| WebP    | `@webp` |                          |
-| AVIF    | `@avif` |                          |
-| GIF     | `@gif`  |                          |
-| Auto    | `@best` | See [Best Format](#best-format--formatbest-or-best) |
+| Format | Suffix  | Notes                                               |
+| ------ | ------- | --------------------------------------------------- |
+| JPEG   | `@jpg`  | Default for image output                            |
+| PNG    | `@png`  |                                                     |
+| WebP   | `@webp` |                                                     |
+| AVIF   | `@avif` |                                                     |
+| GIF    | `@gif`  |                                                     |
+| Auto   | `@best` | See [Best Format](#best-format--formatbest-or-best) |
 
 **Examples:**
 
@@ -45,6 +45,10 @@ Shorthand for setting width and height without specifying resize type (defaults 
 ### Width / Height — `width:<w>` (`w`) / `height:<h>` (`h`)
 
 Set dimensions individually. When used without a `resize` segment, defaults to `fit`.
+
+### Resizing Type — `resizing_type:<type>` (shorthand `t`, `rt`)
+
+Override the resize type without specifying dimensions. Accepts the same values as the type in `resize` (`fit`, `fill`, `fill-down`, `force`, `auto`). Useful when width/height are set separately via `w:` / `h:`.
 
 ### Resizing Algorithm — `resizing_algorithm:<algorithm>` (shorthand `ra`)
 

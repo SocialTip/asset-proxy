@@ -206,6 +206,7 @@ export const SHORTHANDS: Record<string, string> = {
   rs: "resize",
   s: "size",
   t: "resizing_type",
+  rt: "resizing_type",
   w: "width",
   h: "height",
   mw: "min_width",

@@ -44,4 +44,15 @@ describe("extractUrlOptions", () => {
     const opts = extractUrlOptions(`/insecure/mu:1/fr:30/plain/${SRC}`);
     expect(opts).toMatchObject({ mute: "1", framerate: "30" });
   });
+
+  it("expands rt: shorthand to resizing_type", () => {
+    const opts = extractUrlOptions(
+      `/insecure/rt:fill/w:200/h:200/plain/${SRC}`,
+    );
+    expect(opts).toMatchObject({
+      resizing_type: "fill",
+      width: "200",
+      height: "200",
+    });
+  });
 });
