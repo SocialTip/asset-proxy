@@ -1,4 +1,7 @@
-import { generateUrl } from "@socialtip/asset-proxy-url-generator";
+import {
+  generateInfoUrl,
+  generateUrl,
+} from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 
 import { SOURCE_URL } from "./helpers.js";
@@ -88,6 +91,20 @@ describe("imgproxy compat: video format best", () => {
     expect(res.headers.get("location")).toMatchInlineSnapshot(
       `"/_qFVvv-uumoRp79q-5N8Ru7QZK3jkfml6fKklQT5FD4/bl:5/f:webp/q:80/rs:fill:480:360/vts:0/enc/N2NhNmFkMmYzOTFhNWJlMG-aK85gpH2N6VXLBfdqOMaeRyBpwhFQE9cJlUg88UAo_oU1deehUVUo4kSOlAitLA"`,
     );
+  });
+
+  it("does not redirect /info requests", async () => {
+    const infoUrl = generateInfoUrl(
+      { sourceUrl: VIDEO_SOURCE_URL },
+      URL_CONFIG,
+    );
+    const res = await fetch(`${CACHE_PROXY_URL}${infoUrl}`, {
+      headers: COMPAT_HEADER,
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ mime_type: expect.stringContaining("video") });
   });
 
   it("preserves encrypted source URL in the redirect", async () => {
