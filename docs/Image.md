@@ -8,14 +8,14 @@ See also: [Video Processing](Video.md), [Metadata](Metadata.md)
 
 Append a format suffix to the source URL to choose the output format:
 
-| Format  | Suffix  | Notes                    |
-| ------- | ------- | ------------------------ |
-| JPEG    | `@jpg`  | Default for image output |
-| PNG     | `@png`  |                          |
-| WebP    | `@webp` |                          |
-| AVIF    | `@avif` |                          |
-| GIF     | `@gif`  |                          |
-| Auto    | `@best` | See [Best Format](#best-format--formatbest-or-best) |
+| Format | Suffix  | Notes                                               |
+| ------ | ------- | --------------------------------------------------- |
+| JPEG   | `@jpg`  | Default for image output                            |
+| PNG    | `@png`  |                                                     |
+| WebP   | `@webp` |                                                     |
+| AVIF   | `@avif` |                                                     |
+| GIF    | `@gif`  |                                                     |
+| Auto   | `@best` | See [Best Format](#best-format--formatbest-or-best) |
 
 **Examples:**
 
@@ -226,10 +226,10 @@ Format-specific AVIF encoding options. Subsample controls chroma subsampling (e.
 
 ## Best Format — `format:best` or `@best`
 
-Automatically select the most efficient image format. The service analyses image complexity (entropy) and encodes the result in multiple candidate formats, returning the smallest output.
+Automatically select the most efficient image format. The output is always WebP. The service analyses image complexity (entropy) to decide between lossless and lossy encoding:
 
-- **Low complexity** (entropy below threshold): candidates are PNG and WebP (lossless)
-- **High complexity** (entropy at or above threshold): candidates are JPEG, WebP, and AVIF
+- **Low complexity** (entropy below threshold): lossless WebP
+- **High complexity** (entropy at or above threshold): lossy WebP
 
 When `BEST_FORMAT_BY_DEFAULT` is enabled, best format selection is used automatically whenever no explicit output format is specified. Quality and format-specific quality (`q`, `fq`) settings are respected during the comparison.
 
