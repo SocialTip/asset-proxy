@@ -359,43 +359,29 @@ async function selectBestFormat(
   const megapixels =
     meta.width && meta.height ? (meta.width * meta.height) / 1_000_000 : 0;
 
+  const isSimple = entropy < env.BEST_FORMAT_COMPLEXITY_THRESHOLD;
+
   if (
     env.BEST_FORMAT_MAX_RESOLUTION > 0 &&
     megapixels > env.BEST_FORMAT_MAX_RESOLUTION
   ) {
-    const fmt: ImageFormat = "jpg";
+    const fmt: ImageFormat = "webp";
     return {
       buffer: await encodeWithSharp(
         buffer,
         fmt,
-        formatQuality?.["jpg"] ?? quality,
+        formatQuality?.["webp"] ?? quality,
       ),
       format: fmt,
     };
   }
 
-  const isSimple = entropy < env.BEST_FORMAT_COMPLEXITY_THRESHOLD;
+  const fmt: ImageFormat = "webp";
+  const encoded = isSimple
+    ? await sharp(buffer).webp({ lossless: true }).toBuffer()
+    : await encodeWithSharp(buffer, fmt, formatQuality?.["webp"] ?? quality);
 
-  const candidates: ImageFormat[] = isSimple
-    ? ["png", "webp"]
-    : ["jpg", "webp", "avif"];
-
-  const results = await Promise.all(
-    candidates.map(async (fmt) => {
-      const q = formatQuality?.[fmt] ?? quality;
-      // For lossless encoding of simple images, omit quality for PNG and use lossless for WebP
-      let encoded: Buffer;
-      if (isSimple && fmt === "webp") {
-        encoded = await sharp(buffer).webp({ lossless: true }).toBuffer();
-      } else {
-        encoded = await encodeWithSharp(buffer, fmt, q);
-      }
-      return { format: fmt, buffer: encoded, size: encoded.length };
-    }),
-  );
-
-  results.sort((a, b) => a.size - b.size);
-  return { buffer: results[0].buffer, format: results[0].format };
+  return { buffer: encoded, format: fmt };
 }
 
 export interface ProcessImageResult {
