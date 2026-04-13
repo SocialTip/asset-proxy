@@ -104,7 +104,7 @@ vi.hoisted(() => {
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 });
 
-const { parseProcessingUrl, isImageUrl } =
+const { parseProcessingUrl, getOutputMediaType } =
   await import("@socialtip/asset-proxy-url-parser");
 const { processImage, processVideo, buildVideoArgs } =
   await import("../src/ffmpeg.js");
@@ -112,7 +112,7 @@ const { app } = await import("../src/index.js");
 
 function imageArgs(path: string): string[] {
   const parsed = parseProcessingUrl(path);
-  if (!isImageUrl(parsed)) throw new Error("Expected image URL");
+  if (getOutputMediaType(parsed) !== "image") throw new Error("Expected image URL");
   setupSpawnMock();
   processImage(parsed.sourceUrl, parsed as never);
   return mockSpawn.mock.calls.at(-1)![1] as string[];
@@ -120,7 +120,7 @@ function imageArgs(path: string): string[] {
 
 async function videoArgs(path: string): Promise<string[]> {
   const parsed = parseProcessingUrl(path);
-  if (isImageUrl(parsed)) throw new Error("Expected video URL");
+  if (getOutputMediaType(parsed) !== "video") throw new Error("Expected video URL");
   setupSpawnMock();
   // processVideo is async (awaits gpuReady), so we need to await it starting
   // We don't await the full result since it would try to read the stream
@@ -143,6 +143,9 @@ beforeEach(() => {
 
 describe("error handling", () => {
   it("returns 500 with 'Unhandled error' when image processing fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { headers: { "content-type": "image/jpeg" } }),
+    );
     setupSpawnMockError();
     const res = await request(app).get(
       "/insecure/w:100/plain/https://example.com/photo.jpg",
@@ -150,6 +153,7 @@ describe("error handling", () => {
 
     expect(res.status).toBe(500);
     expect(res.text).toBe("Unhandled error");
+    vi.restoreAllMocks();
   });
 
   it("returns the error message for handled errors", async () => {
@@ -1635,7 +1639,7 @@ describe("video thumbnail with image options", () => {
     const result = parseProcessingUrl(
       "/vts:3/plain/https://example.com/video.mp4",
     );
-    expect(isImageUrl(result)).toBe(true);
+    expect(getOutputMediaType(result)).toBe("image");
     expect(result.outputFormat).toBe("jpg");
   });
 
@@ -1643,7 +1647,7 @@ describe("video thumbnail with image options", () => {
     const result = parseProcessingUrl(
       "/vts:3/c:100:100/bl:5/plain/https://example.com/video.mp4",
     );
-    expect(isImageUrl(result)).toBe(true);
+    expect(getOutputMediaType(result)).toBe("image");
     expect(result.crop).toEqual({ width: 100, height: 100 });
     expect(result.blur).toBe(5);
   });
@@ -1652,7 +1656,7 @@ describe("video thumbnail with image options", () => {
     const result = parseProcessingUrl(
       "/vta:0.5:100:10:200:150/plain/https://example.com/video.mp4",
     );
-    expect(isImageUrl(result)).toBe(true);
+    expect(getOutputMediaType(result)).toBe("image");
     expect(result.outputFormat).toBe("jpg");
   });
 
@@ -1660,7 +1664,7 @@ describe("video thumbnail with image options", () => {
     const result = parseProcessingUrl(
       "/vta:0.5:100:10:320:180:1:0:1:0.3:0.7/plain/https://example.com/video.mp4@gif",
     );
-    expect(isImageUrl(result)).toBe(true);
+    expect(getOutputMediaType(result)).toBe("image");
     const vta = result.videoThumbnailAnimation!;
     expect(vta.extendFrame).toBe(true);
     expect(vta.trim).toBe(false);
@@ -1733,7 +1737,7 @@ describe("video thumbnail with image options", () => {
       "/vts:3/plain/https://example.com/video.mp4@webp",
     );
     expect(result.outputFormat).toBe("webp");
-    expect(isImageUrl(result)).toBe(true);
+    expect(getOutputMediaType(result)).toBe("image");
   });
 
   it("resize + vts + crop produces correct ffmpeg args", () => {
@@ -1785,14 +1789,14 @@ describe("url parsing", () => {
     const result = parseProcessingUrl(
       "/w:300/plain/https://example.com/photo.bmp@webp",
     );
-    expect(isImageUrl(result)).toBe(true);
+    expect(getOutputMediaType(result)).toBe("image");
   });
 
   it("detects video from framerate option", () => {
     const result = parseProcessingUrl(
       "/resize:fill:480:360/fr:30/plain/https://example.com/file",
     );
-    expect(isImageUrl(result)).toBe(false);
+    expect(getOutputMediaType(result)).toBe("video");
   });
 
   it("parses @best format suffix as bestFormat flag", () => {
@@ -1959,6 +1963,9 @@ describe("miscellaneous options", () => {
   });
 
   it("fallback_image_url redirects on processing error", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { headers: { "content-type": "image/jpeg" } }),
+    );
     setupSpawnMockError();
     const fallbackUrl = Buffer.from(
       "https://example.com/fallback.jpg",
@@ -1970,6 +1977,7 @@ describe("miscellaneous options", () => {
       .redirects(0);
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe("https://example.com/fallback.jpg");
+    vi.restoreAllMocks();
   });
 
   it("hashsum verifies source integrity", async () => {
@@ -2172,7 +2180,7 @@ describe("security limits", () => {
 describe("best format ffmpeg args", () => {
   it("uses PNG as intermediate format when bestFormat is active", () => {
     const parsed = parseProcessingUrl(plain("/w:100/f:best"));
-    if (!isImageUrl(parsed)) throw new Error("Expected image URL");
+    if (getOutputMediaType(parsed) !== "image") throw new Error("Expected image URL");
     setupSpawnMock();
     // Fire processImage but don't await — we only need the ffmpeg args from the first spawn call.
     // The promise will reject because sharp can't parse mock data, so catch and ignore.

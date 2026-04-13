@@ -97,6 +97,22 @@ flowchart LR
 
 In a typical deployment, both containers run in the same service. The cache proxy is the public-facing container, and the processing proxy is only reachable internally.
 
+## imgproxy compatibility mode
+
+When migrating from imgproxy, some URLs produce different results because asset-proxy supports video processing natively while imgproxy does not. Sending the `X-Imgproxy-Compat: 1` request header enables compatibility mode, which rewrites URLs to match imgproxy's behaviour before processing.
+
+Compatibility mode runs in the cache proxy layer. When a rewrite is needed, the cache proxy responds with a **301 redirect** to the rewritten URL.
+
+### Rules
+
+| Source type | Format | Rewrite                                                                                                                                |
+| ----------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Video       | `best` | `f:webp` + `vts:0` — returns a WebP thumbnail of the first frame, matching imgproxy's behaviour of returning an image for video inputs |
+
+### Signing
+
+When `SIGNING_KEY` and `SIGNING_SALT` are configured on the cache proxy, the redirected URL is re-signed automatically. These must match the keys used by the processing proxy.
+
 ## Info endpoint
 
 The `/info/` endpoint returns JSON metadata about a source asset without processing it. See [Metadata](docs/Metadata.md) for full documentation.
