@@ -1,0 +1,71 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspaces/asset-proxy:cached
+    command: sleep infinity
+    environment:
+      - SERVICE_URL=http://asset-proxy:8080
+      - CACHE_PROXY_URL=http://cache-proxy:8080
+      - HEALTH_URL=http://asset-proxy:8082
+      - JAEGER_URL=http://jaeger:16686
+      - FAKE_GCS_URL=http://fake-gcs:4443
+    depends_on:
+      - asset-proxy
+      - cache-proxy
+
+  asset-proxy:
+    build:
+      context: ..
+    init: true
+    environment:
+      - HEALTH_PORT=8082
+      - SKIP_GPU=1
+      - SOURCE_URL_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      - SIGNING_KEY=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+      - SIGNING_SALT=cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
+      - ALLOWED_ORIGINS=http://file-server
+      - BEST_FORMAT_MAX_RESOLUTION=0.005
+      - STORAGE_EMULATOR_HOST=http://fake-gcs:4443
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_BSP_SCHEDULE_DELAY=100
+      - TRACE_SAMPLE_RATE=1
+    depends_on:
+      - file-server
+      - fake-gcs
+      - jaeger
+
+  cache-proxy:
+    build:
+      context: ..
+    init: true
+    environment:
+      - HEALTH_PORT=8082
+      - FORWARD_URL=http://asset-proxy:8080
+      - CACHE_BUCKET=test-cache
+      - GCS_API_ENDPOINT=http://fake-gcs:4443
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_BSP_SCHEDULE_DELAY=100
+      - OTEL_SERVICE_NAME=cache-proxy
+      - TRACE_SAMPLE_RATE=1
+    depends_on:
+      - asset-proxy
+      - fake-gcs
+
+  fake-gcs:
+    image: fsouza/fake-gcs-server
+    command: ["-scheme", "http", "-port", "4443", "-data", "/data"]
+    volumes:
+      - ../packages/proxy/tests/fixtures/fake-gcs:/data:ro
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+
+  file-server:
+    image: nginx:alpine
+    volumes:
+      - ../packages/proxy/tests/fixtures:/usr/share/nginx/html:ro
