@@ -3,7 +3,9 @@ import { Readable } from "node:stream";
 /** Encode processes whose completion we control manually. */
 const encodeProcs: Array<{
   finish: (code: number) => void;
+  finishWithFrameSizeError: () => void;
   stdout: Readable;
+  stderr: Readable;
   args: string[];
 }> = [];
 
@@ -61,6 +63,7 @@ vi.mock("node:child_process", () => ({
       // Subsequent spawns are video encodes — hang until finish() is called
       encodeProcs.push({
         stdout,
+        stderr,
         args: args ?? [],
         finish: (code: number) => {
           if (code === 0) {
@@ -73,6 +76,17 @@ vi.mock("node:child_process", () => ({
           if (code !== 0) {
             stdout.push(null);
           }
+        },
+        finishWithFrameSizeError: () => {
+          stderr.push(
+            Buffer.from(
+              "[h264_nvenc] InitializeEncoder failed: invalid param (8): Frame Dimension less than the minimum supported value.\n",
+            ),
+          );
+          stdout.on("end", () => {
+            for (const cb of listeners.get("close") ?? []) cb(1 as never);
+          });
+          stdout.push(null);
         },
       });
     }
@@ -267,5 +281,69 @@ describe("GPU frame size fallback", () => {
     await promise;
     expect(args).toContain("libx264");
     expect(args).not.toContain("h264_nvenc");
+  });
+});
+
+describe("GPU error fallback", () => {
+  afterEach(() => {
+    for (const proc of encodeProcs) proc.finish(0);
+    encodeProcs.length = 0;
+    probeWidth = 1920;
+    probeHeight = 1080;
+  });
+
+  it("retries with CPU when GPU encode fails with frame size error (webm)", async () => {
+    // Use dimensions that pass prediction (above 192x192) so GPU is attempted
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/rs:force:480:360/plain/https://example.com/video.mp4@webm",
+    });
+
+    // Wait for the GPU encode to start
+    await vi.waitFor(() => expect(encodeProcs.length).toBeGreaterThan(0));
+    const gpuProc = encodeProcs[encodeProcs.length - 1];
+    expect(gpuProc.args).toContain("av1_nvenc");
+
+    // Simulate frame size error from NVENC
+    gpuProc.finishWithFrameSizeError();
+
+    // The retry should spawn a new CPU encode
+    await vi.waitFor(() => expect(encodeProcs.length).toBeGreaterThan(1));
+    const cpuProc = encodeProcs[encodeProcs.length - 1];
+    expect(cpuProc.args).toContain("libsvtav1");
+    expect(cpuProc.args).not.toContain("av1_nvenc");
+    cpuProc.finish(0);
+
+    const res = await promise;
+    expect(res.statusCode).not.toBe(500);
+  });
+
+  it("retries with CPU when GPU encode fails with frame size error (mp4)", async () => {
+    // Use dimensions that pass prediction (above 192x192) so GPU is attempted
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/rs:force:480:360/plain/https://example.com/video.mp4",
+    });
+
+    // Wait for the GPU encode to start
+    await vi.waitFor(() => expect(encodeProcs.length).toBeGreaterThan(0));
+    const gpuProc = encodeProcs[encodeProcs.length - 1];
+    expect(gpuProc.args).toContain("h264_nvenc");
+
+    // Simulate frame size error from NVENC
+    gpuProc.finishWithFrameSizeError();
+
+    // The retry should spawn a new CPU encode (processMp4 writes to temp file,
+    // which the mock can't create — but we verify the retry is attempted with
+    // the correct codec)
+    await vi.waitFor(() => expect(encodeProcs.length).toBeGreaterThan(1));
+    const cpuProc = encodeProcs[encodeProcs.length - 1];
+    expect(cpuProc.args).toContain("libx264");
+    expect(cpuProc.args).not.toContain("h264_nvenc");
+
+    // Clean up — finish the CPU encode (response will still be 500 because the
+    // mock doesn't write a real temp file, but we've verified the retry logic)
+    cpuProc.finish(0);
+    await promise;
   });
 });

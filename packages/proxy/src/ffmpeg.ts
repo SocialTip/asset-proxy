@@ -398,18 +398,26 @@ export async function processVideo(
     if (useGpu) {
       using _lock = await acquireGpuLock(key);
       logger.verbose("[processor] processMp4", { key, gpu: true });
-      const result = await processMp4(
-        sourceUrl,
-        params,
-        parsed.outputFormat,
-        key,
-      );
-      return { ...result, codecs };
+      try {
+        const result = await processMp4(
+          sourceUrl,
+          params,
+          parsed.outputFormat,
+          key,
+        );
+        return { ...result, codecs };
+      } catch (err) {
+        if (!isFrameSizeError(err)) throw err;
+        logger.warn(
+          "[processor] GPU encode failed due to frame size, retrying with CPU",
+          { key },
+        );
+      }
     }
     logger.verbose("[processor] processMp4", { key, gpu: false });
     const result = await processMp4(
       sourceUrl,
-      params,
+      { ...params, gpu: false },
       parsed.outputFormat,
       key,
     );
@@ -423,11 +431,21 @@ export async function processVideo(
     const lock = await acquireGpuLock(key);
     const args = buildVideoArgs(sourceUrl, params);
     const stream = runFfmpeg(args, key);
-    stream.on("close", () => lock[Symbol.dispose]());
-    return { stream, outputFormat: parsed.outputFormat, codecs };
+    try {
+      await waitForFirstDataOrError(stream);
+      stream.on("close", () => lock[Symbol.dispose]());
+      return { stream, outputFormat: parsed.outputFormat, codecs };
+    } catch (err) {
+      lock[Symbol.dispose]();
+      if (!isFrameSizeError(err)) throw err;
+      logger.warn(
+        "[processor] GPU encode failed due to frame size, retrying with CPU",
+        { key },
+      );
+    }
   }
 
-  const args = buildVideoArgs(sourceUrl, params);
+  const args = buildVideoArgs(sourceUrl, { ...params, gpu: false });
   return {
     stream: runFfmpeg(args, key),
     outputFormat: parsed.outputFormat,
@@ -1138,12 +1156,14 @@ function runFfmpeg(args: string[], key?: string): Readable {
     logger.verbose("[processor] ffmpeg closed", { key, code });
     span.setAttribute("process.exit_code", code ?? -1);
     if (code !== 0) {
-      const err = new Error(`ffmpeg exited with code ${code}`);
+      const err = Object.assign(new Error(`ffmpeg exited with code ${code}`), {
+        stderr: stderr.slice(-2000),
+      });
       recordException(span, err);
       logger.error("[processor] ffmpeg exited with non-zero code", {
         key,
         code,
-        stderr: stderr.slice(-2000),
+        stderr: err.stderr,
       });
       output.destroy(err);
     } else {
@@ -1157,6 +1177,33 @@ function runFfmpeg(args: string[], key?: string): Readable {
   });
 
   return output;
+}
+
+const FRAME_SIZE_PATTERN =
+  /Frame Dimension less than the minimum supported value/i;
+
+function isFrameSizeError(err: unknown): boolean {
+  if (err && typeof err === "object" && "stderr" in err) {
+    return FRAME_SIZE_PATTERN.test(String((err as { stderr: unknown }).stderr));
+  }
+  return false;
+}
+
+function waitForFirstDataOrError(stream: Readable): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onData = (chunk: Buffer) => {
+      stream.removeListener("error", onError);
+      // Push the chunk back so the consumer doesn't miss it
+      stream.unshift(chunk);
+      resolve();
+    };
+    const onError = (err: Error) => {
+      stream.removeListener("data", onData);
+      reject(err);
+    };
+    stream.once("data", onData);
+    stream.once("error", onError);
+  });
 }
 
 interface TrimOptions {
