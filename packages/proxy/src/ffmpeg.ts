@@ -345,7 +345,7 @@ export async function processVideo(
       source?.height,
     );
     if (!isGpuFrameSizeSafe(predicted.width, predicted.height)) {
-      logger.warn(
+      logger.verbose(
         "[processor] predicted output dimensions below GPU minimum, falling back to CPU",
         {
           key,
