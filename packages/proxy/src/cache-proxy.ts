@@ -262,8 +262,12 @@ export async function createCacheProxyApp() {
     }
 
     if (request.headers["x-imgproxy-compat"] === "1") {
+      const span = tracer.startSpan("cache.imgproxyCompatRedirect");
       const compatPath = await imgproxyCompatRedirect(path, gcs);
+      if (compatPath) span.setAttribute("redirect.url", compatPath);
+      span.end();
       if (compatPath) {
+        reply.header("Cache-Control", "public, max-age=86400");
         return reply.redirect(compatPath, 301);
       }
     }
