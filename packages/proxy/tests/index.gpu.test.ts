@@ -4,9 +4,12 @@ import { Readable } from "node:stream";
 const encodeProcs: Array<{
   finish: (code: number) => void;
   stdout: Readable;
+  args: string[];
 }> = [];
 
 let spawnCallIndex = 0;
+let probeWidth = 1920;
+let probeHeight = 1080;
 
 vi.mock("node:child_process", () => ({
   execFile: vi.fn(
@@ -21,8 +24,8 @@ vi.mock("node:child_process", () => ({
             {
               codec_type: "video",
               codec_name: "h264",
-              width: 1920,
-              height: 1080,
+              width: probeWidth,
+              height: probeHeight,
               r_frame_rate: "30/1",
             },
             { codec_type: "audio", codec_name: "aac", profile: "LC" },
@@ -32,7 +35,7 @@ vi.mock("node:child_process", () => ({
       });
     },
   ),
-  spawn: vi.fn(() => {
+  spawn: vi.fn((_cmd: string, args: string[]) => {
     spawnCallIndex++;
     const stdout = new Readable({ read() {} });
     const stderr = new Readable({ read() {} });
@@ -58,6 +61,7 @@ vi.mock("node:child_process", () => ({
       // Subsequent spawns are video encodes — hang until finish() is called
       encodeProcs.push({
         stdout,
+        args: args ?? [],
         finish: (code: number) => {
           if (code === 0) {
             stdout.push(Buffer.from("fake"));
@@ -90,6 +94,7 @@ vi.hoisted(() => {
   delete process.env.SKIP_GPU;
   process.env.GPU_CONCURRENCY = "1";
   process.env.GPU_ACQUIRE_TIMEOUT_MS = "200";
+  process.env.GPU_MIN_FRAME_SIZE = "192x192";
   process.env.KEEP_COPYRIGHT = "0";
   process.env.ALLOWED_ORIGINS = "http://file-server,https://example.com";
   process.env.SOURCE_URL_ENCRYPTION_KEY =
@@ -97,6 +102,14 @@ vi.hoisted(() => {
 });
 
 const { app } = await import("../src/index.js");
+
+/** Wait for an encode process to appear, then auto-finish it. */
+async function waitAndFinish(): Promise<string[]> {
+  await vi.waitFor(() => expect(encodeProcs.length).toBeGreaterThan(0));
+  const proc = encodeProcs[encodeProcs.length - 1];
+  proc.finish(0);
+  return proc.args;
+}
 
 describe("GPU concurrency limit", () => {
   afterEach(() => {
@@ -141,5 +154,118 @@ describe("GPU concurrency limit", () => {
     const retry = await retryPromise;
 
     expect(retry.statusCode).not.toBe(429);
+  });
+});
+
+describe("GPU frame size fallback", () => {
+  afterEach(() => {
+    for (const proc of encodeProcs) proc.finish(0);
+    encodeProcs.length = 0;
+    probeWidth = 1920;
+    probeHeight = 1080;
+  });
+
+  it("uses GPU when output dimensions are above minimum", async () => {
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/rs:force:480:360/plain/https://example.com/video.mp4",
+    });
+    const args = await waitAndFinish();
+    await promise;
+    expect(args).toContain("h264_nvenc");
+  });
+
+  it("falls back to CPU when force resize produces small dimensions", async () => {
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/rs:force:100:100/plain/https://example.com/video.mp4",
+    });
+    const args = await waitAndFinish();
+    await promise;
+    expect(args).toContain("libx264");
+    expect(args).not.toContain("h264_nvenc");
+  });
+
+  it("falls back to CPU when fit resize on landscape source produces narrow width", async () => {
+    // Source 1920x1080, fit into 200x200 → 200x113 — width ok, height < 192
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/rs:fit:200:200/plain/https://example.com/video.mp4",
+    });
+    const args = await waitAndFinish();
+    await promise;
+    expect(args).toContain("libx264");
+    expect(args).not.toContain("h264_nvenc");
+  });
+
+  it("falls back to CPU when fit resize on portrait source produces narrow height", async () => {
+    // Source 576x1024, fit into 200x200 → 113x200 — width < 192
+    probeWidth = 576;
+    probeHeight = 1024;
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/rs:fit:200:200/plain/https://example.com/video.mp4",
+    });
+    const args = await waitAndFinish();
+    await promise;
+    expect(args).toContain("libx264");
+    expect(args).not.toContain("h264_nvenc");
+  });
+
+  it("falls back to CPU when width-only resize produces small height", async () => {
+    // Source 1920x1080, w:100 → 100x56 — both below 192
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/w:100/plain/https://example.com/video.mp4",
+    });
+    const args = await waitAndFinish();
+    await promise;
+    expect(args).toContain("libx264");
+    expect(args).not.toContain("h264_nvenc");
+  });
+
+  it("uses GPU for fill resize (output matches target exactly)", async () => {
+    // fill 480x360 → always 480x360, above minimum
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/rs:fill:480:360/plain/https://example.com/video.mp4",
+    });
+    const args = await waitAndFinish();
+    await promise;
+    expect(args).toContain("h264_nvenc");
+  });
+
+  it("uses GPU for webm output when dimensions are safe", async () => {
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/rs:force:480:360/plain/https://example.com/video.mp4@webm",
+    });
+    const args = await waitAndFinish();
+    await promise;
+    expect(args).toContain("av1_nvenc");
+  });
+
+  it("falls back to CPU for webm when dimensions are too small", async () => {
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/rs:force:100:100/plain/https://example.com/video.mp4@webm",
+    });
+    const args = await waitAndFinish();
+    await promise;
+    expect(args).toContain("libsvtav1");
+    expect(args).not.toContain("av1_nvenc");
+  });
+
+  it("falls back to CPU when no resize is specified and source is small", async () => {
+    probeWidth = 100;
+    probeHeight = 100;
+    const promise = app.inject({
+      method: "GET",
+      url: "/insecure/mu:1/plain/https://example.com/video.mp4",
+    });
+    const args = await waitAndFinish();
+    await promise;
+    expect(args).toContain("libx264");
+    expect(args).not.toContain("h264_nvenc");
   });
 });
