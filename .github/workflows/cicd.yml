@@ -127,6 +127,10 @@ jobs:
           FORWARD_URL: "http://localhost:8080"
           CACHE_BUCKET: "test-cache"
           GCS_API_ENDPOINT: "http://localhost:4443"
+          SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          SIGNING_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+          SIGNING_SALT: "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe"
+          ALLOWED_ORIGINS: "http://file-server"
           NODE_V8_COVERAGE: /tmp/coverage-cache-proxy
           OTEL_SERVICE_NAME: "cache-proxy"
           OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318"
