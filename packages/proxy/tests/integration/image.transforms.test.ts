@@ -1,4 +1,7 @@
-import { fetchImage, sharp, toPng } from "./helpers.js";
+import { fetchImage, fetchImageFrom, sharp, toPng } from "./helpers.js";
+
+const TALL_URL = "http://file-server/test-image-tall.png";
+const WIDE_URL = "http://file-server/test-image-wide.png";
 
 describe("image transforms", () => {
   it("rotates 90 degrees", async () => {
@@ -64,5 +67,33 @@ describe("image transforms", () => {
     expect(meta.width!).toBeLessThanOrEqual(200);
     expect(meta.height!).toBeLessThanOrEqual(150);
     expect(await toPng(trimmed)).toMatchImageSnapshot();
+  });
+
+  describe("fill resize with gravity", () => {
+    for (const g of ["no", "ce", "so"] as const) {
+      it(`tall image with gravity ${g}`, async () => {
+        const buffer = await fetchImageFrom(
+          `/f:png/g:${g}/rs:fill:200:200`,
+          TALL_URL,
+        );
+        const meta = await sharp(buffer).metadata();
+        expect(meta.width).toBe(200);
+        expect(meta.height).toBe(200);
+        expect(await toPng(buffer)).toMatchImageSnapshot();
+      });
+    }
+
+    for (const g of ["we", "ce", "ea"] as const) {
+      it(`wide image with gravity ${g}`, async () => {
+        const buffer = await fetchImageFrom(
+          `/f:png/g:${g}/rs:fill:200:200`,
+          WIDE_URL,
+        );
+        const meta = await sharp(buffer).metadata();
+        expect(meta.width).toBe(200);
+        expect(meta.height).toBe(200);
+        expect(await toPng(buffer)).toMatchImageSnapshot();
+      });
+    }
   });
 });

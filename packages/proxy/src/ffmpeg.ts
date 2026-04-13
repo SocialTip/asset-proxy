@@ -377,6 +377,7 @@ export async function processVideo(
     outputFormat: parsed.outputFormat,
     gpu: useGpu,
     sourceAudioCodec: source?.audio?.codec,
+    gravity: parsed.gravity,
   };
 
   let codecs: string | undefined;
@@ -1259,6 +1260,7 @@ export interface VideoParams {
   outputFormat: OutputFormat;
   gpu: boolean;
   sourceAudioCodec?: string;
+  gravity?: Gravity;
 }
 
 /** @internal Exported for testing only. */
@@ -1280,6 +1282,7 @@ export function buildVideoArgs(
     quality,
     maxBytes,
     outputFormat,
+    gravity,
   } = params;
 
   // Build pre/post filters
@@ -1337,6 +1340,7 @@ export function buildVideoArgs(
           width,
           height,
           gpu: true,
+          gravity,
         });
         const vf = [...preFilters, scaleFilter, ...postFilters].join(",");
         args.push("-vf", vf);
@@ -1359,6 +1363,7 @@ export function buildVideoArgs(
           width,
           height,
           gpu: false,
+          gravity,
         }),
       );
     }
@@ -1495,6 +1500,7 @@ function buildImageArgs(
         height: parsed.resize.height,
         gpu: false,
         enlarge: parsed.enlarge ?? false,
+        gravity: parsed.gravity,
       }),
     );
   }
@@ -1877,6 +1883,7 @@ interface ScaleFilterParams {
   height: number;
   gpu: boolean;
   enlarge?: boolean;
+  gravity?: Gravity;
 }
 
 const CPU_ALGORITHM_FLAGS: Record<string, string> = {
@@ -1902,6 +1909,7 @@ function buildScaleFilter({
   height,
   gpu,
   enlarge,
+  gravity,
 }: ScaleFilterParams): string {
   const w = width > 0 ? width : -1;
   const h = height > 0 ? height : -1;
@@ -1946,20 +1954,24 @@ function buildScaleFilter({
       }
       return `${scaleName}=${clampW}:${clampH}:force_original_aspect_ratio=decrease${flagsSuffix}`;
 
-    case "fill":
+    case "fill": {
+      const { x: fx, y: fy } = gravityOffsets(gravity, width, height);
       if (gpu) {
-        return `${scaleName}=w='max(${width},iw*max(${width}/iw\\,${height}/ih))':h='max(${height},ih*max(${width}/iw\\,${height}/ih))'${flagsSuffix},hwdownload,format=nv12,crop=${width}:${height},hwupload_cuda`;
+        return `${scaleName}=w='max(${width},iw*max(${width}/iw\\,${height}/ih))':h='max(${height},ih*max(${width}/iw\\,${height}/ih))'${flagsSuffix},hwdownload,format=nv12,crop=${width}:${height}:${fx}:${fy},hwupload_cuda`;
       }
       if (noEnlarge) {
-        return `${scaleName}=${clampW}:${clampH}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width}\\,iw)':'min(${height}\\,ih)'`;
+        return `${scaleName}=${clampW}:${clampH}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width}\\,iw)':'min(${height}\\,ih)':${fx}:${fy}`;
       }
-      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop=${width}:${height}`;
+      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop=${width}:${height}:${fx}:${fy}`;
+    }
 
-    case "fill-down":
+    case "fill-down": {
+      const { x: fdx, y: fdy } = gravityOffsets(gravity, width, height);
       if (gpu) {
-        return `${scaleName}=w='min(iw,max(${width},iw*max(${width}/iw\\,${height}/ih)))':h='min(ih,max(${height},ih*max(${width}/iw\\,${height}/ih)))'${flagsSuffix},hwdownload,format=nv12,crop='min(${width},iw)':'min(${height},ih)',hwupload_cuda`;
+        return `${scaleName}=w='min(iw,max(${width},iw*max(${width}/iw\\,${height}/ih)))':h='min(ih,max(${height},ih*max(${width}/iw\\,${height}/ih)))'${flagsSuffix},hwdownload,format=nv12,crop='min(${width},iw)':'min(${height},ih)':${fdx}:${fdy},hwupload_cuda`;
       }
-      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width},iw)':'min(${height},ih)'`;
+      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width},iw)':'min(${height},ih)':${fdx}:${fdy}`;
+    }
 
     case "force":
       if (noEnlarge) {
