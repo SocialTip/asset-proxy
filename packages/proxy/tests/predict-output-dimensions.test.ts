@@ -1,3 +1,7 @@
+vi.hoisted(() => {
+  process.env.SKIP_GPU = "1";
+});
+
 import { predictOutputDimensions } from "../src/ffmpeg.js";
 
 describe("predictOutputDimensions", () => {
