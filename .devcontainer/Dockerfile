@@ -11,7 +11,6 @@ RUN apt-get update && \
       heif-thumbnailer \
       curl \
       xz-utils && \
-    git lfs install && \
     ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then FFMPEG_ARCH="linuxarm64"; \
     else FFMPEG_ARCH="linux64"; fi && \
