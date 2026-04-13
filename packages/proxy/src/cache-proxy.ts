@@ -5,6 +5,7 @@ import { Storage } from "@google-cloud/storage";
 import {
   extractUrlOptions,
   HTTPError,
+  sign,
 } from "@socialtip/asset-proxy-url-parser";
 import Fastify, {
   type FastifyReply,
@@ -113,6 +114,63 @@ function cacheKey(requestPath: string): string {
   return requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
 }
 
+const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|avif|gif|svg|bmp|tiff?)$/i;
+
+/**
+ * Returns a redirect path when an imgproxy-compat redirect is needed, or `undefined` if no redirect applies.
+ *
+ * Rule: video sources with `best` format are redirected to a webp thumbnail at second 0, matching imgproxy's behaviour of returning an image for video inputs.
+ */
+function imgproxyCompatRedirect(requestPath: string): string | undefined {
+  const options = extractUrlOptions(requestPath);
+  if (!options) return undefined;
+
+  const hasBestOption = options.format === "best";
+
+  const plainIdx = requestPath.indexOf("/plain/");
+  if (plainIdx === -1) return undefined;
+
+  const sourceUrl = requestPath.slice(plainIdx + "/plain/".length);
+  const hasBestSuffix = sourceUrl.endsWith("@best");
+
+  if (!hasBestOption && !hasBestSuffix) return undefined;
+
+  if (
+    options.video_thumbnail_second !== undefined ||
+    options.video_thumbnail_animation !== undefined
+  )
+    return undefined;
+
+  const cleanSource = sourceUrl.replace(/@best$/, "");
+  if (IMAGE_EXTENSIONS.test(cleanSource)) return undefined;
+
+  const withoutLeadingSlash = requestPath.slice(1);
+  const firstSlash = withoutLeadingSlash.indexOf("/");
+  const signatureSegment = withoutLeadingSlash.slice(0, firstSlash);
+  const pathAfterSignature = withoutLeadingSlash.slice(firstSlash);
+
+  const plainIdxInPath = pathAfterSignature.indexOf("/plain/");
+  const optionsPart = pathAfterSignature.slice(0, plainIdxInPath);
+
+  const segments = optionsPart
+    .split("/")
+    .filter((s) => s !== "" && s !== "f:best");
+  segments.push("f:webp", "vts:0");
+
+  const newPathAfterSignature = `/${segments.join("/")}/plain/${cleanSource}`;
+
+  if (env.SIGNING_KEY && env.SIGNING_SALT) {
+    const signature = sign(
+      newPathAfterSignature,
+      env.SIGNING_KEY,
+      env.SIGNING_SALT,
+    );
+    return `/${signature}${newPathAfterSignature}`;
+  }
+
+  return `/${signatureSegment}${newPathAfterSignature}`;
+}
+
 export async function createCacheProxyApp() {
   const gcs = new Storage({
     apiEndpoint: process.env.GCS_API_ENDPOINT || undefined,
@@ -193,6 +251,13 @@ export async function createCacheProxyApp() {
     const urlOptions = extractUrlOptions(path);
     if (urlOptions?.cors === "1") {
       reply.header("Access-Control-Allow-Origin", "*");
+    }
+
+    if (request.headers["x-imgproxy-compat"] === "1") {
+      const compatPath = imgproxyCompatRedirect(path);
+      if (compatPath) {
+        return reply.redirect(compatPath, 301);
+      }
     }
     const gcsKey = cacheKey(path);
     if (!gcsKey) {

@@ -201,6 +201,20 @@ const cacheModeSchema = z.object({
 
   /** GCS bucket name for the cache. */
   CACHE_BUCKET: z.string(),
+
+  /** Hex-encoded HMAC-SHA256 key for re-signing redirected URLs (imgproxy compat mode). Must be set together with `SIGNING_SALT`. */
+  SIGNING_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
+    .transform((v) => Buffer.from(v, "hex"))
+    .optional(),
+
+  /** Hex-encoded salt for re-signing redirected URLs (imgproxy compat mode). Must be set together with `SIGNING_KEY`. */
+  SIGNING_SALT: z
+    .string()
+    .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
+    .transform((v) => Buffer.from(v, "hex"))
+    .optional(),
 });
 
 export type ProcessingEnv = z.infer<typeof processingModeSchema>;
