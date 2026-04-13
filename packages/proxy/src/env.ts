@@ -52,6 +52,16 @@ const processingModeSchema = z
     /** Maximum number of concurrent GPU (NVENC) ffmpeg processes. Defaults to 1. */
     GPU_CONCURRENCY: z.coerce.number().int().positive().default(1),
 
+    /** Minimum output frame dimensions supported by the GPU encoder, as `<width>x<height>`. When the predicted output dimensions fall below either value, CPU encoding is used instead. Defaults to `192x192`. The correct value depends on the GPU hardware and driver version (e.g. NVENC on Turing requires at least 145px width). */
+    GPU_MIN_FRAME_SIZE: z
+      .string()
+      .regex(/^\d+x\d+$/, "Must be <width>x<height>, e.g. 192x192")
+      .default("192x192")
+      .transform((v) => {
+        const [w, h] = v.split("x").map(Number);
+        return { width: w, height: h };
+      }),
+
     /** Milliseconds to wait for a GPU slot before returning HTTP 429. Defaults to 5000. */
     GPU_ACQUIRE_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
 
