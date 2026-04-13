@@ -1,6 +1,8 @@
 services:
   dev:
-    image: mcr.microsoft.com/devcontainers/typescript-node:24
+    build:
+      context: .
+      dockerfile: Dockerfile
     volumes:
       - ..:/workspaces/asset-proxy:cached
     command: sleep infinity
