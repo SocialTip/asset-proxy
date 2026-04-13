@@ -1,7 +1,11 @@
-import { generateUrl } from "@socialtip/asset-proxy-url-generator";
+import {
+  generateInfoUrl,
+  generateUrl,
+} from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
+import sharp from "sharp";
 
-import { SOURCE_URL } from "./helpers.js";
+import { SOURCE_URL, toPng } from "./helpers.js";
 import { CACHE_PROXY_URL, h2Fetch as fetch, URL_CONFIG } from "./setup.js";
 import { VIDEO_SOURCE_URL } from "./video-helpers.js";
 
@@ -90,11 +94,25 @@ describe("imgproxy compat: video format best", () => {
     );
   });
 
+  it("does not redirect /info requests", async () => {
+    const infoUrl = generateInfoUrl(
+      { sourceUrl: VIDEO_SOURCE_URL },
+      URL_CONFIG,
+    );
+    const res = await fetch(`${CACHE_PROXY_URL}${infoUrl}`, {
+      headers: COMPAT_HEADER,
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ mime_type: expect.stringContaining("video") });
+  });
+
   it("preserves encrypted source URL in the redirect", async () => {
     // cacheProxyUrl produces a signed+encrypted URL (enc/...)
     const res = await fetch(
       cacheProxyUrl(
-        `/insecure/f:best/rs:fill:480:360/plain/${VIDEO_SOURCE_URL}`,
+        `/insecure/f:best/rs:fill:200:200/plain/${VIDEO_SOURCE_URL}`,
       ),
       { headers: COMPAT_HEADER },
     );
@@ -103,9 +121,22 @@ describe("imgproxy compat: video format best", () => {
     const location = res.headers.get("location")!;
     expect(location).toContain("/enc/");
     expect(location).not.toContain("/plain/");
+    expect(location).toMatchInlineSnapshot(
+      `"/CT6Pl81WbDMKmp9KlnVTqtiVE1XpNPDgtuTywpby-O0/f:webp/rs:fill:200:200/vts:0/enc/N2NhNmFkMmYzOTFhNWJlMG-aK85gpH2N6VXLBfdqOMaeRyBpwhFQE9cJlUg88UAo_oU1deehUVUo4kSOlAitLA"`,
+    );
 
-    // Follow the redirect — the signed encrypted URL should be accepted
+    // Follow the redirect — the signed encrypted URL should produce a webp thumbnail
     const redirectRes = await fetch(`${CACHE_PROXY_URL}${location}`);
     expect(redirectRes.status).toBe(200);
+    expect(redirectRes.headers.get("content-type")).toBe("image/webp");
+    const buffer = Buffer.from(await redirectRes.arrayBuffer());
+    const meta = await sharp(buffer).metadata();
+    expect({ width: meta.width, height: meta.height }).toMatchInlineSnapshot(`
+      {
+        "height": 200,
+        "width": 200,
+      }
+    `);
+    expect(await toPng(buffer)).toMatchImageSnapshot();
   });
 });

@@ -128,6 +128,8 @@ async function imgproxyCompatRedirect(
   requestPath: string,
   gcs: Storage,
 ): Promise<string | undefined> {
+  if (requestPath.startsWith("/info")) return undefined;
+
   let parsed;
   try {
     const pathAfterSignature = verifySignature(requestPath, {
