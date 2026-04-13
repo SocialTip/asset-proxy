@@ -2,10 +2,13 @@ import type { Http2Server } from "node:http2";
 import { PassThrough, type Readable } from "node:stream";
 
 import { Storage } from "@google-cloud/storage";
+import { generateUrlOptions } from "@socialtip/asset-proxy-url-generator";
 import {
   extractUrlOptions,
+  getMediaType,
   HTTPError,
-  sign,
+  parseProcessingUrl,
+  verifySignature,
 } from "@socialtip/asset-proxy-url-parser";
 import Fastify, {
   type FastifyReply,
@@ -19,6 +22,8 @@ import { h2Fetch } from "./h2-fetch.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 import { logger } from "./logger.js";
 import { requestKey } from "./request-key.js";
+import { assertOriginAllowed } from "./resolve-source.js";
+import { createSourceMetadata } from "./source-metadata.js";
 import { tracer } from "./tracing.js";
 
 const env = envSwitched as CacheEnv;
@@ -114,28 +119,6 @@ function cacheKey(requestPath: string): string {
   return requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
 }
 
-const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|avif|gif|svg|bmp|tiff?)$/i;
-
-/**
- * Determines whether a source URL points to a video by sending a HEAD request and inspecting the Content-Type header. Falls back to extension-based detection for non-HTTP URLs or when the request fails.
- */
-async function isVideoSource(sourceUrl: string): Promise<boolean> {
-  if (!sourceUrl.startsWith("http://") && !sourceUrl.startsWith("https://")) {
-    return !IMAGE_EXTENSIONS.test(sourceUrl);
-  }
-
-  try {
-    const response = await fetch(sourceUrl, { method: "HEAD" });
-    if (!response.ok) return !IMAGE_EXTENSIONS.test(sourceUrl);
-    const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.startsWith("video/")) return true;
-    if (contentType.startsWith("image/")) return false;
-    return !IMAGE_EXTENSIONS.test(sourceUrl);
-  } catch {
-    return !IMAGE_EXTENSIONS.test(sourceUrl);
-  }
-}
-
 /**
  * Returns a redirect path when an imgproxy-compat redirect is needed, or `undefined` if no redirect applies.
  *
@@ -143,54 +126,55 @@ async function isVideoSource(sourceUrl: string): Promise<boolean> {
  */
 async function imgproxyCompatRedirect(
   requestPath: string,
+  gcs: Storage,
 ): Promise<string | undefined> {
-  const options = extractUrlOptions(requestPath);
-  if (!options) return undefined;
+  let parsed;
+  try {
+    const pathAfterSignature = verifySignature(requestPath, {
+      signingKey: env.SIGNING_KEY,
+      signingSalt: env.SIGNING_SALT,
+    });
 
-  const hasBestOption = options.format === "best";
+    parsed = parseProcessingUrl(pathAfterSignature, {
+      encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY
+        ? Buffer.from(env.SOURCE_URL_ENCRYPTION_KEY, "hex")
+        : undefined,
+    });
+  } catch {
+    return undefined;
+  }
 
-  const plainIdx = requestPath.indexOf("/plain/");
-  if (plainIdx === -1) return undefined;
-
-  const sourceUrl = requestPath.slice(plainIdx + "/plain/".length);
-  const hasBestSuffix = sourceUrl.endsWith("@best");
-
-  if (!hasBestOption && !hasBestSuffix) return undefined;
-
+  if (!parsed.bestFormat) return undefined;
   if (
-    options.video_thumbnail_second !== undefined ||
-    options.video_thumbnail_animation !== undefined
+    parsed.videoThumbnailSecond !== undefined ||
+    parsed.videoThumbnailAnimation !== undefined
   )
     return undefined;
 
-  const cleanSource = sourceUrl.replace(/@best$/, "");
-  if (!(await isVideoSource(cleanSource))) return undefined;
+  assertOriginAllowed(parsed.sourceUrl, env.ALLOWED_ORIGINS);
 
-  const withoutLeadingSlash = requestPath.slice(1);
-  const firstSlash = withoutLeadingSlash.indexOf("/");
-  const signatureSegment = withoutLeadingSlash.slice(0, firstSlash);
-  const pathAfterSignature = withoutLeadingSlash.slice(firstSlash);
+  const { contentType } = await createSourceMetadata(parsed.sourceUrl, gcs)();
+  if (!contentType || getMediaType(contentType) !== "video") return undefined;
 
-  const plainIdxInPath = pathAfterSignature.indexOf("/plain/");
-  const optionsPart = pathAfterSignature.slice(0, plainIdxInPath);
-
-  const segments = optionsPart
-    .split("/")
-    .filter((s) => s !== "" && s !== "f:best");
-  segments.push("f:webp", "vts:0");
-
-  const newPathAfterSignature = `/${segments.join("/")}/plain/${cleanSource}`;
-
-  if (env.SIGNING_KEY && env.SIGNING_SALT) {
-    const signature = sign(
-      newPathAfterSignature,
-      env.SIGNING_KEY,
-      env.SIGNING_SALT,
-    );
-    return `/${signature}${newPathAfterSignature}`;
-  }
-
-  return `/${signatureSegment}${newPathAfterSignature}`;
+  return (
+    generateUrlOptions(
+      {
+        ...parsed,
+        outputFormat: "webp",
+        videoThumbnailSecond: 0,
+        bestFormat: undefined,
+        sourceUrl: parsed.sourceUrlRaw,
+      },
+      {
+        signingKey: env.SIGNING_KEY
+          ? env.SIGNING_KEY.toString("hex")
+          : undefined,
+        signingSalt: env.SIGNING_SALT
+          ? env.SIGNING_SALT.toString("hex")
+          : undefined,
+      },
+    ) + parsed.sourceUrlRaw
+  );
 }
 
 export async function createCacheProxyApp() {
@@ -276,7 +260,7 @@ export async function createCacheProxyApp() {
     }
 
     if (request.headers["x-imgproxy-compat"] === "1") {
-      const compatPath = await imgproxyCompatRedirect(path);
+      const compatPath = await imgproxyCompatRedirect(path, gcs);
       if (compatPath) {
         return reply.redirect(compatPath, 301);
       }

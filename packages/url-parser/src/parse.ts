@@ -1257,27 +1257,43 @@ export const parsedUrlSchema = z.object({
 }) satisfies z.ZodType<ParsedUrlInput>;
 
 /** Fully parsed URL with all processing options validated. */
-export type ParsedUrl = z.output<typeof parsedUrlSchema>;
+export type ParsedUrl = z.output<typeof parsedUrlSchema> & {
+  /** Raw source URL part as it appeared in the request path (e.g. `plain/http://...` or `enc/abc123`), with any `@best` suffix stripped. */
+  sourceUrlRaw: string;
+};
 
 export type ImageUrl = ParsedUrl & { outputFormat: ImageFormat };
 export type VideoUrl = ParsedUrl & { outputFormat: VideoFormat };
 
-export function isImageUrl(parsed: ParsedUrl): parsed is ImageUrl {
-  if (IMAGE_FORMATS.has(parsed.outputFormat)) return true;
-  if (VIDEO_FORMATS.has(parsed.outputFormat)) return false;
-  // Video thumbnail options produce an image even from a video source
+/**
+ * Classifies a Content-Type header value as image or video. Returns `undefined` for unrecognised types.
+ */
+export function getMediaType(contentType: string): MediaType | undefined {
+  if (contentType.startsWith("image/")) return "image";
+  if (contentType.startsWith("video/")) return "video";
+  return undefined;
+}
+
+/**
+ * Determines whether the output of a processing URL will be an image or video, based on the parsed URL options and optionally the source media type (from a Content-Type header).
+ *
+ * When `sourceMediaType` is provided, it takes precedence over extension-based guessing for ambiguous cases where the output format and processing options don't already determine the result.
+ */
+export function getOutputMediaType(
+  parsed: ParsedUrl,
+  sourceMediaType?: MediaType,
+): MediaType {
+  if (IMAGE_FORMATS.has(parsed.outputFormat)) return "image";
+  if (VIDEO_FORMATS.has(parsed.outputFormat)) return "video";
   if (
     parsed.videoThumbnailSecond !== undefined ||
     parsed.videoThumbnailAnimation !== undefined
   )
-    return true;
-  if (parsed.framerate !== undefined || parsed.cut !== undefined) return false;
-  if (IMAGE_EXTENSIONS.test(parsed.sourceUrl)) return true;
-  return false;
-}
-
-export function isVideoUrl(parsed: ParsedUrl): parsed is VideoUrl {
-  return !isImageUrl(parsed);
+    return "image";
+  if (parsed.framerate !== undefined || parsed.cut !== undefined) return "video";
+  if (sourceMediaType) return sourceMediaType;
+  if (IMAGE_EXTENSIONS.test(parsed.sourceUrl)) return "image";
+  return "video";
 }
 
 export interface ParseOptions {
@@ -1324,11 +1340,14 @@ export function parseProcessingUrl(
   const encIdx = withoutPrefix.indexOf("/enc/");
 
   let sourceUrl: string;
+  let sourceUrlRaw: string;
   let encrypted = false;
 
   if (plainIdx !== -1) {
+    sourceUrlRaw = withoutPrefix.slice(plainIdx + 1); // "plain/..."
     sourceUrl = withoutPrefix.slice(plainIdx + "/plain/".length);
   } else if (encIdx !== -1) {
+    sourceUrlRaw = withoutPrefix.slice(encIdx + 1); // "enc/..."
     sourceUrl = withoutPrefix.slice(encIdx + "/enc/".length);
     encrypted = true;
   } else {
@@ -1352,9 +1371,11 @@ export function parseProcessingUrl(
     if (fmt === "best") {
       bestFormatSuffix = true;
       sourceUrl = sourceUrl.slice(0, -formatMatch[0].length);
+      sourceUrlRaw = sourceUrlRaw.slice(0, -formatMatch[0].length);
     } else if (ALL_FORMATS.has(fmt)) {
       format = fmt as OutputFormat;
       sourceUrl = sourceUrl.slice(0, -formatMatch[0].length);
+      sourceUrlRaw = sourceUrlRaw.slice(0, -formatMatch[0].length);
       hasFormatSuffix = true;
     }
   }
@@ -1475,5 +1496,5 @@ export function parseProcessingUrl(
     maxResultDimension: parsedOptions.maxResultDimension,
   });
 
-  return parsed;
+  return { ...parsed, sourceUrlRaw };
 }

@@ -14,7 +14,7 @@ COPY packages/url-generator/package.json packages/url-generator/
 RUN pnpm install --frozen-lockfile
 
 COPY packages/ packages/
-RUN pnpm --filter @socialtip/asset-proxy-url-parser build && pnpm --filter proxy build
+RUN pnpm --filter @socialtip/asset-proxy-url-parser build && pnpm --filter @socialtip/asset-proxy-url-generator build && pnpm --filter proxy build
 
 # Production stage
 FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
@@ -95,6 +95,9 @@ COPY --from=build /app/packages/proxy/node_modules ./packages/proxy/node_modules
 COPY --from=build /app/packages/url-parser/dist ./packages/url-parser/dist/
 COPY --from=build /app/packages/url-parser/package.json ./packages/url-parser/
 COPY --from=build /app/packages/url-parser/node_modules ./packages/url-parser/node_modules/
+COPY --from=build /app/packages/url-generator/dist ./packages/url-generator/dist/
+COPY --from=build /app/packages/url-generator/package.json ./packages/url-generator/
+COPY --from=build /app/packages/url-generator/node_modules ./packages/url-generator/node_modules/
 COPY --from=build /app/node_modules ./node_modules/
 COPY --from=build /app/package.json ./
 COPY --from=build /app/pnpm-workspace.yaml ./

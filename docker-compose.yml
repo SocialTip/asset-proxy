@@ -51,6 +51,10 @@ services:
       - FORWARD_URL=http://asset-proxy:8080
       - CACHE_BUCKET=test-cache
       - GCS_API_ENDPOINT=http://fake-gcs:4443
+      - SOURCE_URL_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      - SIGNING_KEY=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+      - SIGNING_SALT=cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
+      - ALLOWED_ORIGINS=http://file-server
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_TRACES_SAMPLER=always_on
       - OTEL_BSP_SCHEDULE_DELAY=100
@@ -64,8 +68,11 @@ services:
       - ./packages/proxy/dist:/app/packages/proxy/dist:ro
       - ./packages/url-parser/src:/app/packages/url-parser/src:ro
       - ./packages/url-parser/dist:/app/packages/url-parser/dist:ro
+      - ./packages/url-generator/src:/app/packages/url-generator/src:ro
+      - ./packages/url-generator/dist:/app/packages/url-generator/dist:ro
       - ./packages/proxy/package.json:/app/packages/proxy/package.json:ro
       - ./packages/url-parser/package.json:/app/packages/url-parser/package.json:ro
+      - ./packages/url-generator/package.json:/app/packages/url-generator/package.json:ro
       - ./package.json:/app/package.json:ro
       - ./.coverage-docker/cache-proxy:/coverage
     command:

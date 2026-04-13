@@ -28,31 +28,17 @@ export interface UrlGeneratorConfig {
   signingSalt?: string;
 }
 
-/** Generates an asset-proxy-compatible URL path. */
-export function generateUrl(
+/** Generates the signed options path prefix for a URL, without the source URL part. The returned string includes a trailing `/` (e.g. `/{signature}/f:webp/rs:fill:480:360/vts:0/`). Concatenate with a raw source URL part (e.g. `plain/...` or `enc/...`) to form a complete URL. */
+export function generateUrlOptions(
   options: UrlGeneratorOptions,
-  config?: UrlGeneratorConfig,
+  config: Pick<UrlGeneratorConfig, "signingKey" | "signingSalt">,
 ): string {
-  const segments = serializeOptions(options);
-  segments.sort((a, b) => {
-    const keyA = SHORTHANDS[a.slice(0, a.indexOf(":"))] ?? a;
-    const keyB = SHORTHANDS[b.slice(0, b.indexOf(":"))] ?? b;
-    return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
-  });
-
-  let sourceUrlPart: string;
-  if (config?.encryptionKey) {
-    const key = Buffer.from(config.encryptionKey, "hex");
-    sourceUrlPart = `enc/${encryptSourceUrl(options.sourceUrl, key, { deterministic: config.deterministicEncryption })}`;
-  } else {
-    sourceUrlPart = `plain/${options.sourceUrl}`;
-  }
-
+  const segments = sortSegments(serializeOptions(options));
   const optionsPath = segments.length > 0 ? segments.join("/") + "/" : "";
-  const pathAfterSignature = `/${optionsPath}${sourceUrlPart}`;
+  const pathAfterSignature = `/${optionsPath}${options.sourceUrl}`;
 
   let signature = "insecure";
-  if (config?.signingKey && config?.signingSalt) {
+  if (config.signingKey && config.signingSalt) {
     signature = sign(
       pathAfterSignature,
       Buffer.from(config.signingKey, "hex"),
@@ -60,7 +46,31 @@ export function generateUrl(
     );
   }
 
-  return `/${signature}${pathAfterSignature}`;
+  return `/${signature}/${optionsPath}`;
+}
+
+/** Generates an asset-proxy-compatible URL path. */
+export function generateUrl(
+  options: UrlGeneratorOptions,
+  config?: UrlGeneratorConfig,
+): string {
+  let sourceUrl: string;
+  if (config?.encryptionKey) {
+    const key = Buffer.from(config.encryptionKey, "hex");
+    sourceUrl = `enc/${encryptSourceUrl(options.sourceUrl, key, { deterministic: config.deterministicEncryption })}`;
+  } else {
+    sourceUrl = `plain/${options.sourceUrl}`;
+  }
+
+  return generateUrlOptions({ ...options, sourceUrl }, config ?? {}) + sourceUrl;
+}
+
+function sortSegments(segments: string[]): string[] {
+  return segments.sort((a, b) => {
+    const keyA = SHORTHANDS[a.slice(0, a.indexOf(":"))] ?? a;
+    const keyB = SHORTHANDS[b.slice(0, b.indexOf(":"))] ?? b;
+    return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+  });
 }
 
 /** Options for generating an info URL. Only `sourceUrl` is required; security options (encryption, signing) come from the config. */
