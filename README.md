@@ -101,7 +101,7 @@ In a typical deployment, both containers run in the same service. The cache prox
 
 When migrating from imgproxy, some URLs produce different results because asset-proxy supports video processing natively while imgproxy does not. Sending the `X-Imgproxy-Compat: 1` request header enables compatibility mode, which rewrites URLs to match imgproxy's behaviour before processing.
 
-Compatibility mode runs in the cache proxy layer. When a rewrite is needed, the cache proxy responds with a **301 redirect** to the rewritten URL.
+Compatibility mode runs in the cache proxy layer. When a rewrite is needed, the cache proxy responds with a **301 redirect** to the rewritten URL. The redirect response is cacheable (`Cache-Control: public, max-age=86400`), but does **not** include a `Vary: X-Imgproxy-Compat` header. Consumers must ensure they do not share an HTTP cache between requests with and without the header, as doing so could poison the cache for non-header requests with a redirect response.
 
 ### Rules
 

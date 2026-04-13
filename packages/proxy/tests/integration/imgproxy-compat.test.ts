@@ -26,6 +26,7 @@ describe("imgproxy compat: video format best", () => {
     );
 
     expect(res.status).toBe(301);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=86400");
     expect(res.headers.get("location")).toMatchInlineSnapshot(
       `"/Eu_6EOaZ25Ql6dWOAqP-g0c1ByRqWZwQx1Dt4x7kDJ4/f:webp/rs:fill:480:360/vts:0/enc/N2NhNmFkMmYzOTFhNWJlMG-aK85gpH2N6VXLBfdqOMaeRyBpwhFQE9cJlUg88UAo_oU1deehUVUo4kSOlAitLA"`,
     );

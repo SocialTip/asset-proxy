@@ -46,6 +46,7 @@ describe("imgproxy compat: unsigned redirect", () => {
       .set("x-imgproxy-compat", "1");
 
     expect(res.status).toBe(301);
+    expect(res.headers["cache-control"]).toBe("public, max-age=86400");
     expect(res.headers.location).toMatchInlineSnapshot(
       `"/insecure/f:webp/rs:fill:480:360/vts:0/plain/https://example.com/video.mp4"`,
     );
