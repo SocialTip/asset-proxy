@@ -114,13 +114,16 @@ export function generateInfoUrl(
 function serializeInfoOptions(options?: Partial<InfoOptions>): string[] {
   if (!options) return [];
   const segments: string[] = [];
-  if (options.size === false) segments.push("size:f");
-  if (options.format === false) segments.push("f:f");
-  if (options.dimensions === false) segments.push("d:f");
-  if (options.videoMeta === false) segments.push("vm:f");
-  if (options.exif === false) segments.push("exif:f");
-  if (options.iptc === false) segments.push("iptc:f");
-  if (options.xmp === false) segments.push("xmp:f");
+  if (options.size != null) segments.push(`size:${options.size ? "t" : "f"}`);
+  if (options.format != null) segments.push(`f:${options.format ? "t" : "f"}`);
+  if (options.dimensions != null)
+    segments.push(`d:${options.dimensions ? "t" : "f"}`);
+  if (options.videoMeta != null)
+    segments.push(`vm:${options.videoMeta ? "t" : "f"}`);
+  if (options.exif != null) segments.push(`exif:${options.exif ? "t" : "f"}`);
+  if (options.iptc != null) segments.push(`iptc:${options.iptc ? "t" : "f"}`);
+  if (options.xmp != null) segments.push(`xmp:${options.xmp ? "t" : "f"}`);
+
   if (options.colorspace) segments.push("cs:t");
   if (options.bands) segments.push("b:t");
   if (options.sampleFormat) segments.push("sf:t");

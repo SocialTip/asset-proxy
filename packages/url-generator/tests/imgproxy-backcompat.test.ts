@@ -336,7 +336,7 @@ describe("imgproxy backward compatibility: info URL", () => {
     expect(ours).toBe(theirs);
   });
 
-  it("signed and encrypted with info option disabled", () => {
+  it("signed and encrypted with info option", () => {
     const ours = generateInfoUrl(
       { sourceUrl: SRC },
       {
@@ -345,42 +345,64 @@ describe("imgproxy backward compatibility: info URL", () => {
         signingKey: SIGNING_KEY,
         signingSalt: SIGNING_SALT,
       },
-      { exif: false },
+      { exif: true },
     );
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "encrypted" },
+      encryptKey: KEY_HEX,
+      encryptIV: imgproxyEncryptIV(SRC),
+      key: SIGNING_KEY,
+      salt: SIGNING_SALT,
+      options: { exif: 1 },
+    });
 
+    expect(ours).toBe(theirs);
     expect(ours).toMatchInlineSnapshot(
-      `"/info/vh2Yz6COYjamOVZPOiiDbtBhsvbJtZwJiao7PpJfeVA/exif:f/enc/NWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-"`,
+      `"/info/sw-iVDHlGP1Zc3ij4ktICDuW8LhmCb8oIbPH4ElWr5Q/exif:t/enc/NWNkNzZkOTZiYzJmMmFlY3Be8bupnahLBiXYDPx3gGN39ik0K2cy9XjAVCmLQi5-"`,
     );
   });
 
-  it("with exif disabled", () => {
-    const ours = generateInfoUrl({ sourceUrl: SRC }, undefined, {
-      exif: false,
+  it("with exif option", () => {
+    const ours = generateInfoUrl({ sourceUrl: SRC }, undefined, { exif: true });
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "plain" },
+      options: { exif: 1 },
     });
 
     expect(ours).toMatchInlineSnapshot(
-      `"/info/insecure/exif:f/plain/https://example.com/photo.jpg"`,
+      `"/info/insecure/exif:t/plain/https://example.com/photo.jpg"`,
     );
+    expect(ours).toBe(theirs);
   });
 
-  it("with iptc disabled", () => {
-    const ours = generateInfoUrl({ sourceUrl: SRC }, undefined, {
-      iptc: false,
+  it("with iptc option", () => {
+    const ours = generateInfoUrl({ sourceUrl: SRC }, undefined, { iptc: true });
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "plain" },
+      options: { iptc: 1 },
     });
 
     expect(ours).toMatchInlineSnapshot(
-      `"/info/insecure/iptc:f/plain/https://example.com/photo.jpg"`,
+      `"/info/insecure/iptc:t/plain/https://example.com/photo.jpg"`,
     );
+    expect(ours).toBe(theirs);
   });
 
-  it("with xmp disabled", () => {
-    const ours = generateInfoUrl({ sourceUrl: SRC }, undefined, {
-      xmp: false,
+  it("with xmp option", () => {
+    const ours = generateInfoUrl({ sourceUrl: SRC }, undefined, { xmp: true });
+    const theirs = generateImageInfoUrl({
+      endpoint: "",
+      url: { value: SRC, displayAs: "plain" },
+      options: { xmp: 1 },
     });
 
     expect(ours).toMatchInlineSnapshot(
-      `"/info/insecure/xmp:f/plain/https://example.com/photo.jpg"`,
+      `"/info/insecure/xmp:t/plain/https://example.com/photo.jpg"`,
     );
+    expect(ours).toBe(theirs);
   });
 
   it("with palette option", () => {
