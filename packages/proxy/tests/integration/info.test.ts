@@ -10,6 +10,7 @@ const CASTLE_URL = "http://file-server/test-image-castle.jpg";
 const ANIMATED_URL = "http://file-server/test-image-animated.gif";
 const JPEG_URL = "http://file-server/test-image-with-metadata.jpg";
 const VIDEO_URL = "http://file-server/test-video.mp4";
+const VIDEO_NOAUDIO_URL = "http://file-server/test-video-noaudio.mp4";
 
 describe("info endpoint", () => {
   describe("images", () => {
@@ -65,16 +66,39 @@ describe("info endpoint", () => {
       expect(body).toMatchInlineSnapshot(`
         {
           "duration": 5.069844,
-          "format": "mov",
+          "format": "mov,mp4,m4a,3gp,3g2,mj2",
           "height": 640,
-          "mime_type": "video/quicktime",
+          "mime_type": "video/mp4",
           "orientation": 1,
           "size": 747030,
           "video_meta": {
             "bitrate": 1105458,
             "codec": "h264",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf61.7.100",
             "framerate": 29.98,
+            "major_brand": "isom",
+            "minor_version": "512",
           },
+          "video_streams": [
+            {
+              "bps": 1105458,
+              "codec": "h264",
+              "duration": 5.069844,
+              "fps": 29.98,
+              "language": "und",
+              "type": "video",
+            },
+            {
+              "bps": 63410,
+              "codec": "aac",
+              "duration": 5.04,
+              "frequency": 44100,
+              "language": "und",
+              "layout": "stereo",
+              "type": "audio",
+            },
+          ],
           "width": 360,
         }
       `);
@@ -683,6 +707,112 @@ describe("info endpoint", () => {
           "R": 0,
         }
       `);
+    });
+  });
+
+  describe("video metadata options", () => {
+    it("returns empty exif/iptc/xmp for a video when options are enabled", async () => {
+      const res = await fetch(
+        SERVICE_URL +
+          generateInfoUrl({ sourceUrl: VIDEO_URL }, URL_CONFIG, {
+            exif: true,
+            iptc: true,
+            xmp: true,
+          }),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.exif).toEqual({});
+      expect(body.iptc).toEqual({});
+      expect(body.xmp).toEqual({});
+    });
+
+    it("returns only video stream for a no-audio video", async () => {
+      const res = await fetch(
+        SERVICE_URL +
+          generateInfoUrl({ sourceUrl: VIDEO_NOAUDIO_URL }, URL_CONFIG),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.video_streams).toHaveLength(1);
+      expect(body.video_streams[0]).toMatchObject({
+        type: "video",
+        codec: "h264",
+      });
+      expect(
+        body.video_streams.some(
+          (s: Record<string, unknown>) => s.type === "audio",
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe("default-true options", () => {
+    it("omits size when size:f is set", async () => {
+      const res = await fetch(
+        SERVICE_URL +
+          generateInfoUrl({ sourceUrl: IMAGE_URL }, URL_CONFIG, {
+            size: false,
+          }),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.size).toBeUndefined();
+      expect(body.format).toBeDefined();
+      expect(body.width).toBeDefined();
+    });
+
+    it("omits format and mime_type when format:f is set", async () => {
+      const res = await fetch(
+        SERVICE_URL +
+          generateInfoUrl({ sourceUrl: IMAGE_URL }, URL_CONFIG, {
+            format: false,
+          }),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.format).toBeUndefined();
+      expect(body.mime_type).toBeUndefined();
+      expect(body.width).toBeDefined();
+      expect(body.size).toBeDefined();
+    });
+
+    it("omits dimensions when dimensions:f is set", async () => {
+      const res = await fetch(
+        SERVICE_URL +
+          generateInfoUrl({ sourceUrl: IMAGE_URL }, URL_CONFIG, {
+            dimensions: false,
+          }),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.width).toBeUndefined();
+      expect(body.height).toBeUndefined();
+      expect(body.orientation).toBeUndefined();
+      expect(body.format).toBeDefined();
+      expect(body.size).toBeDefined();
+    });
+
+    it("omits video_meta and video_streams when video_meta:f is set", async () => {
+      const res = await fetch(
+        SERVICE_URL +
+          generateInfoUrl({ sourceUrl: VIDEO_URL }, URL_CONFIG, {
+            videoMeta: false,
+          }),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.video_meta).toBeUndefined();
+      expect(body.video_streams).toBeUndefined();
+      expect(body.duration).toBeUndefined();
+      expect(body.format).toBeDefined();
+      expect(body.size).toBeDefined();
     });
   });
 

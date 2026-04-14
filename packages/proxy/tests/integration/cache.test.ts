@@ -275,21 +275,50 @@ describe("cache proxy", () => {
     const body = await res.json();
     expect(body).toMatchObject({
       duration: expect.any(Number),
-      video_meta: expect.objectContaining({ codec: expect.any(String) }),
+      video_meta: expect.objectContaining({
+        codec: expect.any(String),
+        major_brand: expect.any(String),
+      }),
+      video_streams: expect.arrayContaining([
+        expect.objectContaining({ type: "video" }),
+      ]),
     });
     expect(body).toMatchInlineSnapshot(`
       {
         "duration": 5.069844,
-        "format": "mov",
+        "format": "mov,mp4,m4a,3gp,3g2,mj2",
         "height": 640,
-        "mime_type": "video/quicktime",
+        "mime_type": "video/mp4",
         "orientation": 1,
         "size": 747030,
         "video_meta": {
           "bitrate": 1105458,
           "codec": "h264",
+          "compatible_brands": "isomiso2avc1mp41",
+          "encoder": "Lavf61.7.100",
           "framerate": 29.98,
+          "major_brand": "isom",
+          "minor_version": "512",
         },
+        "video_streams": [
+          {
+            "bps": 1105458,
+            "codec": "h264",
+            "duration": 5.069844,
+            "fps": 29.98,
+            "language": "und",
+            "type": "video",
+          },
+          {
+            "bps": 63410,
+            "codec": "aac",
+            "duration": 5.04,
+            "frequency": 44100,
+            "language": "und",
+            "layout": "stereo",
+            "type": "audio",
+          },
+        ],
         "width": 360,
       }
     `);

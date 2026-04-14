@@ -82,7 +82,7 @@ export interface InfoUrlOptions {
 export function generateInfoUrl(
   options: InfoUrlOptions,
   config?: UrlGeneratorConfig,
-  infoOptions?: InfoOptions,
+  infoOptions?: Partial<InfoOptions>,
 ): string {
   const infoSegments = serializeInfoOptions(infoOptions);
   const infoPath = infoSegments.length > 0 ? infoSegments.join("/") + "/" : "";
@@ -109,9 +109,13 @@ export function generateInfoUrl(
   return `/info/${signature}${pathAfterSignature}`;
 }
 
-function serializeInfoOptions(options?: InfoOptions): string[] {
+function serializeInfoOptions(options?: Partial<InfoOptions>): string[] {
   if (!options) return [];
   const segments: string[] = [];
+  if (options.size === false) segments.push("size:f");
+  if (options.format === false) segments.push("f:f");
+  if (options.dimensions === false) segments.push("d:f");
+  if (options.videoMeta === false) segments.push("vm:f");
   if (options.exif) segments.push("exif:t");
   if (options.iptc) segments.push("iptc:t");
   if (options.xmp) segments.push("xmp:t");
