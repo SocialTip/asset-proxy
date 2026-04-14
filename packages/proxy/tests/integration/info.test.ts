@@ -175,17 +175,17 @@ describe("info endpoint", () => {
       const body = await res.json();
       expect(body.iptc).toMatchInlineSnapshot(`
         {
-          "ApplicationRecordVersion": 4,
+          "Application Record Version": 4,
           "By-line": "Test Photographer",
           "Caption-Abstract": "A test image for IPTC metadata",
           "City": "London",
-          "CopyrightNotice": "(c) 2026 Test",
-          "Country-PrimaryLocationName": "United Kingdom",
+          "Copyright Notice": "(c) 2026 Test",
+          "Country-Primary Location Name": "United Kingdom",
           "Keywords": [
             "test",
             "metadata",
           ],
-          "ObjectName": "Test Image",
+          "Object Name": "Test Image",
         }
       `);
     });
@@ -257,7 +257,7 @@ describe("info endpoint", () => {
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.colorspace).toBe("gbr");
+      expect(body.colorspace).toBe("srgb");
     });
 
     it("omits colorspace when option is not set", async () => {
@@ -852,7 +852,7 @@ describe("info endpoint", () => {
           ),
       );
       expect(res.status).toBeGreaterThanOrEqual(400);
-      expect(await res.text()).toMatchInlineSnapshot(`"Unhandled error"`);
+      expect(await res.text()).toMatchInlineSnapshot(`"Could not fetch source"`);
     });
   });
 });
