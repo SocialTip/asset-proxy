@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { Http2Server } from "node:http2";
 import { promisify } from "node:util";
 
+import { Storage } from "@google-cloud/storage";
 import {
   getMediaType,
   HTTPError,
@@ -18,8 +19,6 @@ import type {
   RouteGenericInterface,
 } from "fastify";
 import sharp from "sharp";
-
-import { Storage } from "@google-cloud/storage";
 
 import { env as envSwitched, type ProcessingEnv } from "./env.js";
 
