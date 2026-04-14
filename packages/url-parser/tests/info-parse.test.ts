@@ -71,18 +71,35 @@ describe("parseInfoUrl", () => {
     });
   });
 
+  describe("exif, iptc, xmp default to true", () => {
+    it("defaults exif, iptc, xmp to true", () => {
+      const result = parseInfoUrl(`/plain/${SRC}`);
+      expect(result.infoOptions.exif).toBe(true);
+      expect(result.infoOptions.iptc).toBe(true);
+      expect(result.infoOptions.xmp).toBe(true);
+    });
+
+    it("disables exif with exif:0", () => {
+      const result = parseInfoUrl(`/exif:0/plain/${SRC}`);
+      expect(result.infoOptions.exif).toBe(false);
+    });
+
+    it("disables iptc with iptc:f", () => {
+      const result = parseInfoUrl(`/iptc:f/plain/${SRC}`);
+      expect(result.infoOptions.iptc).toBe(false);
+    });
+
+    it("disables xmp with xmp:false", () => {
+      const result = parseInfoUrl(`/xmp:false/plain/${SRC}`);
+      expect(result.infoOptions.xmp).toBe(false);
+    });
+  });
+
   describe("opt-in options", () => {
     it("defaults opt-in options to undefined", () => {
       const result = parseInfoUrl(`/plain/${SRC}`);
-      expect(result.infoOptions.exif).toBeUndefined();
-      expect(result.infoOptions.iptc).toBeUndefined();
-      expect(result.infoOptions.xmp).toBeUndefined();
       expect(result.infoOptions.colorspace).toBeUndefined();
-    });
-
-    it("enables exif with exif:t", () => {
-      const result = parseInfoUrl(`/exif:t/plain/${SRC}`);
-      expect(result.infoOptions.exif).toBe(true);
+      expect(result.infoOptions.bands).toBeUndefined();
     });
   });
 });

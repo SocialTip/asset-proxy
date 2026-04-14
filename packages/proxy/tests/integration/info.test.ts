@@ -66,8 +66,10 @@ describe("info endpoint", () => {
       expect(body).toMatchInlineSnapshot(`
         {
           "duration": 5.069844,
+          "exif": {},
           "format": "mov,mp4,m4a,3gp,3g2,mj2",
           "height": 640,
+          "iptc": {},
           "mime_type": "video/mp4",
           "orientation": 1,
           "size": 747030,
@@ -100,6 +102,7 @@ describe("info endpoint", () => {
             },
           ],
           "width": 360,
+          "xmp": {},
         }
       `);
     });
@@ -147,9 +150,12 @@ describe("info endpoint", () => {
       `);
     });
 
-    it("omits EXIF metadata when exif option is not set", async () => {
+    it("omits EXIF metadata when exif is disabled", async () => {
       const res = await fetch(
-        SERVICE_URL + generateInfoUrl({ sourceUrl: JPEG_URL }, URL_CONFIG),
+        SERVICE_URL +
+          generateInfoUrl({ sourceUrl: JPEG_URL }, URL_CONFIG, {
+            exif: false,
+          }),
       );
       expect(res.status).toBe(200);
 
@@ -184,9 +190,12 @@ describe("info endpoint", () => {
       `);
     });
 
-    it("omits IPTC metadata when iptc option is not set", async () => {
+    it("omits IPTC metadata when iptc is disabled", async () => {
       const res = await fetch(
-        SERVICE_URL + generateInfoUrl({ sourceUrl: JPEG_URL }, URL_CONFIG),
+        SERVICE_URL +
+          generateInfoUrl({ sourceUrl: JPEG_URL }, URL_CONFIG, {
+            iptc: false,
+          }),
       );
       expect(res.status).toBe(200);
 
@@ -223,9 +232,12 @@ describe("info endpoint", () => {
       `);
     });
 
-    it("omits XMP metadata when xmp option is not set", async () => {
+    it("omits XMP metadata when xmp is disabled", async () => {
       const res = await fetch(
-        SERVICE_URL + generateInfoUrl({ sourceUrl: JPEG_URL }, URL_CONFIG),
+        SERVICE_URL +
+          generateInfoUrl({ sourceUrl: JPEG_URL }, URL_CONFIG, {
+            xmp: false,
+          }),
       );
       expect(res.status).toBe(200);
 

@@ -10,7 +10,9 @@ const zBool = z
 const zBoolDefaultTrue = z
   .string()
   .optional()
-  .transform((v) => v === undefined || (v !== "0" && v !== "f" && v !== "false"));
+  .transform(
+    (v) => v === undefined || (v !== "0" && v !== "f" && v !== "false"),
+  );
 
 const INFO_SHORTHANDS: Record<string, string> = {
   cs: "colorspace",
@@ -36,9 +38,9 @@ const rawInfoOptionsSchema = z.object({
   format: zBoolDefaultTrue,
   dimensions: zBoolDefaultTrue,
   video_meta: zBoolDefaultTrue,
-  exif: zBool.optional(),
-  iptc: zBool.optional(),
-  xmp: zBool.optional(),
+  exif: zBoolDefaultTrue,
+  iptc: zBoolDefaultTrue,
+  xmp: zBoolDefaultTrue,
   colorspace: zBool.optional(),
   bands: zBool.optional(),
   sample_format: zBool.optional(),
@@ -105,12 +107,12 @@ export interface InfoOptions {
   dimensions: boolean;
   /** Include video metadata and stream information. Defaults to `true`. */
   videoMeta: boolean;
-  /** Include EXIF metadata in the response. */
-  exif?: boolean;
-  /** Include IPTC metadata in the response. */
-  iptc?: boolean;
-  /** Include XMP metadata organised by namespace in the response. */
-  xmp?: boolean;
+  /** Include EXIF metadata in the response. Defaults to `true`. */
+  exif: boolean;
+  /** Include IPTC metadata in the response. Defaults to `true`. */
+  iptc: boolean;
+  /** Include XMP metadata organised by namespace in the response. Defaults to `true`. */
+  xmp: boolean;
   /** Include the image colour space (e.g. `gbr`, `bt709`). */
   colorspace?: boolean;
   /** Include the number of image bands/channels. */
@@ -141,9 +143,9 @@ export const parsedInfoOptionsSchema = z.object({
   format: z.boolean(),
   dimensions: z.boolean(),
   videoMeta: z.boolean(),
-  exif: z.boolean().optional(),
-  iptc: z.boolean().optional(),
-  xmp: z.boolean().optional(),
+  exif: z.boolean(),
+  iptc: z.boolean(),
+  xmp: z.boolean(),
   colorspace: z.boolean().optional(),
   bands: z.boolean().optional(),
   sampleFormat: z.boolean().optional(),

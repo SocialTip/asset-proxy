@@ -62,7 +62,9 @@ export function generateUrl(
     sourceUrl = `plain/${options.sourceUrl}`;
   }
 
-  return generateUrlOptions({ ...options, sourceUrl }, config ?? {}) + sourceUrl;
+  return (
+    generateUrlOptions({ ...options, sourceUrl }, config ?? {}) + sourceUrl
+  );
 }
 
 function sortSegments(segments: string[]): string[] {
@@ -116,9 +118,9 @@ function serializeInfoOptions(options?: Partial<InfoOptions>): string[] {
   if (options.format === false) segments.push("f:f");
   if (options.dimensions === false) segments.push("d:f");
   if (options.videoMeta === false) segments.push("vm:f");
-  if (options.exif) segments.push("exif:t");
-  if (options.iptc) segments.push("iptc:t");
-  if (options.xmp) segments.push("xmp:t");
+  if (options.exif === false) segments.push("exif:f");
+  if (options.iptc === false) segments.push("iptc:f");
+  if (options.xmp === false) segments.push("xmp:f");
   if (options.colorspace) segments.push("cs:t");
   if (options.bands) segments.push("b:t");
   if (options.sampleFormat) segments.push("sf:t");

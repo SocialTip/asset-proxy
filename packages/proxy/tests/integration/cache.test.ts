@@ -286,8 +286,10 @@ describe("cache proxy", () => {
     expect(body).toMatchInlineSnapshot(`
       {
         "duration": 5.069844,
+        "exif": {},
         "format": "mov,mp4,m4a,3gp,3g2,mj2",
         "height": 640,
+        "iptc": {},
         "mime_type": "video/mp4",
         "orientation": 1,
         "size": 747030,
@@ -320,6 +322,7 @@ describe("cache proxy", () => {
           },
         ],
         "width": 360,
+        "xmp": {},
       }
     `);
 
