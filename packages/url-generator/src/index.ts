@@ -62,7 +62,9 @@ export function generateUrl(
     sourceUrl = `plain/${options.sourceUrl}`;
   }
 
-  return generateUrlOptions({ ...options, sourceUrl }, config ?? {}) + sourceUrl;
+  return (
+    generateUrlOptions({ ...options, sourceUrl }, config ?? {}) + sourceUrl
+  );
 }
 
 function sortSegments(segments: string[]): string[] {
@@ -82,7 +84,7 @@ export interface InfoUrlOptions {
 export function generateInfoUrl(
   options: InfoUrlOptions,
   config?: UrlGeneratorConfig,
-  infoOptions?: InfoOptions,
+  infoOptions?: Partial<InfoOptions>,
 ): string {
   const infoSegments = serializeInfoOptions(infoOptions);
   const infoPath = infoSegments.length > 0 ? infoSegments.join("/") + "/" : "";
@@ -109,12 +111,19 @@ export function generateInfoUrl(
   return `/info/${signature}${pathAfterSignature}`;
 }
 
-function serializeInfoOptions(options?: InfoOptions): string[] {
+function serializeInfoOptions(options?: Partial<InfoOptions>): string[] {
   if (!options) return [];
   const segments: string[] = [];
-  if (options.exif) segments.push("exif:t");
-  if (options.iptc) segments.push("iptc:t");
-  if (options.xmp) segments.push("xmp:t");
+  if (options.size != null) segments.push(`size:${options.size ? "t" : "f"}`);
+  if (options.format != null) segments.push(`f:${options.format ? "t" : "f"}`);
+  if (options.dimensions != null)
+    segments.push(`d:${options.dimensions ? "t" : "f"}`);
+  if (options.videoMeta != null)
+    segments.push(`vm:${options.videoMeta ? "t" : "f"}`);
+  if (options.exif != null) segments.push(`exif:${options.exif ? "t" : "f"}`);
+  if (options.iptc != null) segments.push(`iptc:${options.iptc ? "t" : "f"}`);
+  if (options.xmp != null) segments.push(`xmp:${options.xmp ? "t" : "f"}`);
+
   if (options.colorspace) segments.push("cs:t");
   if (options.bands) segments.push("b:t");
   if (options.sampleFormat) segments.push("sf:t");

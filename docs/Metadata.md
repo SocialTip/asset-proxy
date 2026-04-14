@@ -41,17 +41,40 @@ Returns `application/json` with a `Cache-Control` header.
 
 ```json
 {
-  "format": "mov",
-  "mime_type": "video/quicktime",
+  "format": "mov,mp4,m4a,3gp,3g2,mj2",
+  "mime_type": "video/mp4",
   "width": 1920,
   "height": 1080,
+  "orientation": 1,
   "size": 5242880,
   "duration": 30.5,
   "video_meta": {
     "codec": "h264",
     "bitrate": 1200000,
-    "framerate": 29.97
-  }
+    "framerate": 29.97,
+    "major_brand": "isom",
+    "minor_version": "512",
+    "compatible_brands": "isomiso2avc1mp41"
+  },
+  "video_streams": [
+    {
+      "type": "video",
+      "codec": "h264",
+      "duration": 30.5,
+      "bps": 1200000,
+      "fps": 30,
+      "language": "und"
+    },
+    {
+      "type": "audio",
+      "codec": "aac",
+      "duration": 30.7,
+      "bps": 128000,
+      "frequency": 44100,
+      "layout": "stereo",
+      "language": "und"
+    }
+  ]
 }
 ```
 
@@ -59,7 +82,7 @@ Returns `application/json` with a `Cache-Control` header.
 
 | Field             | Type   | Description                                                                    |
 | ----------------- | ------ | ------------------------------------------------------------------------------ |
-| `format`          | string | Codec name (images) or container format (videos)                               |
+| `format`          | string | Codec name (images) or ffprobe format name (videos, e.g. `"mov,mp4,m4a,3gp,3g2,mj2"`) |
 | `mime_type`       | string | MIME type of the source                                                        |
 | `width`           | number | Width in pixels (adjusted for EXIF orientation)                                |
 | `height`          | number | Height in pixels (adjusted for EXIF orientation)                               |
@@ -71,7 +94,8 @@ Returns `application/json` with a `Cache-Control` header.
 | `alpha`           | object | Alpha channel info (only when `a` info option is enabled)                      |
 | `size`            | number | File size in bytes                                                             |
 | `duration`        | number | Duration in seconds (video only)                                               |
-| `video_meta`      | object | Video stream details (video only)                                              |
+| `video_meta`      | object | Video metadata: codec, bitrate, framerate, and container tags (video only)     |
+| `video_streams`   | array  | Per-stream details: type, codec, duration, bps, fps/frequency/layout, language (video only) |
 | `exif`            | object | EXIF metadata grouped by IFD section (only when `exif` info option is enabled) |
 | `iptc`            | object | IPTC metadata (only when `iptc` info option is enabled)                        |
 | `xmp`             | object | XMP metadata organised by namespace (only when `xmp` info option is enabled)   |
@@ -85,21 +109,25 @@ Returns `application/json` with a `Cache-Control` header.
 
 Info-specific options control which additional metadata is returned. They are placed in the URL path alongside processing options.
 
-| Option            | Shorthand | Description                                                                   |
-| ----------------- | --------- | ----------------------------------------------------------------------------- |
-| `exif`            |           | Include EXIF metadata                                                         |
-| `iptc`            |           | Include IPTC metadata                                                         |
-| `xmp`             |           | Include XMP metadata                                                          |
-| `colorspace`      | `cs`      | Include colour space                                                          |
-| `bands`           | `b`       | Include bands count                                                           |
-| `sample_format`   | `sf`      | Include sample format                                                         |
-| `pages_number`    | `pn`      | Include page count                                                            |
-| `alpha`           | `a`       | Include alpha info                                                            |
-| `palette`         | `p`       | Return RGBA colour palette (value = max colours, 2-256)                       |
-| `average`         | `avg`     | Return average RGB colour (`avg:t` or `avg:t:t` to ignore transparent pixels) |
-| `dominant_colors` | `dc`      | Return six dominant colour categories                                         |
-| `blurhash`        | `bh`      | Return BlurHash string (value = `<x>:<y>` components)                         |
-| `calc_hashsums`   | `chs`     | Return file checksums (value = hash types: md5, sha1, sha256, sha512)         |
+| Option            | Shorthand | Default | Description                                                            |
+| ----------------- | --------- | ------- | ---------------------------------------------------------------------- |
+| `size`            |           | `true`  | Include file size                                                      |
+| `format`          | `f`       | `true`  | Include format and MIME type                                           |
+| `dimensions`      | `d`       | `true`  | Include width, height, and orientation                                 |
+| `video_meta`      | `vm`      | `true`  | Include video metadata and stream information                          |
+| `exif`            |           |         | Include EXIF metadata                                                  |
+| `iptc`            |           |         | Include IPTC metadata                                                  |
+| `xmp`             |           |         | Include XMP metadata                                                   |
+| `colorspace`      | `cs`      |         | Include colour space                                                   |
+| `bands`           | `b`       |         | Include bands count                                                    |
+| `sample_format`   | `sf`      |         | Include sample format                                                  |
+| `pages_number`    | `pn`      |         | Include page count                                                     |
+| `alpha`           | `a`       |         | Include alpha info                                                     |
+| `palette`         | `p`       |         | Return RGBA colour palette (value = max colours, 2-256)                |
+| `average`         | `avg`     |         | Return average RGB colour (`avg:t` or `avg:t:t` to ignore transparent) |
+| `dominant_colors` | `dc`      |         | Return six dominant colour categories                                  |
+| `blurhash`        | `bh`      |         | Return BlurHash string (value = `<x>:<y>` components)                  |
+| `calc_hashsums`   | `chs`     |         | Return file checksums (value = hash types: md5, sha1, sha256, sha512)  |
 
 ## URL generator
 

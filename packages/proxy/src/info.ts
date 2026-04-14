@@ -49,12 +49,23 @@ const MIME_TYPES: Record<string, string> = {
   flv: "video/x-flv",
 };
 
+interface VideoStream {
+  type: string;
+  codec: string;
+  duration?: number;
+  bps?: number;
+  fps?: number;
+  frequency?: number;
+  layout?: string;
+  language?: string;
+}
+
 interface InfoResponse {
-  format: string;
-  mime_type: string;
-  width: number;
-  height: number;
-  orientation: number;
+  format?: string;
+  mime_type?: string;
+  width?: number;
+  height?: number;
+  orientation?: number;
   colorspace?: string;
   bands?: number;
   sample_format?: string;
@@ -62,11 +73,8 @@ interface InfoResponse {
   alpha?: { alpha: boolean; transparent?: boolean };
   size?: number;
   duration?: number;
-  video_meta?: {
-    codec: string;
-    bitrate?: number;
-    framerate?: number;
-  };
+  video_meta?: Record<string, string | number>;
+  video_streams?: VideoStream[];
   exif?: Record<string, unknown>;
   iptc?: Record<string, unknown>;
   xmp?: Record<string, unknown>;
@@ -90,6 +98,16 @@ function isVideoFormat(formatName: string): boolean {
     "avi",
   ]);
   return videoFormats.has(formatName);
+}
+
+const VIDEO_MIME_PRIORITY = ["mp4", "webm", "mkv", "avi", "flv", "mov"];
+
+function mimeTypeFromVideoFormat(formatName: string): string {
+  const segments = new Set(formatName.split(","));
+  for (const fmt of VIDEO_MIME_PRIORITY) {
+    if (segments.has(fmt)) return MIME_TYPES[fmt];
+  }
+  return "video/mp4";
 }
 
 interface LazyBuffer {
@@ -385,19 +403,21 @@ async function probeMetadata(
   const formatName: string = probe.format?.format_name ?? stream.codec_name;
   const isVideo = isVideoFormat(formatName);
 
-  const format = isVideo ? formatName.split(",")[0] : stream.codec_name;
-  const mimeType =
-    MIME_TYPES[format] ?? (isVideo ? "video/mp4" : `image/${format}`);
+  const format = isVideo ? formatName : stream.codec_name;
+  const mimeType = isVideo
+    ? mimeTypeFromVideoFormat(formatName)
+    : (MIME_TYPES[format] ?? `image/${format}`);
 
   const pixFmt: string = stream.pix_fmt ?? "";
   const sharpOpts = infoOpts.page !== undefined ? { page: infoOpts.page } : {};
 
   const result: InfoResponse = {
-    format,
-    mime_type: mimeType,
-    width: stream.width,
-    height: stream.height,
-    orientation: 1,
+    ...(infoOpts.format && { format, mime_type: mimeType }),
+    ...(infoOpts.dimensions && {
+      width: stream.width,
+      height: stream.height,
+      orientation: 1,
+    }),
     ...(infoOpts.colorspace &&
       stream.color_space && { colorspace: stream.color_space }),
     ...(infoOpts.bands && { bands: bandsFromPixFmt(pixFmt) }),
@@ -412,27 +432,66 @@ async function probeMetadata(
     }),
   };
 
-  if (isVideo) {
+  if (isVideo && infoOpts.videoMeta) {
     const duration = parseFloat(probe.format?.duration);
     if (!isNaN(duration)) {
       result.duration = duration;
     }
-    result.video_meta = {
-      codec: stream.codec_name,
-    };
+
+    const meta: Record<string, string | number> = {};
+
+    meta.codec = stream.codec_name;
     const bitrate = parseInt(stream.bit_rate ?? probe.format?.bit_rate, 10);
-    if (!isNaN(bitrate)) {
-      result.video_meta.bitrate = bitrate;
+    if (!isNaN(bitrate)) meta.bitrate = bitrate;
+    const [fpsNum, fpsDen] = (stream.r_frame_rate ?? "").split("/").map(Number);
+    if (fpsNum && fpsDen)
+      meta.framerate = Math.round((fpsNum / fpsDen) * 100) / 100;
+
+    const tags = probe.format?.tags;
+    if (tags && typeof tags === "object") {
+      for (const [k, v] of Object.entries(tags)) {
+        if (typeof v === "string") meta[k] = v;
+      }
     }
-    const [num, den] = (stream.r_frame_rate ?? "").split("/").map(Number);
-    if (num && den) {
-      result.video_meta.framerate = Math.round((num / den) * 100) / 100;
+    result.video_meta = meta;
+
+    const streams: VideoStream[] = [];
+    for (const s of probe.streams ?? []) {
+      const type: string = s.codec_type;
+      if (type === "video") {
+        const vs: VideoStream = { type, codec: s.codec_name };
+        const dur = parseFloat(s.duration);
+        if (!isNaN(dur)) vs.duration = dur;
+        const bps = parseInt(s.bit_rate, 10);
+        if (!isNaN(bps)) vs.bps = bps;
+        const [num, den] = (s.r_frame_rate ?? "").split("/").map(Number);
+        if (num && den) vs.fps = Math.round((num / den) * 100) / 100;
+        if (s.tags?.language) vs.language = s.tags.language;
+        streams.push(vs);
+      } else if (type === "audio") {
+        const as: VideoStream = { type, codec: s.codec_name };
+        const dur = parseFloat(s.duration);
+        if (!isNaN(dur)) as.duration = dur;
+        const bps = parseInt(s.bit_rate, 10);
+        if (!isNaN(bps)) as.bps = bps;
+        const freq = parseInt(s.sample_rate, 10);
+        if (!isNaN(freq)) as.frequency = freq;
+        if (s.channel_layout) as.layout = s.channel_layout;
+        if (s.tags?.language) as.language = s.tags.language;
+        streams.push(as);
+      } else if (type === "subtitle") {
+        const ss: VideoStream = { type, codec: s.codec_name };
+        if (s.tags?.language) ss.language = s.tags.language;
+        streams.push(ss);
+      }
     }
+    if (streams.length) result.video_streams = streams;
   }
 
-  // Size: from buffer if available, otherwise from ffprobe format.size
-  const probeSize = parseInt(probe.format?.size, 10);
-  if (probeSize > 0) result.size = probeSize;
+  if (infoOpts.size) {
+    const probeSize = parseInt(probe.format?.size, 10);
+    if (probeSize > 0) result.size = probeSize;
+  }
 
   // Slow features — each calls getBuffer() on demand, triggering a
   // single download on first use (no download if none are requested).
@@ -506,26 +565,37 @@ async function probeMetadata(
     );
   }
 
-  // Run exiftool for orientation (always) and optional EXIF/IPTC/XMP.
+  // Run exiftool for orientation (images only) and optional EXIF/IPTC/XMP.
   // If a slow feature already triggered a full download, reuse that buffer
   // instead of making a second request.
-  if (!isVideo) {
+  const wantsExiftool =
+    (!isVideo && infoOpts.dimensions) ||
+    infoOpts.exif ||
+    infoOpts.iptc ||
+    infoOpts.xmp;
+  if (wantsExiftool) {
     try {
-      const groups: string[] = ["-Orientation"];
+      const groups: string[] = [];
+      if (!isVideo && infoOpts.dimensions) groups.push("-Orientation");
       if (infoOpts.exif) groups.push("-EXIF:all");
       if (infoOpts.iptc) groups.push("-IPTC:all");
       if (infoOpts.xmp) groups.push("-XMP:all");
 
       const exiftoolSource = getBuffer.pending() ?? sourceUrl;
-      const exiftoolResult = await runExiftool(exiftoolSource, groups);
+      const exiftoolResult =
+        groups.length > 0
+          ? await runExiftool(exiftoolSource, groups)
+          : {};
 
-      const rawOrientation = exiftoolResult["IFD0:Orientation"];
-      if (typeof rawOrientation === "number") {
-        result.orientation = rawOrientation;
-        if (rawOrientation >= 5 && rawOrientation <= 8) {
-          const w = result.width;
-          result.width = result.height;
-          result.height = w;
+      if (!isVideo && infoOpts.dimensions) {
+        const rawOrientation = exiftoolResult["IFD0:Orientation"];
+        if (typeof rawOrientation === "number") {
+          result.orientation = rawOrientation;
+          if (rawOrientation >= 5 && rawOrientation <= 8) {
+            const w = result.width;
+            result.width = result.height;
+            result.height = w;
+          }
         }
       }
 
@@ -542,15 +612,15 @@ async function probeMetadata(
 
       if (infoOpts.iptc) {
         const iptc = groupExiftoolOutput(exiftoolResult, "IPTC");
-        if (Object.keys(iptc).length) result.iptc = iptc;
+        result.iptc = Object.keys(iptc).length ? iptc : {};
       }
 
       if (infoOpts.xmp) {
         const xmp = groupExiftoolXmp(exiftoolResult);
-        if (Object.keys(xmp).length) result.xmp = xmp;
+        result.xmp = Object.keys(xmp).length ? xmp : {};
       }
     } catch (cause) {
-      logger.error("Failed to extract image metadata", { cause });
+      logger.error("Failed to extract metadata", { cause });
     }
   }
 
