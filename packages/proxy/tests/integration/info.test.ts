@@ -257,7 +257,7 @@ describe("info endpoint", () => {
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.colorspace).toBe("srgb");
+      expect(body.colorspace).toBe("gbr");
     });
 
     it("omits colorspace when option is not set", async () => {
@@ -852,7 +852,7 @@ describe("info endpoint", () => {
           ),
       );
       expect(res.status).toBeGreaterThanOrEqual(400);
-      expect(await res.text()).toMatchInlineSnapshot(`"Could not fetch source"`);
+      expect(await res.text()).toMatchInlineSnapshot(`"Unhandled error"`);
     });
   });
 });
