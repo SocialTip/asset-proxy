@@ -38,6 +38,25 @@ describe("info endpoint", () => {
       expect(body.video_meta).toBeUndefined();
     });
 
+    it("returns correct metadata for a JPEG image", async () => {
+      const res = await fetch(
+        SERVICE_URL + generateInfoUrl({ sourceUrl: CASTLE_URL }, URL_CONFIG),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body).toMatchObject({
+        format: "jpeg",
+        mime_type: "image/jpeg",
+        width: expect.any(Number),
+        height: expect.any(Number),
+        orientation: expect.any(Number),
+      });
+      expect(body.size).toBeGreaterThan(0);
+      expect(body.duration).toBeUndefined();
+      expect(body.video_meta).toBeUndefined();
+    });
+
     it("returns EXIF orientation and adjusts dimensions for a rotated JPEG", async () => {
       const res = await fetch(
         SERVICE_URL + generateInfoUrl({ sourceUrl: JPEG_URL }, URL_CONFIG),
