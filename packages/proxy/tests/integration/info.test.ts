@@ -35,7 +35,28 @@ describe("info endpoint", () => {
       expect(body.size).toBeGreaterThan(0);
       expect(body.colorspace).toBeUndefined();
       expect(body.duration).toBeUndefined();
-      expect(body.video_meta).toBeUndefined();
+      expect(body.video_meta).toEqual({});
+      expect(body.video_streams).toEqual([]);
+    });
+
+    it("returns correct metadata for a JPEG image", async () => {
+      const res = await fetch(
+        SERVICE_URL + generateInfoUrl({ sourceUrl: CASTLE_URL }, URL_CONFIG),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body).toMatchObject({
+        format: "jpeg",
+        mime_type: "image/jpeg",
+        width: expect.any(Number),
+        height: expect.any(Number),
+        orientation: expect.any(Number),
+      });
+      expect(body.size).toBeGreaterThan(0);
+      expect(body.duration).toBeUndefined();
+      expect(body.video_meta).toEqual({});
+      expect(body.video_streams).toEqual([]);
     });
 
     it("returns EXIF orientation and adjusts dimensions for a rotated JPEG", async () => {
@@ -175,17 +196,17 @@ describe("info endpoint", () => {
       const body = await res.json();
       expect(body.iptc).toMatchInlineSnapshot(`
         {
-          "ApplicationRecordVersion": 4,
+          "Application Record Version": 4,
           "By-line": "Test Photographer",
           "Caption-Abstract": "A test image for IPTC metadata",
           "City": "London",
-          "CopyrightNotice": "(c) 2026 Test",
-          "Country-PrimaryLocationName": "United Kingdom",
+          "Copyright Notice": "(c) 2026 Test",
+          "Country-Primary Location Name": "United Kingdom",
           "Keywords": [
             "test",
             "metadata",
           ],
-          "ObjectName": "Test Image",
+          "Object Name": "Test Image",
         }
       `);
     });
