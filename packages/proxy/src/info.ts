@@ -482,6 +482,11 @@ async function probeImageMetadata(
     }),
   };
 
+  if (infoOpts.videoMeta) {
+    result.video_meta = {};
+    result.video_streams = [];
+  }
+
   if (infoOpts.size) {
     const probeSize = parseInt(probe.format?.size, 10);
     if (probeSize > 0) result.size = probeSize;

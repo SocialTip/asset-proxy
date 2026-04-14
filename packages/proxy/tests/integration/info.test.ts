@@ -35,7 +35,8 @@ describe("info endpoint", () => {
       expect(body.size).toBeGreaterThan(0);
       expect(body.colorspace).toBeUndefined();
       expect(body.duration).toBeUndefined();
-      expect(body.video_meta).toBeUndefined();
+      expect(body.video_meta).toEqual({});
+      expect(body.video_streams).toEqual([]);
     });
 
     it("returns correct metadata for a JPEG image", async () => {
@@ -54,7 +55,8 @@ describe("info endpoint", () => {
       });
       expect(body.size).toBeGreaterThan(0);
       expect(body.duration).toBeUndefined();
-      expect(body.video_meta).toBeUndefined();
+      expect(body.video_meta).toEqual({});
+      expect(body.video_streams).toEqual([]);
     });
 
     it("returns EXIF orientation and adjusts dimensions for a rotated JPEG", async () => {
