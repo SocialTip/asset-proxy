@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     env:
       BEST_FORMAT_MAX_RESOLUTION: "0.005"
     services:
@@ -127,6 +127,10 @@ jobs:
           FORWARD_URL: "http://localhost:8080"
           CACHE_BUCKET: "test-cache"
           GCS_API_ENDPOINT: "http://localhost:4443"
+          SOURCE_URL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          SIGNING_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+          SIGNING_SALT: "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe"
+          ALLOWED_ORIGINS: "http://file-server"
           NODE_V8_COVERAGE: /tmp/coverage-cache-proxy
           OTEL_SERVICE_NAME: "cache-proxy"
           OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318"
@@ -250,7 +254,7 @@ jobs:
   test-video-player:
     if: needs.changes.outputs.video-player == 'true'
     needs: [changes]
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -275,7 +279,7 @@ jobs:
         run: pnpm --filter @socialtip/asset-proxy-video-player test
 
   changes:
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
@@ -313,7 +317,7 @@ jobs:
     if: always() && !cancelled()
     needs: [test, test-video-player, docker-build, cd]
     permissions: {}
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     steps:
       - name: Check required jobs
         run: |

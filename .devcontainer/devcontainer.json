@@ -1,0 +1,23 @@
+{
+  "name": "Asset Proxy",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "dev",
+  "workspaceFolder": "/workspaces/asset-proxy",
+  "postCreateCommand": "git config commit.gpgsign false && sudo corepack enable && pnpm install --force && npm install -g @anthropic-ai/claude-code",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "vitest.explorer"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+      }
+    }
+  }
+}

@@ -2,9 +2,13 @@ import type { Http2Server } from "node:http2";
 import { PassThrough, type Readable } from "node:stream";
 
 import { Storage } from "@google-cloud/storage";
+import { generateUrlOptions } from "@socialtip/asset-proxy-url-generator";
 import {
   extractUrlOptions,
+  getMediaType,
   HTTPError,
+  parseProcessingUrl,
+  verifySignature,
 } from "@socialtip/asset-proxy-url-parser";
 import Fastify, {
   type FastifyReply,
@@ -18,6 +22,8 @@ import { h2Fetch } from "./h2-fetch.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 import { logger } from "./logger.js";
 import { requestKey } from "./request-key.js";
+import { assertOriginAllowed } from "./resolve-source.js";
+import { createSourceMetadata } from "./source-metadata.js";
 import { tracer } from "./tracing.js";
 
 const env = envSwitched as CacheEnv;
@@ -113,6 +119,66 @@ function cacheKey(requestPath: string): string {
   return requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
 }
 
+/**
+ * Returns a redirect path when an imgproxy-compat redirect is needed, or `undefined` if no redirect applies.
+ *
+ * Rule: video sources with `best` format are redirected to a webp thumbnail at second 0, matching imgproxy's behaviour of returning an image for video inputs.
+ */
+async function imgproxyCompatRedirect(
+  requestPath: string,
+  gcs: Storage,
+): Promise<string | undefined> {
+  if (requestPath.startsWith("/info")) return undefined;
+
+  let parsed;
+  try {
+    const pathAfterSignature = verifySignature(requestPath, {
+      signingKey: env.SIGNING_KEY,
+      signingSalt: env.SIGNING_SALT,
+    });
+
+    parsed = parseProcessingUrl(pathAfterSignature, {
+      encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY
+        ? Buffer.from(env.SOURCE_URL_ENCRYPTION_KEY, "hex")
+        : undefined,
+    });
+  } catch {
+    return undefined;
+  }
+
+  if (!parsed.bestFormat) return undefined;
+  if (
+    parsed.videoThumbnailSecond !== undefined ||
+    parsed.videoThumbnailAnimation !== undefined
+  )
+    return undefined;
+
+  assertOriginAllowed(parsed.sourceUrl, env.ALLOWED_ORIGINS);
+
+  const { contentType } = await createSourceMetadata(parsed.sourceUrl, gcs)();
+  if (!contentType || getMediaType(contentType) !== "video") return undefined;
+
+  return (
+    generateUrlOptions(
+      {
+        ...parsed,
+        outputFormat: "webp",
+        videoThumbnailSecond: 0,
+        bestFormat: undefined,
+        sourceUrl: parsed.sourceUrlRaw,
+      },
+      {
+        signingKey: env.SIGNING_KEY
+          ? env.SIGNING_KEY.toString("hex")
+          : undefined,
+        signingSalt: env.SIGNING_SALT
+          ? env.SIGNING_SALT.toString("hex")
+          : undefined,
+      },
+    ) + parsed.sourceUrlRaw
+  );
+}
+
 export async function createCacheProxyApp() {
   const gcs = new Storage({
     apiEndpoint: process.env.GCS_API_ENDPOINT || undefined,
@@ -193,6 +259,17 @@ export async function createCacheProxyApp() {
     const urlOptions = extractUrlOptions(path);
     if (urlOptions?.cors === "1") {
       reply.header("Access-Control-Allow-Origin", "*");
+    }
+
+    if (request.headers["x-imgproxy-compat"] === "1") {
+      const span = tracer.startSpan("cache.imgproxyCompatRedirect");
+      const compatPath = await imgproxyCompatRedirect(path, gcs);
+      if (compatPath) span.setAttribute("redirect.url", compatPath);
+      span.end();
+      if (compatPath) {
+        reply.header("Cache-Control", "public, max-age=86400");
+        return reply.redirect(compatPath, 301);
+      }
     }
     const gcsKey = cacheKey(path);
     if (!gcsKey) {

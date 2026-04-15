@@ -28,31 +28,17 @@ export interface UrlGeneratorConfig {
   signingSalt?: string;
 }
 
-/** Generates an asset-proxy-compatible URL path. */
-export function generateUrl(
+/** Generates the signed options path prefix for a URL, without the source URL part. The returned string includes a trailing `/` (e.g. `/{signature}/f:webp/rs:fill:480:360/vts:0/`). Concatenate with a raw source URL part (e.g. `plain/...` or `enc/...`) to form a complete URL. */
+export function generateUrlOptions(
   options: UrlGeneratorOptions,
-  config?: UrlGeneratorConfig,
+  config: Pick<UrlGeneratorConfig, "signingKey" | "signingSalt">,
 ): string {
-  const segments = serializeOptions(options);
-  segments.sort((a, b) => {
-    const keyA = SHORTHANDS[a.slice(0, a.indexOf(":"))] ?? a;
-    const keyB = SHORTHANDS[b.slice(0, b.indexOf(":"))] ?? b;
-    return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
-  });
-
-  let sourceUrlPart: string;
-  if (config?.encryptionKey) {
-    const key = Buffer.from(config.encryptionKey, "hex");
-    sourceUrlPart = `enc/${encryptSourceUrl(options.sourceUrl, key, { deterministic: config.deterministicEncryption })}`;
-  } else {
-    sourceUrlPart = `plain/${options.sourceUrl}`;
-  }
-
+  const segments = sortSegments(serializeOptions(options));
   const optionsPath = segments.length > 0 ? segments.join("/") + "/" : "";
-  const pathAfterSignature = `/${optionsPath}${sourceUrlPart}`;
+  const pathAfterSignature = `/${optionsPath}${options.sourceUrl}`;
 
   let signature = "insecure";
-  if (config?.signingKey && config?.signingSalt) {
+  if (config.signingKey && config.signingSalt) {
     signature = sign(
       pathAfterSignature,
       Buffer.from(config.signingKey, "hex"),
@@ -60,7 +46,33 @@ export function generateUrl(
     );
   }
 
-  return `/${signature}${pathAfterSignature}`;
+  return `/${signature}/${optionsPath}`;
+}
+
+/** Generates an asset-proxy-compatible URL path. */
+export function generateUrl(
+  options: UrlGeneratorOptions,
+  config?: UrlGeneratorConfig,
+): string {
+  let sourceUrl: string;
+  if (config?.encryptionKey) {
+    const key = Buffer.from(config.encryptionKey, "hex");
+    sourceUrl = `enc/${encryptSourceUrl(options.sourceUrl, key, { deterministic: config.deterministicEncryption })}`;
+  } else {
+    sourceUrl = `plain/${options.sourceUrl}`;
+  }
+
+  return (
+    generateUrlOptions({ ...options, sourceUrl }, config ?? {}) + sourceUrl
+  );
+}
+
+function sortSegments(segments: string[]): string[] {
+  return segments.sort((a, b) => {
+    const keyA = SHORTHANDS[a.slice(0, a.indexOf(":"))] ?? a;
+    const keyB = SHORTHANDS[b.slice(0, b.indexOf(":"))] ?? b;
+    return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+  });
 }
 
 /** Options for generating an info URL. Only `sourceUrl` is required; security options (encryption, signing) come from the config. */
@@ -72,7 +84,7 @@ export interface InfoUrlOptions {
 export function generateInfoUrl(
   options: InfoUrlOptions,
   config?: UrlGeneratorConfig,
-  infoOptions?: InfoOptions,
+  infoOptions?: Partial<InfoOptions>,
 ): string {
   const infoSegments = serializeInfoOptions(infoOptions);
   const infoPath = infoSegments.length > 0 ? infoSegments.join("/") + "/" : "";
@@ -99,12 +111,19 @@ export function generateInfoUrl(
   return `/info/${signature}${pathAfterSignature}`;
 }
 
-function serializeInfoOptions(options?: InfoOptions): string[] {
+function serializeInfoOptions(options?: Partial<InfoOptions>): string[] {
   if (!options) return [];
   const segments: string[] = [];
-  if (options.exif) segments.push("exif:t");
-  if (options.iptc) segments.push("iptc:t");
-  if (options.xmp) segments.push("xmp:t");
+  if (options.size != null) segments.push(`size:${options.size ? "t" : "f"}`);
+  if (options.format != null) segments.push(`f:${options.format ? "t" : "f"}`);
+  if (options.dimensions != null)
+    segments.push(`d:${options.dimensions ? "t" : "f"}`);
+  if (options.videoMeta != null)
+    segments.push(`vm:${options.videoMeta ? "t" : "f"}`);
+  if (options.exif != null) segments.push(`exif:${options.exif ? "t" : "f"}`);
+  if (options.iptc != null) segments.push(`iptc:${options.iptc ? "t" : "f"}`);
+  if (options.xmp != null) segments.push(`xmp:${options.xmp ? "t" : "f"}`);
+
   if (options.colorspace) segments.push("cs:t");
   if (options.bands) segments.push("b:t");
   if (options.sampleFormat) segments.push("sf:t");

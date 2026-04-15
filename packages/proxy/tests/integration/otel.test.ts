@@ -7,6 +7,7 @@ import { SERVICE_URL, VIDEO_SOURCE_URL } from "./video-helpers.js";
 
 const JAEGER_URL = process.env.JAEGER_URL ?? "http://localhost:16686";
 const FAKE_GCS_URL = process.env.FAKE_GCS_URL ?? "http://localhost:4443";
+const HEALTH_URL = process.env.HEALTH_URL ?? "http://localhost:8082";
 const gcs = new Storage({ apiEndpoint: FAKE_GCS_URL });
 const bucket = gcs.bucket("test-cache");
 
@@ -70,7 +71,7 @@ describe("otel configuration", () => {
     const res = await fetch(`${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`);
     await res.arrayBuffer();
 
-    await globalThis.fetch("http://localhost:8082/health");
+    await globalThis.fetch(`${HEALTH_URL}/health`);
     await fetch(`${SERVICE_URL}/health`);
 
     const spans = await vi.waitFor(async () => {

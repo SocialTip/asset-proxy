@@ -1,4 +1,4 @@
-# Prepares a release PR with version bumps and changelogs. Triggered manually. For each publishable package, finds changes since the last git tag, bumps the version, and generates a CHANGELOG.md entry. Opens a PR into main using peter-evans/create-pull-request. After merging the PR, run the Publish workflow to tag and release. See docs/Release.md for the full process.
+# Prepares a release PR with version bumps and changelogs. Triggered manually. For each publishable package, finds changes since the last git tag, bumps the version, and generates a CHANGELOG.md entry. In "auto" mode (default), the bump type is determined per package from commit messages: patch if all commits are fix/docs only, minor otherwise. Force-bumped packages with no changes default to patch. Opens a PR into main using peter-evans/create-pull-request. After merging the PR, run the Publish workflow to tag and release. See docs/Release.md for the full process.
 
 name: Prepare Release
 
@@ -6,11 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: "Version bump type"
+        description: "Version bump type (auto detects from commit messages)"
         required: true
-        default: minor
+        default: auto
         type: choice
         options:
+          - auto
           - patch
           - minor
           - major
@@ -25,7 +26,7 @@ on:
 
 jobs:
   prepare-release:
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
@@ -54,7 +55,7 @@ jobs:
       - name: Prepare package releases
         id: release
         run: |
-          BUMP="${{ inputs.bump || 'minor' }}"
+          BUMP_INPUT="${{ inputs.bump || 'auto' }}"
           FORCE="${{ inputs.force || 'false' }}"
           CHANGED=""
           SUMMARY=""
@@ -101,6 +102,27 @@ jobs:
                 continue
               fi
 
+              # Determine bump type
+              if [ "$BUMP_INPUT" = "auto" ]; then
+                if [ -z "$LOG_ENTRIES" ]; then
+                  # Force-bumped package with no changes — default to patch
+                  BUMP="patch"
+                else
+                  # Check if all commits are fix/docs only
+                  # Matches: "fix: ...", "docs: ...", "[anything] fix: ...", "[anything] docs: ..."
+                  NON_PATCH_COMMITS=$(git log --format="%s" "${TAG_COMMIT}..HEAD" -- "$PKG_DIR" \
+                    | grep -cvE '^(\[.*\] )?(fix|docs): ' || true)
+                  if [ "$NON_PATCH_COMMITS" -eq 0 ]; then
+                    BUMP="patch"
+                  else
+                    BUMP="minor"
+                  fi
+                fi
+                echo "::debug::${PKG_NAME}: auto-detected bump=${BUMP}"
+              else
+                BUMP="$BUMP_INPUT"
+              fi
+
               # Bump version
               NEW_VERSION=$(cd "$PKG_DIR" && npm version "$BUMP" --no-git-tag-version | tr -d 'v')
 
@@ -118,7 +140,7 @@ jobs:
               fi
 
               CHANGED="${CHANGED} ${pkg}"
-              SUMMARY="${SUMMARY}- **${PKG_NAME}** \`${CURRENT_VERSION}\` → \`${NEW_VERSION}\`"$'\n'
+              SUMMARY="${SUMMARY}- **${PKG_NAME}** \`${CURRENT_VERSION}\` → \`${NEW_VERSION}\` (${BUMP})"$'\n'
             fi
           done
 

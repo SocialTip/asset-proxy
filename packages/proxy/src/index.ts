@@ -4,11 +4,14 @@ import { Readable } from "node:stream";
 
 import { Storage } from "@google-cloud/storage";
 import {
+  getMediaType,
+  getOutputMediaType,
   HTTPError,
-  isImageUrl,
-  isVideoUrl,
+  type ImageUrl,
+  type MediaType,
   parseProcessingUrl,
   verifySignature,
+  type VideoUrl,
 } from "@socialtip/asset-proxy-url-parser";
 import contentDisposition from "content-disposition";
 import type {
@@ -25,6 +28,7 @@ import { fastifyOtelInstrumentation } from "./instrument.js";
 const env = envSwitched as ProcessingEnv;
 import {
   gpuReady,
+  isSourceNotFoundError,
   processImage,
   processVideo,
   type VideoResult,
@@ -33,6 +37,8 @@ import { probeSource } from "./ffprobe.js";
 import { handleInfoRequest } from "./info.js";
 import { logger } from "./logger.js";
 import { requestKey } from "./request-key.js";
+import { assertOriginAllowed, resolveGcsUrl } from "./resolve-source.js";
+import { createSourceMetadata } from "./source-metadata.js";
 import { recordException, tracer, withSpan } from "./tracing.js";
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -51,56 +57,6 @@ const gcs = new Storage();
 export const app = Fastify({ http2: true });
 app.register(fastifyOtelInstrumentation.plugin());
 
-function assertOriginAllowed(sourceUrl: string): void {
-  const { ALLOWED_ORIGINS } = env;
-  if (!ALLOWED_ORIGINS) return;
-
-  const origin = extractOrigin(sourceUrl);
-  if (!ALLOWED_ORIGINS.has(origin)) {
-    throw new HTTPError(`Origin not allowed: ${origin}`, {
-      code: "FORBIDDEN",
-    });
-  }
-}
-
-function extractOrigin(sourceUrl: string): string {
-  if (sourceUrl.startsWith("gs://")) {
-    const bucket = sourceUrl.slice("gs://".length).split("/")[0];
-    return `gs://${bucket}`;
-  }
-  const url = new URL(sourceUrl);
-  return url.origin;
-}
-
-async function resolveGcsUrl(gsUrl: string): Promise<string> {
-  const withoutScheme = gsUrl.slice("gs://".length);
-  const slashIdx = withoutScheme.indexOf("/");
-  if (slashIdx === -1) {
-    throw new HTTPError("Invalid gs:// URL: missing object path", {
-      code: "BAD_REQUEST",
-    });
-  }
-
-  const bucket = withoutScheme.slice(0, slashIdx);
-  const objectPath = withoutScheme.slice(slashIdx + 1);
-
-  return withSpan(
-    "gcs.getSignedUrl",
-    { "gcs.bucket": bucket, "gcs.object": objectPath },
-    async () => {
-      const [signedUrl] = await gcs
-        .bucket(bucket)
-        .file(objectPath)
-        .getSignedUrl({
-          version: "v4",
-          action: "read",
-          expires: Date.now() + 15 * 60 * 1000, // 15 minutes
-        });
-
-      return signedUrl;
-    },
-  );
-}
 
 function shouldSkipProcessing(
   parsed: ReturnType<typeof parseProcessingUrl>,
@@ -138,8 +94,9 @@ async function verifyHashsum(
 }
 
 async function checkSourceLimits(
-  sourceUrl: string,
   parsed: ReturnType<typeof parseProcessingUrl>,
+  getSourceMetadata: () => Promise<{ contentLength?: number }>,
+  sourceUrl: string,
 ): Promise<void> {
   const maxFileSize = parsed.maxSrcFileSize ?? env.MAX_SRC_FILE_SIZE;
   const maxResolution = parsed.maxSrcResolution ?? env.MAX_SRC_RESOLUTION;
@@ -148,15 +105,12 @@ async function checkSourceLimits(
 
   return withSpan("checkSourceLimits", {}, async (span) => {
     if (maxFileSize) {
-      const response = await fetch(sourceUrl, { method: "HEAD" });
-      if (response.ok) {
-        const contentLength = response.headers.get("content-length");
-        if (contentLength && parseInt(contentLength, 10) > maxFileSize) {
-          throw new HTTPError(
-            `Source file size ${contentLength} exceeds limit of ${maxFileSize} bytes`,
-            { code: "UNPROCESSABLE_ENTITY" },
-          );
-        }
+      const { contentLength } = await getSourceMetadata();
+      if (contentLength && contentLength > maxFileSize) {
+        throw new HTTPError(
+          `Source file size ${contentLength} exceeds limit of ${maxFileSize} bytes`,
+          { code: "UNPROCESSABLE_ENTITY" },
+        );
       }
     }
 
@@ -275,16 +229,30 @@ async function handleRequest(request: AppRequest, reply: AppReply) {
       encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY,
     });
 
+    assertOriginAllowed(parsed.sourceUrl, env.ALLOWED_ORIGINS);
+
+    if (parsed.expires && Date.now() / 1000 > parsed.expires) {
+      throw new HTTPError("URL has expired", { code: "NOT_FOUND" });
+    }
+
+    // Resolve gs:// URLs to signed HTTP URLs
+    const sourceUrl = parsed.sourceUrl.startsWith("gs://")
+      ? await resolveGcsUrl(parsed.sourceUrl, gcs)
+      : parsed.sourceUrl;
+
+    const getSourceMetadata = createSourceMetadata(parsed.sourceUrl, gcs);
+    const sourceContentType = (await getSourceMetadata()).contentType;
+    const sourceMediaType: MediaType | undefined = sourceContentType
+      ? getMediaType(sourceContentType)
+      : undefined;
+    const outputMediaType = getOutputMediaType(parsed, sourceMediaType);
+
     span.setAttributes({
       "asset_proxy.source_scheme": parsed.sourceUrl.startsWith("gs://")
         ? "gs"
         : "http",
       "asset_proxy.output_format": parsed.outputFormat,
-      "asset_proxy.media_type": isImageUrl(parsed)
-        ? "image"
-        : isVideoUrl(parsed)
-          ? "video"
-          : "unknown",
+      "asset_proxy.media_type": outputMediaType,
       ...(parsed.resize?.width && {
         "asset_proxy.resize_width": parsed.resize.width,
       }),
@@ -293,27 +261,16 @@ async function handleRequest(request: AppRequest, reply: AppReply) {
       }),
     });
 
-    assertOriginAllowed(parsed.sourceUrl);
-
-    if (parsed.expires && Date.now() / 1000 > parsed.expires) {
-      throw new HTTPError("URL has expired", { code: "NOT_FOUND" });
-    }
-
-    // Resolve gs:// URLs to signed HTTP URLs
-    const sourceUrl = parsed.sourceUrl.startsWith("gs://")
-      ? await resolveGcsUrl(parsed.sourceUrl)
-      : parsed.sourceUrl;
-
     if (parsed.hashsum) {
       await verifyHashsum(sourceUrl, parsed.hashsum);
     }
 
     checkResultLimits(parsed);
     checkAnimationLimits(parsed);
-    await checkSourceLimits(sourceUrl, parsed);
+    await checkSourceLimits(parsed, getSourceMetadata, sourceUrl);
 
     try {
-      await processAndRespond(reply, parsed, sourceUrl, key);
+      await processAndRespond(reply, parsed, sourceUrl, key, outputMediaType);
     } catch (err) {
       if (parsed.fallbackImageUrl && !reply.sent) {
         const fallbackUrl = Buffer.from(
@@ -342,6 +299,7 @@ async function processAndRespond(
   parsed: ReturnType<typeof parseProcessingUrl>,
   sourceUrl: string,
   key: string,
+  mediaType: "image" | "video",
 ): Promise<void> {
   if (parsed.cors) {
     reply.header("Access-Control-Allow-Origin", "*");
@@ -369,10 +327,10 @@ async function processAndRespond(
     return reply.send(raw);
   }
 
-  if (isImageUrl(parsed)) {
+  if (mediaType === "image") {
     try {
       const result = await withSpan("processImage", {}, () =>
-        processImage(sourceUrl, parsed),
+        processImage(sourceUrl, parsed as ImageUrl),
       );
       const contentType = CONTENT_TYPES[result.outputFormat] || "image/jpeg";
       reply.header("Content-Type", contentType);
@@ -381,6 +339,9 @@ async function processAndRespond(
       return reply.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
+      if (isSourceNotFoundError(err)) {
+        throw new HTTPError("Source not found", { code: "NOT_FOUND" });
+      }
       logger.error("Error processing image", {
         error: err instanceof Error ? err.message : String(err),
         sourceUrl: parsed.sourceUrl,
@@ -389,10 +350,10 @@ async function processAndRespond(
         code: "INTERNAL_SERVER_ERROR",
       });
     }
-  } else if (isVideoUrl(parsed)) {
+  } else {
     try {
       const result: VideoResult = await withSpan("processVideo", {}, () =>
-        processVideo(sourceUrl, parsed, key),
+        processVideo(sourceUrl, parsed as VideoUrl, key),
       );
 
       const baseType = CONTENT_TYPES[result.outputFormat] || "video/mp4";
@@ -407,6 +368,9 @@ async function processAndRespond(
       return reply.send(result.stream);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
+      if (isSourceNotFoundError(err)) {
+        throw new HTTPError("Source not found", { code: "NOT_FOUND" });
+      }
       logger.error("Error processing video", {
         error: err instanceof Error ? err.message : String(err),
         sourceUrl: parsed.sourceUrl,

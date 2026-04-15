@@ -7,6 +7,13 @@ const zBool = z
   .string()
   .transform((v) => v === "1" || v === "t" || v === "true");
 
+const zBoolDefaultTrue = z
+  .string()
+  .optional()
+  .transform(
+    (v) => v === undefined || (v !== "0" && v !== "f" && v !== "false"),
+  );
+
 const INFO_SHORTHANDS: Record<string, string> = {
   cs: "colorspace",
   b: "bands",
@@ -19,14 +26,21 @@ const INFO_SHORTHANDS: Record<string, string> = {
   bh: "blurhash",
   chs: "calc_hashsums",
   pg: "page",
+  f: "format",
+  d: "dimensions",
+  vm: "video_meta",
 };
 
 const hashsumType = z.enum(["md5", "sha1", "sha256", "sha512"]);
 
 const rawInfoOptionsSchema = z.object({
-  exif: zBool.optional(),
-  iptc: zBool.optional(),
-  xmp: zBool.optional(),
+  size: zBoolDefaultTrue,
+  format: zBoolDefaultTrue,
+  dimensions: zBoolDefaultTrue,
+  video_meta: zBoolDefaultTrue,
+  exif: zBoolDefaultTrue,
+  iptc: zBoolDefaultTrue,
+  xmp: zBoolDefaultTrue,
   colorspace: zBool.optional(),
   bands: zBool.optional(),
   sample_format: zBool.optional(),
@@ -63,6 +77,10 @@ const rawInfoOptionsSchema = z.object({
 });
 
 const infoOptionsSchema = rawInfoOptionsSchema.transform((data) => ({
+  size: data.size,
+  format: data.format,
+  dimensions: data.dimensions,
+  videoMeta: data.video_meta,
   exif: data.exif,
   iptc: data.iptc,
   xmp: data.xmp,
@@ -81,12 +99,20 @@ const infoOptionsSchema = rawInfoOptionsSchema.transform((data) => ({
 
 /** Parsed info endpoint options that control which additional metadata is returned. */
 export interface InfoOptions {
-  /** Include EXIF metadata in the response. */
-  exif?: boolean;
-  /** Include IPTC metadata in the response. */
-  iptc?: boolean;
-  /** Include XMP metadata organised by namespace in the response. */
-  xmp?: boolean;
+  /** Include the file size. Defaults to `true`. */
+  size: boolean;
+  /** Include format and MIME type. Defaults to `true`. */
+  format: boolean;
+  /** Include width, height, and orientation. Defaults to `true`. */
+  dimensions: boolean;
+  /** Include video metadata and stream information. Defaults to `true`. */
+  videoMeta: boolean;
+  /** Include EXIF metadata in the response. Defaults to `true`. */
+  exif: boolean;
+  /** Include IPTC metadata in the response. Defaults to `true`. */
+  iptc: boolean;
+  /** Include XMP metadata organised by namespace in the response. Defaults to `true`. */
+  xmp: boolean;
   /** Include the image colour space (e.g. `gbr`, `bt709`). */
   colorspace?: boolean;
   /** Include the number of image bands/channels. */
@@ -113,9 +139,13 @@ export interface InfoOptions {
 
 /** Zod schema for runtime validation of parsed info options. The `InfoOptions` interface is the authoritative type definition; this schema validates against it at compile time via `satisfies`. */
 export const parsedInfoOptionsSchema = z.object({
-  exif: z.boolean().optional(),
-  iptc: z.boolean().optional(),
-  xmp: z.boolean().optional(),
+  size: z.boolean(),
+  format: z.boolean(),
+  dimensions: z.boolean(),
+  videoMeta: z.boolean(),
+  exif: z.boolean(),
+  iptc: z.boolean(),
+  xmp: z.boolean(),
   colorspace: z.boolean().optional(),
   bands: z.boolean().optional(),
   sampleFormat: z.boolean().optional(),
@@ -147,6 +177,10 @@ const ALL_SHORTHANDS: Record<string, string> = {
 const ALL_OPTION_NAMES = new Set([
   ...Object.keys(ALL_SHORTHANDS),
   ...Object.values(ALL_SHORTHANDS),
+  "size",
+  "format",
+  "dimensions",
+  "video_meta",
   "exif",
   "iptc",
   "xmp",

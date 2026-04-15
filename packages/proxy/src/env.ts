@@ -36,6 +36,21 @@ const commonFields = {
 
   /** Minimum log level. Defaults to "info". */
   LOG_LEVEL: z.enum(logLevels).default("info"),
+
+  /** Comma-separated list of allowed source URL origins (e.g. "https://example.com,gs://my-bucket"). When unset, all origins are permitted. */
+  ALLOWED_ORIGINS: z
+    .string()
+    .optional()
+    .transform((v) =>
+      v
+        ? new Set(
+            v
+              .split(",")
+              .map((o) => o.trim())
+              .filter(Boolean),
+          )
+        : undefined,
+    ),
 };
 
 const processingModeSchema = z
@@ -51,6 +66,16 @@ const processingModeSchema = z
 
     /** Maximum number of concurrent GPU (NVENC) ffmpeg processes. Defaults to 1. */
     GPU_CONCURRENCY: z.coerce.number().int().positive().default(1),
+
+    /** Minimum output frame dimensions supported by the GPU encoder, as `<width>x<height>`. When the predicted output dimensions fall below either value, CPU encoding is used instead. Defaults to `192x192`. The correct value depends on the GPU hardware and driver version (e.g. NVENC on Turing requires at least 145px width). */
+    GPU_MIN_FRAME_SIZE: z
+      .string()
+      .regex(/^\d+x\d+$/, "Must be <width>x<height>, e.g. 192x192")
+      .default("192x192")
+      .transform((v) => {
+        const [w, h] = v.split("x").map(Number);
+        return { width: w, height: h };
+      }),
 
     /** Milliseconds to wait for a GPU slot before returning HTTP 429. Defaults to 5000. */
     GPU_ACQUIRE_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
@@ -81,22 +106,6 @@ const processingModeSchema = z
       )
       .transform((v) => Buffer.from(v, "hex"))
       .optional(),
-
-    /** Comma-separated list of allowed source URL origins (e.g. "https://example.com,gs://my-bucket").
-     *  When unset, all origins are permitted. */
-    ALLOWED_ORIGINS: z
-      .string()
-      .optional()
-      .transform((v) =>
-        v
-          ? new Set(
-              v
-                .split(",")
-                .map((o) => o.trim())
-                .filter(Boolean),
-            )
-          : undefined,
-      ),
 
     /** When true, strip EXIF/IPTC metadata from output images. Defaults to true. */
     STRIP_METADATA: z
@@ -191,6 +200,27 @@ const cacheModeSchema = z.object({
 
   /** GCS bucket name for the cache. */
   CACHE_BUCKET: z.string(),
+
+  /** Hex-encoded AES-256-CBC key for decrypting `/enc/` source URLs in imgproxy compat mode. */
+  SOURCE_URL_ENCRYPTION_KEY: z
+    .string()
+    .length(64, "Must be a 32-byte hex-encoded string (64 hex characters)")
+    .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
+    .optional(),
+
+  /** Hex-encoded HMAC-SHA256 key for re-signing redirected URLs (imgproxy compat mode). Must be set together with `SIGNING_SALT`. */
+  SIGNING_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
+    .transform((v) => Buffer.from(v, "hex"))
+    .optional(),
+
+  /** Hex-encoded salt for re-signing redirected URLs (imgproxy compat mode). Must be set together with `SIGNING_KEY`. */
+  SIGNING_SALT: z
+    .string()
+    .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
+    .transform((v) => Buffer.from(v, "hex"))
+    .optional(),
 });
 
 export type ProcessingEnv = z.infer<typeof processingModeSchema>;

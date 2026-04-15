@@ -41,7 +41,7 @@ export const gpuReady: Promise<boolean> =
           "-f",
           "lavfi",
           "-i",
-          "nullsrc=s=192x192:d=0.1",
+          `nullsrc=s=${env.GPU_MIN_FRAME_SIZE.width}x${env.GPU_MIN_FRAME_SIZE.height}:d=0.1`,
           "-c:v",
           "h264_nvenc",
           "-f",
@@ -196,6 +196,108 @@ export type VideoResult = {
   codecs?: string;
 };
 
+/**
+ * Predicts the output frame dimensions after applying the given resize
+ * parameters to a source of the given dimensions. Returns `undefined` for
+ * each axis that cannot be determined without a probe (e.g. aspect-ratio
+ * preserving modes when the source size is unknown).
+ */
+export function predictOutputDimensions(
+  resize: { type?: ResizingType; width: number; height: number } | undefined,
+  sourceWidth: number | undefined,
+  sourceHeight: number | undefined,
+): { width: number | undefined; height: number | undefined } {
+  if (!resize || (resize.width <= 0 && resize.height <= 0)) {
+    return { width: sourceWidth, height: sourceHeight };
+  }
+
+  const tw = resize.width > 0 ? resize.width : 0;
+  const th = resize.height > 0 ? resize.height : 0;
+  const type = resize.type ?? "fit";
+
+  switch (type) {
+    case "force":
+      return { width: tw || sourceWidth, height: th || sourceHeight };
+
+    case "fill":
+      // fill scales to cover the box then crops — output is exactly tw x th
+      return { width: tw || sourceWidth, height: th || sourceHeight };
+
+    case "fill-down": {
+      // Like fill but never upscales — output is min(target, source) per axis after crop
+      if (tw && th && sourceWidth !== undefined && sourceHeight !== undefined) {
+        const scale = Math.min(
+          1,
+          Math.max(tw / sourceWidth, th / sourceHeight),
+        );
+        const sw = Math.round(sourceWidth * scale);
+        const sh = Math.round(sourceHeight * scale);
+        return {
+          width: Math.min(tw, sw),
+          height: Math.min(th, sh),
+        };
+      }
+      return { width: undefined, height: undefined };
+    }
+
+    case "fit": {
+      if (tw && th) {
+        if (sourceWidth !== undefined && sourceHeight !== undefined) {
+          const scale = Math.min(tw / sourceWidth, th / sourceHeight);
+          return {
+            width: Math.round(sourceWidth * scale),
+            height: Math.round(sourceHeight * scale),
+          };
+        }
+        // Both targets set but no source — we know output won't exceed the box
+        // but the actual dimension could be smaller on one axis
+        return { width: undefined, height: undefined };
+      }
+      // Only one target dimension: the other preserves aspect ratio
+      if (tw && sourceWidth !== undefined && sourceHeight !== undefined) {
+        const scale = tw / sourceWidth;
+        return { width: tw, height: Math.round(sourceHeight * scale) };
+      }
+      if (th && sourceWidth !== undefined && sourceHeight !== undefined) {
+        const scale = th / sourceHeight;
+        return { width: Math.round(sourceWidth * scale), height: th };
+      }
+      return { width: tw || undefined, height: th || undefined };
+    }
+
+    case "auto": {
+      // auto uses fill when orientations match, otherwise fit
+      if (sourceWidth !== undefined && sourceHeight !== undefined && tw && th) {
+        const srcLandscape = sourceWidth >= sourceHeight;
+        const tgtLandscape = tw >= th;
+        const useFill = srcLandscape === tgtLandscape;
+        if (useFill) {
+          return { width: tw, height: th };
+        }
+        const scale = Math.min(tw / sourceWidth, th / sourceHeight);
+        return {
+          width: Math.round(sourceWidth * scale),
+          height: Math.round(sourceHeight * scale),
+        };
+      }
+      return { width: undefined, height: undefined };
+    }
+
+    default:
+      return { width: undefined, height: undefined };
+  }
+}
+
+function isGpuFrameSizeSafe(
+  width: number | undefined,
+  height: number | undefined,
+): boolean {
+  const { width: minW, height: minH } = env.GPU_MIN_FRAME_SIZE;
+  if (width !== undefined && width < minW) return false;
+  if (height !== undefined && height < minH) return false;
+  return true;
+}
+
 export async function processVideo(
   sourceUrl: string,
   parsed: VideoUrl,
@@ -207,19 +309,55 @@ export async function processVideo(
   // whether to copy AAC through or re-encode to a compatible format. When the
   // output is muted we strip audio entirely, so the probe can be skipped
   // unless codec signalling is requested (which needs dimensions and fps).
-  const needsProbe = !parsed.mute || parsed.codec;
-  const [useGpu, source] = await Promise.all([
-    gpuReady,
-    needsProbe
-      ? probeSource(sourceUrl).catch((err) => {
-          logger.error("[processor] probeSource failed, using defaults", {
-            sourceUrl,
-            error: err instanceof Error ? err.message : String(err),
-          });
-          return null;
-        })
-      : undefined,
-  ]);
+  //
+  // When GPU is available, we also need the source dimensions to predict the
+  // output frame size — if it falls below the GPU encoder's minimum, we fall
+  // back to CPU. For resize modes with fully determined output dimensions
+  // (force, fill with both axes set) the probe can still be skipped.
+  const gpuAvailable = await gpuReady;
+  const outputDimWithoutProbe = predictOutputDimensions(
+    parsed.resize,
+    undefined,
+    undefined,
+  );
+  const needsProbeDims =
+    gpuAvailable &&
+    (outputDimWithoutProbe.width === undefined ||
+      outputDimWithoutProbe.height === undefined);
+  const needsProbe = !parsed.mute || parsed.codec || needsProbeDims;
+
+  const source = needsProbe
+    ? await probeSource(sourceUrl).catch((err) => {
+        logger.error("[processor] probeSource failed, using defaults", {
+          sourceUrl,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      })
+    : undefined;
+
+  // Determine whether GPU is safe to use based on predicted output dimensions
+  let useGpu = gpuAvailable;
+  if (useGpu) {
+    const predicted = predictOutputDimensions(
+      parsed.resize,
+      source?.width,
+      source?.height,
+    );
+    if (!isGpuFrameSizeSafe(predicted.width, predicted.height)) {
+      logger.verbose(
+        "[processor] predicted output dimensions below GPU minimum, falling back to CPU",
+        {
+          key,
+          predictedWidth: predicted.width,
+          predictedHeight: predicted.height,
+          gpuMinFrameSize: env.GPU_MIN_FRAME_SIZE,
+        },
+      );
+      useGpu = false;
+    }
+  }
+
   const params = {
     resizingType: parsed.resize?.type,
     resizingAlgorithm: parsed.resizingAlgorithm,
@@ -239,6 +377,7 @@ export async function processVideo(
     outputFormat: parsed.outputFormat,
     gpu: useGpu,
     sourceAudioCodec: source?.audio?.codec,
+    gravity: parsed.gravity,
   };
 
   let codecs: string | undefined;
@@ -260,18 +399,26 @@ export async function processVideo(
     if (useGpu) {
       using _lock = await acquireGpuLock(key);
       logger.verbose("[processor] processMp4", { key, gpu: true });
-      const result = await processMp4(
-        sourceUrl,
-        params,
-        parsed.outputFormat,
-        key,
-      );
-      return { ...result, codecs };
+      try {
+        const result = await processMp4(
+          sourceUrl,
+          params,
+          parsed.outputFormat,
+          key,
+        );
+        return { ...result, codecs };
+      } catch (err) {
+        if (!isFrameSizeError(err)) throw err;
+        logger.warn(
+          "[processor] GPU encode failed due to frame size, retrying with CPU",
+          { key },
+        );
+      }
     }
     logger.verbose("[processor] processMp4", { key, gpu: false });
     const result = await processMp4(
       sourceUrl,
-      params,
+      { ...params, gpu: false },
       parsed.outputFormat,
       key,
     );
@@ -986,12 +1133,14 @@ function runFfmpeg(args: string[], key?: string): Readable {
     logger.verbose("[processor] ffmpeg closed", { key, code });
     span.setAttribute("process.exit_code", code ?? -1);
     if (code !== 0) {
-      const err = new Error(`ffmpeg exited with code ${code}`);
+      const err = Object.assign(new Error(`ffmpeg exited with code ${code}`), {
+        stderr: stderr.slice(-2000),
+      });
       recordException(span, err);
       logger.error("[processor] ffmpeg exited with non-zero code", {
         key,
         code,
-        stderr: stderr.slice(-2000),
+        stderr: err.stderr,
       });
       output.destroy(err);
     } else {
@@ -1005,6 +1154,28 @@ function runFfmpeg(args: string[], key?: string): Readable {
   });
 
   return output;
+}
+
+const FRAME_SIZE_PATTERN =
+  /Frame Dimension less than the minimum supported value/i;
+
+function isFrameSizeError(err: unknown): boolean {
+  if (err && typeof err === "object" && "stderr" in err) {
+    return FRAME_SIZE_PATTERN.test(String((err as { stderr: unknown }).stderr));
+  }
+  return false;
+}
+
+const SOURCE_NOT_FOUND_PATTERN = /Server returned 4(?:04|10)/;
+
+/** Checks whether an ffmpeg error indicates that the source URL returned HTTP 404 or 410. */
+export function isSourceNotFoundError(err: unknown): boolean {
+  if (err && typeof err === "object" && "stderr" in err) {
+    return SOURCE_NOT_FOUND_PATTERN.test(
+      String((err as { stderr: unknown }).stderr),
+    );
+  }
+  return false;
 }
 
 interface TrimOptions {
@@ -1087,6 +1258,7 @@ export interface VideoParams {
   outputFormat: OutputFormat;
   gpu: boolean;
   sourceAudioCodec?: string;
+  gravity?: Gravity;
 }
 
 /** @internal Exported for testing only. */
@@ -1108,6 +1280,7 @@ export function buildVideoArgs(
     quality,
     maxBytes,
     outputFormat,
+    gravity,
   } = params;
 
   // Build pre/post filters
@@ -1165,6 +1338,7 @@ export function buildVideoArgs(
           width,
           height,
           gpu: true,
+          gravity,
         });
         const vf = [...preFilters, scaleFilter, ...postFilters].join(",");
         args.push("-vf", vf);
@@ -1187,6 +1361,7 @@ export function buildVideoArgs(
           width,
           height,
           gpu: false,
+          gravity,
         }),
       );
     }
@@ -1323,6 +1498,7 @@ function buildImageArgs(
         height: parsed.resize.height,
         gpu: false,
         enlarge: parsed.enlarge ?? false,
+        gravity: parsed.gravity,
       }),
     );
   }
@@ -1705,6 +1881,7 @@ interface ScaleFilterParams {
   height: number;
   gpu: boolean;
   enlarge?: boolean;
+  gravity?: Gravity;
 }
 
 const CPU_ALGORITHM_FLAGS: Record<string, string> = {
@@ -1730,6 +1907,7 @@ function buildScaleFilter({
   height,
   gpu,
   enlarge,
+  gravity,
 }: ScaleFilterParams): string {
   const w = width > 0 ? width : -1;
   const h = height > 0 ? height : -1;
@@ -1774,20 +1952,24 @@ function buildScaleFilter({
       }
       return `${scaleName}=${clampW}:${clampH}:force_original_aspect_ratio=decrease${flagsSuffix}`;
 
-    case "fill":
+    case "fill": {
+      const { x: fx, y: fy } = gravityOffsets(gravity, width, height);
       if (gpu) {
-        return `${scaleName}=w='max(${width},iw*max(${width}/iw\\,${height}/ih))':h='max(${height},ih*max(${width}/iw\\,${height}/ih))'${flagsSuffix},hwdownload,format=nv12,crop=${width}:${height},hwupload_cuda`;
+        return `${scaleName}=w='max(${width},iw*max(${width}/iw\\,${height}/ih))':h='max(${height},ih*max(${width}/iw\\,${height}/ih))'${flagsSuffix},hwdownload,format=nv12,crop=${width}:${height}:${fx}:${fy},hwupload_cuda`;
       }
       if (noEnlarge) {
-        return `${scaleName}=${clampW}:${clampH}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width}\\,iw)':'min(${height}\\,ih)'`;
+        return `${scaleName}=${clampW}:${clampH}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width}\\,iw)':'min(${height}\\,ih)':${fx}:${fy}`;
       }
-      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop=${width}:${height}`;
+      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop=${width}:${height}:${fx}:${fy}`;
+    }
 
-    case "fill-down":
+    case "fill-down": {
+      const { x: fdx, y: fdy } = gravityOffsets(gravity, width, height);
       if (gpu) {
-        return `${scaleName}=w='min(iw,max(${width},iw*max(${width}/iw\\,${height}/ih)))':h='min(ih,max(${height},ih*max(${width}/iw\\,${height}/ih)))'${flagsSuffix},hwdownload,format=nv12,crop='min(${width},iw)':'min(${height},ih)',hwupload_cuda`;
+        return `${scaleName}=w='min(iw,max(${width},iw*max(${width}/iw\\,${height}/ih)))':h='min(ih,max(${height},ih*max(${width}/iw\\,${height}/ih)))'${flagsSuffix},hwdownload,format=nv12,crop='min(${width},iw)':'min(${height},ih)':${fdx}:${fdy},hwupload_cuda`;
       }
-      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width},iw)':'min(${height},ih)'`;
+      return `${scaleName}=${w}:${h}:force_original_aspect_ratio=increase${flagsSuffix},crop='min(${width},iw)':'min(${height},ih)':${fdx}:${fdy}`;
+    }
 
     case "force":
       if (noEnlarge) {

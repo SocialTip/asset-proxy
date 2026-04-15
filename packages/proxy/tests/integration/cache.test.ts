@@ -275,22 +275,54 @@ describe("cache proxy", () => {
     const body = await res.json();
     expect(body).toMatchObject({
       duration: expect.any(Number),
-      video_meta: expect.objectContaining({ codec: expect.any(String) }),
+      video_meta: expect.objectContaining({
+        codec: expect.any(String),
+        major_brand: expect.any(String),
+      }),
+      video_streams: expect.arrayContaining([
+        expect.objectContaining({ type: "video" }),
+      ]),
     });
     expect(body).toMatchInlineSnapshot(`
       {
         "duration": 5.069844,
-        "format": "mov",
+        "exif": {},
+        "format": "mov,mp4,m4a,3gp,3g2,mj2",
         "height": 640,
-        "mime_type": "video/quicktime",
+        "iptc": {},
+        "mime_type": "video/mp4",
         "orientation": 1,
         "size": 747030,
         "video_meta": {
           "bitrate": 1105458,
           "codec": "h264",
+          "compatible_brands": "isomiso2avc1mp41",
+          "encoder": "Lavf61.7.100",
           "framerate": 29.98,
+          "major_brand": "isom",
+          "minor_version": "512",
         },
+        "video_streams": [
+          {
+            "bps": 1105458,
+            "codec": "h264",
+            "duration": 5.069844,
+            "fps": 29.98,
+            "language": "und",
+            "type": "video",
+          },
+          {
+            "bps": 63410,
+            "codec": "aac",
+            "duration": 5.04,
+            "frequency": 44100,
+            "language": "und",
+            "layout": "stereo",
+            "type": "audio",
+          },
+        ],
         "width": 360,
+        "xmp": {},
       }
     `);
 
@@ -300,13 +332,14 @@ describe("cache proxy", () => {
     expect(JSON.parse(cachedBuffer.toString())).toEqual(body);
   });
 
-  it("does not cache error responses", async () => {
+  it("returns 404 and does not cache when source is not found", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/cb:${CACHE_BUSTER}/rs:fit:100:100/plain/http://file-server/nonexistent.png`,
     );
     const urlPath = generateUrl(parsed, URL_CONFIG);
     const res = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("Source not found");
 
     const [files] = await bucket.getFiles({ prefix: urlPath.slice(1) });
     expect(files).toHaveLength(0);

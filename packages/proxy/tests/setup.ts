@@ -18,11 +18,9 @@ interface InjectableApp {
     method: string;
     url: string;
     headers?: Record<string, string>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<any>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RequestResult = PromiseLike<any> & {
   redirects: (_n: number) => RequestResult;
   set: (key: string, value: string) => RequestResult;

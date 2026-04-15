@@ -46,6 +46,10 @@ Shorthand for setting width and height without specifying resize type (defaults 
 
 Set dimensions individually. When used without a `resize` segment, defaults to `fit`.
 
+### Resizing Type — `resizing_type:<type>` (shorthand `t`, `rt`)
+
+Override the resize type without specifying dimensions. Accepts the same values as the type in `resize` (`fit`, `fill`, `fill-down`, `force`, `auto`). Useful when width/height are set separately via `w:` / `h:`.
+
 ### Resizing Algorithm — `resizing_algorithm:<algorithm>` (shorthand `ra`)
 
 Controls the scaling algorithm. Supported algorithms: `nearest`, `linear`, `cubic`, `lanczos2`, `lanczos3`. Example: `ra:lanczos3`.

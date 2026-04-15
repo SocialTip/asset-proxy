@@ -1,6 +1,6 @@
 {
   "name": "@socialtip/asset-proxy-url-generator",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Generate asset-proxy-compatible URL paths with optional encryption and signing",
   "type": "module",
   "main": "dist/index.js",
@@ -28,7 +28,7 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SocialTip/asset-proxy.git",

@@ -3,9 +3,12 @@ import { createHash } from "node:crypto";
 import type { Http2Server } from "node:http2";
 import { promisify } from "node:util";
 
+import { Storage } from "@google-cloud/storage";
 import {
+  getMediaType,
   HTTPError,
   type InfoOptions,
+  type MediaType,
   parseInfoUrl,
   verifySignature,
 } from "@socialtip/asset-proxy-url-parser";
@@ -21,6 +24,7 @@ import { env as envSwitched, type ProcessingEnv } from "./env.js";
 
 const env = envSwitched as ProcessingEnv;
 import { logger } from "./logger.js";
+import { createSourceMetadata } from "./source-metadata.js";
 import { recordException, tracer, withSpan } from "./tracing.js";
 
 const execFileAsync = promisify(execFile);
@@ -49,12 +53,23 @@ const MIME_TYPES: Record<string, string> = {
   flv: "video/x-flv",
 };
 
+interface VideoStream {
+  type: string;
+  codec: string;
+  duration?: number;
+  bps?: number;
+  fps?: number;
+  frequency?: number;
+  layout?: string;
+  language?: string;
+}
+
 interface InfoResponse {
-  format: string;
-  mime_type: string;
-  width: number;
-  height: number;
-  orientation: number;
+  format?: string;
+  mime_type?: string;
+  width?: number;
+  height?: number;
+  orientation?: number;
   colorspace?: string;
   bands?: number;
   sample_format?: string;
@@ -62,11 +77,8 @@ interface InfoResponse {
   alpha?: { alpha: boolean; transparent?: boolean };
   size?: number;
   duration?: number;
-  video_meta?: {
-    codec: string;
-    bitrate?: number;
-    framerate?: number;
-  };
+  video_meta?: Record<string, string | number>;
+  video_streams?: VideoStream[];
   exif?: Record<string, unknown>;
   iptc?: Record<string, unknown>;
   xmp?: Record<string, unknown>;
@@ -77,34 +89,14 @@ interface InfoResponse {
   hashsums?: Record<string, string>;
 }
 
-function isVideoFormat(formatName: string): boolean {
-  const videoFormats = new Set([
-    "mp4",
-    "mov",
-    "avi",
-    "mkv",
-    "webm",
-    "flv",
-    "matroska",
-    "mov,mp4,m4a,3gp,3g2,mj2",
-    "avi",
-  ]);
-  return videoFormats.has(formatName);
-}
+const VIDEO_MIME_PRIORITY = ["mp4", "webm", "mkv", "avi", "flv", "mov"];
 
-interface LazyBuffer {
-  (): Promise<Buffer>;
-  pending(): Promise<Buffer> | undefined;
-}
-
-function createLazyBuffer(sourceUrl: string): LazyBuffer {
-  let promise: Promise<Buffer> | undefined;
-  const fn = (() => {
-    promise ??= fetchSource(sourceUrl);
-    return promise;
-  }) as LazyBuffer;
-  fn.pending = () => promise;
-  return fn;
+function mimeTypeFromVideoFormat(formatName: string): string {
+  const segments = new Set(formatName.split(","));
+  for (const fmt of VIDEO_MIME_PRIORITY) {
+    if (segments.has(fmt)) return MIME_TYPES[fmt];
+  }
+  return "video/mp4";
 }
 
 function pixFmtHasAlpha(pixFmt: string): boolean {
@@ -133,6 +125,21 @@ function sampleFormatFromPixFmt(
   if (/16|48|64/i.test(pixFmt)) return "ushort";
   if (/f32|float/i.test(pixFmt)) return "float";
   return "uchar";
+}
+
+interface LazyBuffer {
+  (): Promise<Buffer>;
+  pending(): Promise<Buffer> | undefined;
+}
+
+function createLazyBuffer(sourceUrl: string): LazyBuffer {
+  let promise: Promise<Buffer> | undefined;
+  const fn = (() => {
+    promise ??= fetchSource(sourceUrl);
+    return promise;
+  }) as LazyBuffer;
+  fn.pending = () => promise;
+  return fn;
 }
 
 type RGB = { R: number; G: number; B: number };
@@ -324,15 +331,21 @@ async function runExiftool(
 function groupExiftoolOutput(
   raw: Record<string, unknown>,
   prefix: string,
+  transformKey?: (key: string) => string,
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   const pfx = prefix + ":";
   for (const [key, value] of Object.entries(raw)) {
     if (key.startsWith(pfx)) {
-      result[key.slice(pfx.length)] = value;
+      const k = key.slice(pfx.length);
+      result[transformKey ? transformKey(k) : k] = value;
     }
   }
   return result;
+}
+
+function camelToSpaced(s: string): string {
+  return s.replace(/([a-z\d])([A-Z])/g, "$1 $2");
 }
 
 function groupExiftoolXmp(
@@ -352,12 +365,72 @@ function groupExiftoolXmp(
   return result;
 }
 
-async function probeMetadata(
+async function extractExiftoolMetadata(
+  infoOpts: InfoOptions,
+  getBuffer: LazyBuffer,
+  sourceUrl: string,
+  applyOrientation: boolean,
+  result: InfoResponse,
+): Promise<void> {
+  const wantsExiftool =
+    applyOrientation || infoOpts.exif || infoOpts.iptc || infoOpts.xmp;
+  if (!wantsExiftool) return;
+
+  try {
+    const groups: string[] = [];
+    if (applyOrientation) groups.push("-Orientation");
+    if (infoOpts.exif) groups.push("-EXIF:all");
+    if (infoOpts.iptc) groups.push("-IPTC:all");
+    if (infoOpts.xmp) groups.push("-XMP:all");
+
+    const exiftoolSource = getBuffer.pending() ?? sourceUrl;
+    const exiftoolResult =
+      groups.length > 0 ? await runExiftool(exiftoolSource, groups) : {};
+
+    if (applyOrientation) {
+      const rawOrientation = exiftoolResult["IFD0:Orientation"];
+      if (typeof rawOrientation === "number") {
+        result.orientation = rawOrientation;
+        if (rawOrientation >= 5 && rawOrientation <= 8) {
+          const w = result.width;
+          result.width = result.height;
+          result.height = w;
+        }
+      }
+    }
+
+    if (infoOpts.exif) {
+      const ifd0 = groupExiftoolOutput(exiftoolResult, "IFD0");
+      const exifIFD = groupExiftoolOutput(exiftoolResult, "ExifIFD");
+      const gps = groupExiftoolOutput(exiftoolResult, "GPS");
+      const exifData: Record<string, unknown> = {};
+      if (Object.keys(ifd0).length) exifData.Image = ifd0;
+      if (Object.keys(exifIFD).length) exifData.Photo = exifIFD;
+      if (Object.keys(gps).length) exifData.GPSInfo = gps;
+      result.exif = exifData;
+    }
+
+    if (infoOpts.iptc) {
+      const iptc = groupExiftoolOutput(exiftoolResult, "IPTC", camelToSpaced);
+      result.iptc = Object.keys(iptc).length ? iptc : {};
+    }
+
+    if (infoOpts.xmp) {
+      const xmp = groupExiftoolXmp(exiftoolResult);
+      result.xmp = Object.keys(xmp).length ? xmp : {};
+    }
+  } catch (cause) {
+    logger.error("Failed to extract metadata", { cause });
+  }
+}
+
+const FORMAT_ALIASES: Record<string, string> = { mjpeg: "jpeg" };
+
+async function probeImageMetadata(
   sourceUrl: string,
   infoOpts: InfoOptions,
   getBuffer: LazyBuffer,
 ): Promise<InfoResponse> {
-  // ffprobe reads directly from URL — no download needed
   const { stdout } = await withSpan("exec.ffprobe.metadata", {}, () =>
     execFileAsync("ffprobe", [
       "-v",
@@ -370,7 +443,6 @@ async function probeMetadata(
     ]),
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const probe: any = JSON.parse(stdout);
   const stream = probe.streams?.find(
     (s: Record<string, unknown>) => s.codec_type === "video",
@@ -382,22 +454,20 @@ async function probeMetadata(
     });
   }
 
-  const formatName: string = probe.format?.format_name ?? stream.codec_name;
-  const isVideo = isVideoFormat(formatName);
-
-  const format = isVideo ? formatName.split(",")[0] : stream.codec_name;
-  const mimeType =
-    MIME_TYPES[format] ?? (isVideo ? "video/mp4" : `image/${format}`);
+  const rawFormat: string = stream.codec_name;
+  const format = FORMAT_ALIASES[rawFormat] ?? rawFormat;
+  const mimeType = MIME_TYPES[format] ?? `image/${format}`;
 
   const pixFmt: string = stream.pix_fmt ?? "";
   const sharpOpts = infoOpts.page !== undefined ? { page: infoOpts.page } : {};
 
   const result: InfoResponse = {
-    format,
-    mime_type: mimeType,
-    width: stream.width,
-    height: stream.height,
-    orientation: 1,
+    ...(infoOpts.format && { format, mime_type: mimeType }),
+    ...(infoOpts.dimensions && {
+      width: stream.width,
+      height: stream.height,
+      orientation: 1,
+    }),
     ...(infoOpts.colorspace &&
       stream.color_space && { colorspace: stream.color_space }),
     ...(infoOpts.bands && { bands: bandsFromPixFmt(pixFmt) }),
@@ -412,86 +482,70 @@ async function probeMetadata(
     }),
   };
 
-  if (isVideo) {
-    const duration = parseFloat(probe.format?.duration);
-    if (!isNaN(duration)) {
-      result.duration = duration;
-    }
-    result.video_meta = {
-      codec: stream.codec_name,
-    };
-    const bitrate = parseInt(stream.bit_rate ?? probe.format?.bit_rate, 10);
-    if (!isNaN(bitrate)) {
-      result.video_meta.bitrate = bitrate;
-    }
-    const [num, den] = (stream.r_frame_rate ?? "").split("/").map(Number);
-    if (num && den) {
-      result.video_meta.framerate = Math.round((num / den) * 100) / 100;
-    }
+  if (infoOpts.videoMeta) {
+    result.video_meta = {};
+    result.video_streams = [];
   }
 
-  // Size: from buffer if available, otherwise from ffprobe format.size
-  const probeSize = parseInt(probe.format?.size, 10);
-  if (probeSize > 0) result.size = probeSize;
+  if (infoOpts.size) {
+    const probeSize = parseInt(probe.format?.size, 10);
+    if (probeSize > 0) result.size = probeSize;
+  }
 
-  // Slow features — each calls getBuffer() on demand, triggering a
-  // single download on first use (no download if none are requested).
-  if (!isVideo) {
-    if (infoOpts.average) {
-      try {
-        const buf = await getBuffer();
-        const img = infoOpts.average.ignoreTransparent
-          ? sharp(buf, sharpOpts).removeAlpha()
-          : sharp(buf, sharpOpts);
-        const stats = await img.stats();
-        result.average = {
-          R: Math.round(stats.channels[0].mean),
-          G: Math.round(stats.channels[1].mean),
-          B: Math.round(stats.channels[2].mean),
-        };
-      } catch (cause) {
-        logger.error("Failed to extract average colour", { cause });
-      }
+  if (infoOpts.average) {
+    try {
+      const buf = await getBuffer();
+      const img = infoOpts.average.ignoreTransparent
+        ? sharp(buf, sharpOpts).removeAlpha()
+        : sharp(buf, sharpOpts);
+      const stats = await img.stats();
+      result.average = {
+        R: Math.round(stats.channels[0].mean),
+        G: Math.round(stats.channels[1].mean),
+        B: Math.round(stats.channels[2].mean),
+      };
+    } catch (cause) {
+      logger.error("Failed to extract average colour", { cause });
     }
-    if (infoOpts.dominantColors) {
-      try {
-        result.dominant_colors = await extractDominantColors(
-          await getBuffer(),
-          sharpOpts,
-        );
-      } catch (cause) {
-        logger.error("Failed to extract dominant colours", { cause });
-      }
+  }
+  if (infoOpts.dominantColors) {
+    try {
+      result.dominant_colors = await extractDominantColors(
+        await getBuffer(),
+        sharpOpts,
+      );
+    } catch (cause) {
+      logger.error("Failed to extract dominant colours", { cause });
     }
-    if (infoOpts.palette && infoOpts.palette >= 2) {
-      try {
-        result.palette = await extractPalette(
-          await getBuffer(),
-          infoOpts.palette,
-          sharpOpts,
-        );
-      } catch (cause) {
-        logger.error("Failed to extract colour palette", { cause });
-      }
+  }
+  if (infoOpts.palette && infoOpts.palette >= 2) {
+    try {
+      result.palette = await extractPalette(
+        await getBuffer(),
+        infoOpts.palette,
+        sharpOpts,
+      );
+    } catch (cause) {
+      logger.error("Failed to extract colour palette", { cause });
     }
-    if (infoOpts.blurhash) {
-      try {
-        const buf = await getBuffer();
-        const { data, info } = await sharp(buf, sharpOpts)
-          .resize(32, 32, { fit: "inside" })
-          .ensureAlpha()
-          .raw()
-          .toBuffer({ resolveWithObject: true });
-        result.blurhash = blurhashEncode(
-          new Uint8ClampedArray(data),
-          info.width,
-          info.height,
-          infoOpts.blurhash.xComponents,
-          infoOpts.blurhash.yComponents,
-        );
-      } catch (cause) {
-        logger.error("Failed to encode blurhash", { cause });
-      }
+  }
+  if (infoOpts.blurhash) {
+    try {
+      const buf = await getBuffer();
+      const { data, info } = await sharp(buf, sharpOpts)
+        .resize(32, 32, { fit: "inside" })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      result.blurhash = blurhashEncode(
+        new Uint8ClampedArray(data),
+        info.width,
+        info.height,
+        infoOpts.blurhash.xComponents,
+        infoOpts.blurhash.yComponents,
+      );
+    } catch (cause) {
+      logger.error("Failed to encode blurhash", { cause });
     }
   }
 
@@ -506,53 +560,127 @@ async function probeMetadata(
     );
   }
 
-  // Run exiftool for orientation (always) and optional EXIF/IPTC/XMP.
-  // If a slow feature already triggered a full download, reuse that buffer
-  // instead of making a second request.
-  if (!isVideo) {
-    try {
-      const groups: string[] = ["-Orientation"];
-      if (infoOpts.exif) groups.push("-EXIF:all");
-      if (infoOpts.iptc) groups.push("-IPTC:all");
-      if (infoOpts.xmp) groups.push("-XMP:all");
+  await extractExiftoolMetadata(
+    infoOpts,
+    getBuffer,
+    sourceUrl,
+    infoOpts.dimensions,
+    result,
+  );
 
-      const exiftoolSource = getBuffer.pending() ?? sourceUrl;
-      const exiftoolResult = await runExiftool(exiftoolSource, groups);
+  return result;
+}
 
-      const rawOrientation = exiftoolResult["IFD0:Orientation"];
-      if (typeof rawOrientation === "number") {
-        result.orientation = rawOrientation;
-        if (rawOrientation >= 5 && rawOrientation <= 8) {
-          const w = result.width;
-          result.width = result.height;
-          result.height = w;
-        }
-      }
+async function probeVideoMetadata(
+  sourceUrl: string,
+  infoOpts: InfoOptions,
+  getBuffer: LazyBuffer,
+): Promise<InfoResponse> {
+  const { stdout } = await withSpan("exec.ffprobe.metadata", {}, () =>
+    execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-show_format",
+      "-show_streams",
+      "-of",
+      "json",
+      sourceUrl,
+    ]),
+  );
 
-      if (infoOpts.exif) {
-        const ifd0 = groupExiftoolOutput(exiftoolResult, "IFD0");
-        const exifIFD = groupExiftoolOutput(exiftoolResult, "ExifIFD");
-        const gps = groupExiftoolOutput(exiftoolResult, "GPS");
-        const exifData: Record<string, unknown> = {};
-        if (Object.keys(ifd0).length) exifData.Image = ifd0;
-        if (Object.keys(exifIFD).length) exifData.Photo = exifIFD;
-        if (Object.keys(gps).length) exifData.GPSInfo = gps;
-        result.exif = exifData;
-      }
+  const probe: any = JSON.parse(stdout);
+  const stream = probe.streams?.find(
+    (s: Record<string, unknown>) => s.codec_type === "video",
+  );
 
-      if (infoOpts.iptc) {
-        const iptc = groupExiftoolOutput(exiftoolResult, "IPTC");
-        if (Object.keys(iptc).length) result.iptc = iptc;
-      }
-
-      if (infoOpts.xmp) {
-        const xmp = groupExiftoolXmp(exiftoolResult);
-        if (Object.keys(xmp).length) result.xmp = xmp;
-      }
-    } catch (cause) {
-      logger.error("Failed to extract image metadata", { cause });
-    }
+  if (!stream) {
+    throw new HTTPError("Could not read media metadata", {
+      code: "UNPROCESSABLE_ENTITY",
+    });
   }
+
+  const formatName: string = probe.format?.format_name ?? stream.codec_name;
+  const mimeType = mimeTypeFromVideoFormat(formatName);
+
+  const result: InfoResponse = {
+    ...(infoOpts.format && { format: formatName, mime_type: mimeType }),
+    ...(infoOpts.dimensions && {
+      width: stream.width,
+      height: stream.height,
+      orientation: 1,
+    }),
+  };
+
+  if (infoOpts.videoMeta) {
+    const duration = parseFloat(probe.format?.duration);
+    if (!isNaN(duration)) result.duration = duration;
+
+    const meta: Record<string, string | number> = {};
+    meta.codec = stream.codec_name;
+    const bitrate = parseInt(stream.bit_rate ?? probe.format?.bit_rate, 10);
+    if (!isNaN(bitrate)) meta.bitrate = bitrate;
+    const [fpsNum, fpsDen] = (stream.r_frame_rate ?? "").split("/").map(Number);
+    if (fpsNum && fpsDen)
+      meta.framerate = Math.round((fpsNum / fpsDen) * 100) / 100;
+
+    const tags = probe.format?.tags;
+    if (tags && typeof tags === "object") {
+      for (const [k, v] of Object.entries(tags)) {
+        if (typeof v === "string") meta[k] = v;
+      }
+    }
+    result.video_meta = meta;
+
+    const streams: VideoStream[] = [];
+    for (const s of probe.streams ?? []) {
+      const type: string = s.codec_type;
+      if (type === "video") {
+        const vs: VideoStream = { type, codec: s.codec_name };
+        const dur = parseFloat(s.duration);
+        if (!isNaN(dur)) vs.duration = dur;
+        const bps = parseInt(s.bit_rate, 10);
+        if (!isNaN(bps)) vs.bps = bps;
+        const [num, den] = (s.r_frame_rate ?? "").split("/").map(Number);
+        if (num && den) vs.fps = Math.round((num / den) * 100) / 100;
+        if (s.tags?.language) vs.language = s.tags.language;
+        streams.push(vs);
+      } else if (type === "audio") {
+        const as: VideoStream = { type, codec: s.codec_name };
+        const dur = parseFloat(s.duration);
+        if (!isNaN(dur)) as.duration = dur;
+        const bps = parseInt(s.bit_rate, 10);
+        if (!isNaN(bps)) as.bps = bps;
+        const freq = parseInt(s.sample_rate, 10);
+        if (!isNaN(freq)) as.frequency = freq;
+        if (s.channel_layout) as.layout = s.channel_layout;
+        if (s.tags?.language) as.language = s.tags.language;
+        streams.push(as);
+      } else if (type === "subtitle") {
+        const ss: VideoStream = { type, codec: s.codec_name };
+        if (s.tags?.language) ss.language = s.tags.language;
+        streams.push(ss);
+      }
+    }
+    result.video_streams = streams;
+  }
+
+  if (infoOpts.size) {
+    const probeSize = parseInt(probe.format?.size, 10);
+    if (probeSize > 0) result.size = probeSize;
+  }
+
+  if (infoOpts.calcHashsums?.length) {
+    const buf = await getBuffer();
+    result.hashsums = [...new Set(infoOpts.calcHashsums)].reduce(
+      (prev, type) => ({
+        ...prev,
+        [type]: createHash(type).update(buf).digest("hex"),
+      }),
+      {},
+    );
+  }
+
+  await extractExiftoolMetadata(infoOpts, getBuffer, sourceUrl, false, result);
 
   return result;
 }
@@ -578,6 +706,10 @@ export async function handleInfoRequest(
     throw new HTTPError("URL has expired", { code: "NOT_FOUND" });
   }
 
+  const gcs = new Storage();
+  const getSourceMeta = createSourceMetadata(parsed.sourceUrl, gcs);
+  const sourceMeta = await getSourceMeta();
+
   const sourceUrl = parsed.sourceUrl.startsWith("gs://")
     ? await resolveGcsUrl(parsed.sourceUrl)
     : parsed.sourceUrl;
@@ -596,22 +728,26 @@ export async function handleInfoRequest(
   }
 
   const maxFileSize = parsed.maxSrcFileSize ?? env.MAX_SRC_FILE_SIZE;
-  if (maxFileSize) {
-    const headRes = await fetch(sourceUrl, { method: "HEAD" });
-    const size = parseInt(headRes.headers.get("content-length") ?? "0", 10);
-    if (size > maxFileSize) {
-      throw new HTTPError(
-        `Source file size ${size} exceeds limit of ${maxFileSize} bytes`,
-        { code: "UNPROCESSABLE_ENTITY" },
-      );
-    }
+  if (
+    maxFileSize &&
+    sourceMeta.contentLength &&
+    sourceMeta.contentLength > maxFileSize
+  ) {
+    throw new HTTPError(
+      `Source file size ${sourceMeta.contentLength} exceeds limit of ${maxFileSize} bytes`,
+      { code: "UNPROCESSABLE_ENTITY" },
+    );
   }
 
-  const metadata = await probeMetadata(
-    sourceUrl,
-    parsed.infoOptions,
-    getBuffer,
-  );
+  const mediaType: MediaType =
+    (sourceMeta.contentType
+      ? getMediaType(sourceMeta.contentType)
+      : undefined) ?? "image";
+
+  const metadata =
+    mediaType === "video"
+      ? await probeVideoMetadata(sourceUrl, parsed.infoOptions, getBuffer)
+      : await probeImageMetadata(sourceUrl, parsed.infoOptions, getBuffer);
 
   const maxResolution = parsed.maxSrcResolution ?? env.MAX_SRC_RESOLUTION;
   if (maxResolution && metadata.width && metadata.height) {

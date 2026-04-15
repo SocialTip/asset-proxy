@@ -14,7 +14,7 @@ COPY packages/url-generator/package.json packages/url-generator/
 RUN pnpm install --frozen-lockfile
 
 COPY packages/ packages/
-RUN pnpm --filter @socialtip/asset-proxy-url-parser build && pnpm --filter proxy build
+RUN pnpm --filter @socialtip/asset-proxy-url-parser build && pnpm --filter @socialtip/asset-proxy-url-generator build && pnpm --filter proxy build
 
 # Production stage
 FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
@@ -37,6 +37,9 @@ ENV SKIP_GPU=
 ENV GPU_CONCURRENCY=1
 # Milliseconds to wait for a GPU slot before returning HTTP 429.
 ENV GPU_ACQUIRE_TIMEOUT_MS=5000
+# Minimum output frame dimensions for GPU encoding (<width>x<height>).
+# Falls back to CPU when output is smaller. Depends on GPU hardware.
+ENV GPU_MIN_FRAME_SIZE=192x192
 
 ENV CACHE_BUCKET=
 # When set, container will run in cache mode
@@ -92,6 +95,9 @@ COPY --from=build /app/packages/proxy/node_modules ./packages/proxy/node_modules
 COPY --from=build /app/packages/url-parser/dist ./packages/url-parser/dist/
 COPY --from=build /app/packages/url-parser/package.json ./packages/url-parser/
 COPY --from=build /app/packages/url-parser/node_modules ./packages/url-parser/node_modules/
+COPY --from=build /app/packages/url-generator/dist ./packages/url-generator/dist/
+COPY --from=build /app/packages/url-generator/package.json ./packages/url-generator/
+COPY --from=build /app/packages/url-generator/node_modules ./packages/url-generator/node_modules/
 COPY --from=build /app/node_modules ./node_modules/
 COPY --from=build /app/package.json ./
 COPY --from=build /app/pnpm-workspace.yaml ./
