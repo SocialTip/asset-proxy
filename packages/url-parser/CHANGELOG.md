@@ -1,3 +1,7 @@
+## 0.10.1
+
+- fix(url-parser): handle URLs with no processing options before plain/ or enc/
+
 ## 0.10.0
 
 - chore: license all packages as MIT
