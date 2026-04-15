@@ -219,12 +219,12 @@ describe("format-specific options", () => {
 });
 
 describe("best format", () => {
-  // test-image.png has entropy ~2.0 (low complexity → lossless branch: PNG or WebP)
-  // test-image-butterfly.png has entropy ~7.5 (high complexity → lossy branch: JPG, WebP, or AVIF)
+  // test-image.png has entropy ~2.0 (low complexity → lossless WebP)
+  // test-image-butterfly.png has entropy ~7.5 (high complexity → lossy WebP)
   // BEST_FORMAT_MAX_RESOLUTION is set to 0.005 (5000 pixels) in docker-compose,
   // so w:50 images (~50x38 = 1900px) stay below the limit while w:100+ images exceed it.
 
-  it("selects a lossless encoding for a low-complexity image", async () => {
+  it("selects lossless WebP for a low-complexity image", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/w:50/f:best/plain/${SOURCE_URL}`,
     );
@@ -233,20 +233,11 @@ describe("best format", () => {
     const buffer = Buffer.from(await res.arrayBuffer());
     const meta = await sharp(buffer).metadata();
     expect(meta.width).toBe(50);
-    // Must be a lossless format: PNG, or WebP with VP8L (lossless) marker
-    const contentType = res.headers.get("content-type")!;
-    if (contentType === "image/png") {
-      // PNG is always lossless — pass
-    } else if (contentType === "image/webp") {
-      expect(buffer.includes(Buffer.from("VP8L"))).toBe(true);
-    } else {
-      throw new Error(
-        `Expected lossless format (png or lossless webp), got ${contentType}`,
-      );
-    }
+    expect(res.headers.get("content-type")).toBe("image/webp");
+    expect(buffer.includes(Buffer.from("VP8L"))).toBe(true);
   });
 
-  it("selects a lossy encoding for a high-complexity image", async () => {
+  it("selects lossy WebP for a high-complexity image", async () => {
     const parsed = parseProcessingUrl(
       `/insecure/w:50/f:best/plain/${BUTTERFLY_URL}`,
     );
@@ -255,17 +246,8 @@ describe("best format", () => {
     const buffer = Buffer.from(await res.arrayBuffer());
     const meta = await sharp(buffer).metadata();
     expect(meta.width).toBe(50);
-    // Must be a lossy format: JPEG, AVIF, or WebP with VP8 (lossy) marker
-    const contentType = res.headers.get("content-type")!;
-    if (contentType === "image/jpeg" || contentType === "image/avif") {
-      // Inherently lossy — pass
-    } else if (contentType === "image/webp") {
-      expect(buffer.includes(Buffer.from("VP8 "))).toBe(true);
-    } else {
-      throw new Error(
-        `Expected lossy format (jpeg, avif, or lossy webp), got ${contentType}`,
-      );
-    }
+    expect(res.headers.get("content-type")).toBe("image/webp");
+    expect(buffer.includes(Buffer.from("VP8 "))).toBe(true);
   });
 
   it("best format with quality respects quality setting for complex images", async () => {
@@ -288,12 +270,9 @@ describe("best format", () => {
     expect(lowBuffer.length).toBeLessThan(highBuffer.length);
   });
 
-  it("best format produces smaller output than an arbitrary format", async () => {
+  it("best format produces smaller output than PNG for a complex image", async () => {
     const bestParsed = parseProcessingUrl(
       `/insecure/w:50/f:best/plain/${BUTTERFLY_URL}`,
-    );
-    const jpgParsed = parseProcessingUrl(
-      `/insecure/w:50/plain/${BUTTERFLY_URL}@jpg`,
     );
     const pngParsed = parseProcessingUrl(
       `/insecure/w:50/plain/${BUTTERFLY_URL}@png`,
@@ -301,32 +280,26 @@ describe("best format", () => {
     const best = await fetch(
       `${SERVICE_URL}${generateUrl(bestParsed, URL_CONFIG)}`,
     );
-    const jpg = await fetch(
-      `${SERVICE_URL}${generateUrl(jpgParsed, URL_CONFIG)}`,
-    );
     const png = await fetch(
       `${SERVICE_URL}${generateUrl(pngParsed, URL_CONFIG)}`,
     );
     expect(best.status).toBe(200);
     const bestBuf = Buffer.from(await best.arrayBuffer());
-    const jpgBuf = Buffer.from(await jpg.arrayBuffer());
     const pngBuf = Buffer.from(await png.arrayBuffer());
-    expect(bestBuf.length).toBeLessThanOrEqual(
-      Math.max(jpgBuf.length, pngBuf.length),
-    );
+    expect(bestBuf.length).toBeLessThan(pngBuf.length);
   });
 
-  it("falls back to JPEG when image exceeds max resolution", async () => {
+  it("falls back to lossy WebP when image exceeds max resolution", async () => {
     // Requires BEST_FORMAT_MAX_RESOLUTION=0.005 in docker-compose.yml and cicd.yml.
     expect(process.env.BEST_FORMAT_MAX_RESOLUTION).toBe("0.005");
 
-    // At w:200, output is ~200x150 = 30000 pixels which exceeds 0.005 MP → JPEG fallback.
+    // At w:200, output is ~200x150 = 30000 pixels which exceeds 0.005 MP → lossy WebP fallback.
     const parsed = parseProcessingUrl(
       `/insecure/w:200/f:best/plain/${SOURCE_URL}`,
     );
     const res = await fetch(`${SERVICE_URL}${generateUrl(parsed, URL_CONFIG)}`);
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("image/jpeg");
+    expect(res.headers.get("content-type")).toBe("image/webp");
   });
 });
 
