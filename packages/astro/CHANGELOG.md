@@ -1,3 +1,8 @@
+## 0.6.0
+
+- chore: license all packages as MIT
+- docs: less verbose changelog for astro 0.5.0
+
 ## 0.5.0
 
 - feat(astro): add mse prop to Video component for MediaSource playback
