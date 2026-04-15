@@ -28,6 +28,7 @@ import { fastifyOtelInstrumentation } from "./instrument.js";
 const env = envSwitched as ProcessingEnv;
 import {
   gpuReady,
+  isSourceNotFoundError,
   processImage,
   processVideo,
   type VideoResult,
@@ -338,6 +339,9 @@ async function processAndRespond(
       return reply.send(result.buffer);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
+      if (isSourceNotFoundError(err)) {
+        throw new HTTPError("Source not found", { code: "NOT_FOUND" });
+      }
       logger.error("Error processing image", {
         error: err instanceof Error ? err.message : String(err),
         sourceUrl: parsed.sourceUrl,
@@ -364,6 +368,9 @@ async function processAndRespond(
       return reply.send(result.stream);
     } catch (err) {
       if (err instanceof HTTPError) throw err;
+      if (isSourceNotFoundError(err)) {
+        throw new HTTPError("Source not found", { code: "NOT_FOUND" });
+      }
       logger.error("Error processing video", {
         error: err instanceof Error ? err.message : String(err),
         sourceUrl: parsed.sourceUrl,
