@@ -136,6 +136,16 @@ describe("image output formats", () => {
       'inline; filename="image.jpg"',
     );
   });
+
+  it("processes an image with no options", async () => {
+    const url = `${SERVICE_URL}${generateUrl({ sourceUrl: SOURCE_URL }, URL_CONFIG)}`;
+    expect(url).toMatchInlineSnapshot(
+      `"http://localhost:8080/i7L5AMt6RNVvkc-rhuVZALwsKq_faELXlc195oBDuqQ/enc/NzMyYzQzZGJhYjk5ZDBlZtBKi-Id0FYxlGQ7-9wXDkM3s2zCBr3Da1CfeTUcMhYe03RhgH0EO99c6crVLSXM_A"`,
+    );
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
+  });
 });
 
 describe("format-specific options", () => {

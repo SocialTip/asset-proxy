@@ -1290,7 +1290,8 @@ export function getOutputMediaType(
     parsed.videoThumbnailAnimation !== undefined
   )
     return "image";
-  if (parsed.framerate !== undefined || parsed.cut !== undefined) return "video";
+  if (parsed.framerate !== undefined || parsed.cut !== undefined)
+    return "video";
   if (sourceMediaType) return sourceMediaType;
   if (IMAGE_EXTENSIONS.test(parsed.sourceUrl)) return "image";
   return "video";
@@ -1309,23 +1310,18 @@ export interface ParseOptions {
 export function extractUrlOptions(
   path: string,
 ): Record<string, string> | undefined {
-  const withoutPrefix = path.replace(/^\//, "");
-  const plainIdx = withoutPrefix.indexOf("/plain/");
-  const encIdx = withoutPrefix.indexOf("/enc/");
-  const splitIdx = plainIdx !== -1 ? plainIdx : encIdx;
+  const parts = path.split("/");
+  const splitIdx = parts.findIndex((p) => /(plain|enc)/.test(p));
   if (splitIdx === -1) return undefined;
-  const optionsPart = withoutPrefix.slice(0, splitIdx);
+  const optionsPart = parts.slice(0, splitIdx);
   return Object.fromEntries(
-    optionsPart
-      .split("/")
-      .filter(Boolean)
-      .map((segment) => {
-        const idx = segment.indexOf(":");
-        if (idx === -1) return [segment, ""];
-        const name = segment.slice(0, idx);
-        const value = segment.slice(idx + 1);
-        return [SHORTHANDS[name] ?? name, value];
-      }),
+    optionsPart.filter(Boolean).map((segment) => {
+      const idx = segment.indexOf(":");
+      if (idx === -1) return [segment, ""];
+      const name = segment.slice(0, idx);
+      const value = segment.slice(idx + 1);
+      return [SHORTHANDS[name] ?? name, value];
+    }),
   );
 }
 
@@ -1334,30 +1330,20 @@ export function parseProcessingUrl(
   path: string,
   options?: ParseOptions,
 ): ParsedUrl {
-  const withoutPrefix = path.replace(/^\//, "");
-
-  const plainIdx = withoutPrefix.indexOf("/plain/");
-  const encIdx = withoutPrefix.indexOf("/enc/");
-
-  let sourceUrl: string;
-  let sourceUrlRaw: string;
-  let encrypted = false;
-
-  if (plainIdx !== -1) {
-    sourceUrlRaw = withoutPrefix.slice(plainIdx + 1); // "plain/..."
-    sourceUrl = withoutPrefix.slice(plainIdx + "/plain/".length);
-  } else if (encIdx !== -1) {
-    sourceUrlRaw = withoutPrefix.slice(encIdx + 1); // "enc/..."
-    sourceUrl = withoutPrefix.slice(encIdx + "/enc/".length);
-    encrypted = true;
-  } else {
-    throw new Error(
+  const parts = path.split("/");
+  const splitIdx = parts.findIndex((p) => /(plain|enc)/.test(p));
+  if (splitIdx === -1) {
+    throw new HTTPError(
       "Unsupported URL format: expected /plain/ or /enc/ source URL",
+      { code: "BAD_REQUEST" },
     );
   }
+  const encrypted = parts[splitIdx] === "enc";
+  let sourceUrl = parts.slice(splitIdx + 1).join("/");
+  let sourceUrlRaw = parts.slice(splitIdx).join("/");
 
   if (!sourceUrl) {
-    throw new Error("Missing source URL");
+    throw new HTTPError("Missing source URL", { code: "BAD_REQUEST" });
   }
 
   // Parse @format suffix from source URL
