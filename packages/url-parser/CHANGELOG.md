@@ -1,3 +1,11 @@
+## 0.9.1
+
+- chore: license all packages as MIT
+- fix(info): make exif, iptc, xmp default to true matching imgproxy
+- fix(info): align video metadata with imgproxy and add missing info options
+- feat(cache-proxy): preserve raw source URL in imgproxy compat redirect
+- feat(url-parser): add `rt:` shorthand for resizing_type
+
 ## 0.9.0
 
 - feat: add extractUrlOptions() and cors URL option to url-parser

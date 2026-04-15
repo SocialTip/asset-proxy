@@ -1,3 +1,14 @@
+## 0.5.1
+
+- chore: license all packages as MIT
+- docs: less verbose changelog for astro 0.5.0
+- release: bump package versions
+- fix(astro): use data attribute for mse src to prevent premature fetch
+- feat: require f:fmp4 format for MSE playback
+- fix: correct codec option docs — it's a boolean (codec:1), not a value
+- docs(astro): note that mse implies autoplay
+- feat(astro): add mse prop to Video component for MediaSource playback
+
 ## 0.5.0
 
 - feat(astro): add mse prop to Video component for MediaSource playback
