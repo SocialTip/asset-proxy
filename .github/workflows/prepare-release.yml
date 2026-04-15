@@ -109,9 +109,10 @@ jobs:
                   BUMP="patch"
                 else
                   # Check if all commits are fix/docs only
-                  # Matches: "fix: ...", "docs: ...", "[anything] fix: ...", "[anything] docs: ..."
+                  # Matches: "fix: ...", "docs: ...", "fix(scope): ...", "docs(scope): ...",
+                  # "[anything] fix: ...", "[anything] docs(scope): ...", etc.
                   NON_PATCH_COMMITS=$(git log --format="%s" "${TAG_COMMIT}..HEAD" -- "$PKG_DIR" \
-                    | grep -cvE '^(\[.*\] )?(fix|docs): ' || true)
+                    | grep -cvE '^(\[.*\] )?(fix|docs)(\(.*\))?: ' || true)
                   if [ "$NON_PATCH_COMMITS" -eq 0 ]; then
                     BUMP="patch"
                   else
