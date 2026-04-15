@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     env:
       BEST_FORMAT_MAX_RESOLUTION: "0.005"
     services:
@@ -254,7 +254,7 @@ jobs:
   test-video-player:
     if: needs.changes.outputs.video-player == 'true'
     needs: [changes]
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -279,7 +279,7 @@ jobs:
         run: pnpm --filter @socialtip/asset-proxy-video-player test
 
   changes:
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
@@ -317,7 +317,7 @@ jobs:
     if: always() && !cancelled()
     needs: [test, test-video-player, docker-build, cd]
     permissions: {}
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: ubuntu-latest
     steps:
       - name: Check required jobs
         run: |
