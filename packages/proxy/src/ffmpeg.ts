@@ -1180,6 +1180,18 @@ function isFrameSizeError(err: unknown): boolean {
   return false;
 }
 
+const SOURCE_NOT_FOUND_PATTERN = /Server returned 4(?:04|10)/;
+
+/** Checks whether an ffmpeg error indicates that the source URL returned HTTP 404 or 410. */
+export function isSourceNotFoundError(err: unknown): boolean {
+  if (err && typeof err === "object" && "stderr" in err) {
+    return SOURCE_NOT_FOUND_PATTERN.test(
+      String((err as { stderr: unknown }).stderr),
+    );
+  }
+  return false;
+}
+
 interface TrimOptions {
   threshold: number;
   colour?: string;
