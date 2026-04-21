@@ -16,6 +16,42 @@ RUN pnpm install --frozen-lockfile
 COPY packages/ packages/
 RUN pnpm --filter @socialtip/asset-proxy-url-parser build && pnpm --filter @socialtip/asset-proxy-url-generator build && pnpm --filter proxy build
 
+# libheif build stage — compiled separately so the result caches across
+# base-image / apt / ffmpeg / node changes.
+#
+# strukturag/libheif's PPA tops out at 1.19.8 for every Ubuntu series,
+# which mis-decodes iPhone HDR HEICs (10-bit 4:4:4 grid + tmap brand +
+# alpha-as-gain-map) — several tiles come out as solid magenta/green
+# blocks. Upstream fixed it in 1.21 via commits 388d4b35 (alpha bpp
+# read during colour conversion) and 00c618cd (tracking alpha bpp
+# through the colour pipeline); see libheif release notes for 1.21.0.
+FROM ubuntu:24.04 AS libheif-build
+ENV DEBIAN_FRONTEND=noninteractive
+ARG LIBHEIF_VERSION=1.21.2
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      build-essential \
+      cmake \
+      pkg-config \
+      libde265-dev \
+      libaom-dev \
+      libpng-dev \
+      libjpeg-dev && \
+    curl -fsSL https://github.com/strukturag/libheif/releases/download/v${LIBHEIF_VERSION}/libheif-${LIBHEIF_VERSION}.tar.gz \
+      | tar -xz -C /tmp && \
+    cd /tmp/libheif-${LIBHEIF_VERSION} && \
+    mkdir build && cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DWITH_EXAMPLES=ON \
+      -DWITH_GDK_PIXBUF=OFF \
+      -DBUILD_TESTING=OFF \
+      .. && \
+    make -j"$(nproc)" && \
+    make install DESTDIR=/libheif-install
+
 # Production stage
 FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
 
@@ -28,13 +64,8 @@ ENV FFMPEG_VERSION=7.0
 ENV FFMPEG_RELEASE=autobuild-2024-08-31-12-50
 ENV FFMPEG_BUILD=n7.0.2-6-g7e69129d2f
 
-# strukturag/libheif's PPA tops out at 1.19.8 for every Ubuntu series,
-# which mis-decodes iPhone HDR HEICs (10-bit 4:4:4 grid + tmap brand +
-# alpha-as-gain-map) — several tiles come out as solid magenta/green
-# blocks. Upstream fixed it in 1.21 via commits 388d4b35 (alpha bpp
-# read during colour conversion) and 00c618cd (tracking alpha bpp
-# through the colour pipeline); see libheif release notes for 1.21.0.
-# Build from source to pull these in.
+# Keep in sync with the libheif-build stage. Baking it as ENV so
+# downstream tooling (e.g. troubleshooting) can read the running version.
 ENV LIBHEIF_VERSION=1.21.2
 
 # GPU is only used for video outputs (MP4/WebM). Image outputs — including
@@ -80,37 +111,12 @@ RUN apt-get update && \
       ca-certificates \
       curl \
       xz-utils \
-      build-essential \
-      cmake \
-      pkg-config \
-      libde265-dev \
-      libaom-dev \
-      libpng-dev \
-      libjpeg-dev \
+      libde265-0 \
+      libaom3 \
+      libpng16-16t64 \
+      libjpeg-turbo8 \
       libimage-exiftool-perl \
       heif-thumbnailer && \
-    # libheif 1.21.2 from source — see LIBHEIF_VERSION rationale above.
-    # Installs into /usr/local so it sits alongside (doesn't replace) the
-    # Ubuntu 24.04 libheif 1.17 that heif-thumbnailer links against.
-    curl -fsSL https://github.com/strukturag/libheif/releases/download/v${LIBHEIF_VERSION}/libheif-${LIBHEIF_VERSION}.tar.gz \
-      | tar -xz -C /tmp && \
-    cd /tmp/libheif-${LIBHEIF_VERSION} && \
-    mkdir build && cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr/local \
-      -DWITH_EXAMPLES=ON \
-      -DWITH_GDK_PIXBUF=OFF \
-      -DBUILD_TESTING=OFF \
-      .. && \
-    make -j"$(nproc)" && \
-    make install && \
-    # /lib/<arch> comes before /usr/local/lib in the default ld.so search
-    # order; make /usr/local win so heif-convert picks our 1.21 over the
-    # Ubuntu 1.17 pulled in by heif-thumbnailer.
-    echo "/usr/local/lib" > /etc/ld.so.conf.d/00-usr-local.conf && \
-    ldconfig && \
-    cd / && rm -rf /tmp/libheif-${LIBHEIF_VERSION} && \
-    apt-get purge -y build-essential cmake pkg-config && \
     ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then FFMPEG_ARCH="linuxarm64"; NODE_ARCH="linux-arm64"; \
     else FFMPEG_ARCH="linux64"; NODE_ARCH="linux-x64"; fi && \
@@ -122,6 +128,13 @@ RUN apt-get update && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Drop our source-built libheif 1.21 on top. /lib/<arch> comes before
+# /usr/local/lib in the default ld.so search order; make /usr/local win
+# so heif-convert picks our 1.21 over the Ubuntu 1.17 pulled in by
+# heif-thumbnailer.
+COPY --from=libheif-build /libheif-install/usr/local /usr/local
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/00-usr-local.conf && ldconfig
 
 RUN corepack enable
 

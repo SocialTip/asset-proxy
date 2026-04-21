@@ -75,19 +75,33 @@ jobs:
 
       - run: pnpm -w run lint
 
-      - name: Install ffmpeg, exiftool, heif-thumbnailer, and libheif
+      - name: Install ffmpeg, exiftool, heif-thumbnailer, libheif runtime deps
         env:
           FFMPEG_VERSION: "7.0"
           FFMPEG_RELEASE: "autobuild-2024-08-31-12-50"
           FFMPEG_BUILD: "n7.0.2-6-g7e69129d2f"
-          # Keep this in sync with Dockerfile. strukturag PPA is stuck at
-          # 1.19.8, which mis-decodes iPhone HDR HEICs, so we build from
-          # source (fixed upstream in libheif 1.21).
-          LIBHEIF_VERSION: "1.21.2"
         run: |
           curl -fsSL https://github.com/BtbN/FFmpeg-Builds/releases/download/${FFMPEG_RELEASE}/ffmpeg-${FFMPEG_BUILD}-linux64-gpl-${FFMPEG_VERSION}.tar.xz \
             | sudo tar -xJ --strip-components=1 -C /usr/local
           sudo apt-get install -y -qq libimage-exiftool-perl heif-thumbnailer \
+            libde265-0 libaom3 libpng16-16t64 libjpeg-turbo8
+
+      # Build-from-source libheif 1.21 (strukturag PPA is stuck at 1.19.8
+      # which mis-decodes iPhone HDR HEICs — fixed upstream in 1.21). Keep
+      # LIBHEIF_VERSION in sync with Dockerfile.
+      - name: Cache libheif build
+        id: libheif-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/libheif-install
+          key: libheif-1.21.2-ubuntu-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build libheif 1.21.2 from source
+        if: steps.libheif-cache.outputs.cache-hit != 'true'
+        env:
+          LIBHEIF_VERSION: "1.21.2"
+        run: |
+          sudo apt-get install -y -qq \
             build-essential cmake pkg-config libde265-dev libaom-dev libpng-dev libjpeg-dev
           curl -fsSL https://github.com/strukturag/libheif/releases/download/v${LIBHEIF_VERSION}/libheif-${LIBHEIF_VERSION}.tar.gz \
             | tar -xz -C /tmp
@@ -98,7 +112,11 @@ jobs:
             -DWITH_GDK_PIXBUF=OFF \
             -DBUILD_TESTING=OFF ..
           make -j"$(nproc)"
-          sudo make install
+          make install DESTDIR=/tmp/libheif-install
+
+      - name: Install libheif into /usr/local
+        run: |
+          sudo cp -a /tmp/libheif-install/usr/local/. /usr/local/
           echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/00-usr-local.conf
           sudo ldconfig
 
