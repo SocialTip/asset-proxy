@@ -374,3 +374,20 @@ describe("image quality", () => {
     expect(await toPng(auto)).toMatchImageSnapshot();
   });
 });
+
+describe("tiled HEIC source (iPhone-style grid)", () => {
+  // Synthetic 1536×2048 HEIC composed of a 3×4 grid of 512×512 HEVC tiles —
+  // mirrors the structure iPhones produce for full-size portrait photos.
+  // ffmpeg's HEIF demuxer does not reassemble grids, so without grid-aware
+  // decoding the output collapses to a single 512×512 tile.
+  const GRID_HEIC_URL = "http://file-server/test-image-iphone-grid.heic";
+
+  it("decodes the full primary image, not a single 512×512 tile", async () => {
+    const buffer = await fetchImageFrom("/f:webp", GRID_HEIC_URL);
+    const meta = await sharp(buffer).metadata();
+    expect(meta.format).toBe("webp");
+    expect(meta.width).toBe(1536);
+    expect(meta.height).toBe(2048);
+    await expect(toPng(buffer)).resolves.toMatchImageSnapshot();
+  });
+});

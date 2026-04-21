@@ -110,17 +110,21 @@ const { processImage, processVideo, buildVideoArgs } =
   await import("../src/ffmpeg.js");
 const { app } = await import("../src/index.js");
 
-function imageArgs(path: string): string[] {
+async function imageArgs(path: string): Promise<string[]> {
   const parsed = parseProcessingUrl(path);
-  if (getOutputMediaType(parsed) !== "image") throw new Error("Expected image URL");
+  if (getOutputMediaType(parsed) !== "image")
+    throw new Error("Expected image URL");
   setupSpawnMock();
-  processImage(parsed.sourceUrl, parsed as never);
+  // Mock stdout is not a valid image, so sharp post-processing may reject —
+  // we only care about the ffmpeg args passed to spawn.
+  await processImage(parsed.sourceUrl, parsed as never).catch(() => {});
   return mockSpawn.mock.calls.at(-1)![1] as string[];
 }
 
 async function videoArgs(path: string): Promise<string[]> {
   const parsed = parseProcessingUrl(path);
-  if (getOutputMediaType(parsed) !== "video") throw new Error("Expected video URL");
+  if (getOutputMediaType(parsed) !== "video")
+    throw new Error("Expected video URL");
   setupSpawnMock();
   // processVideo is async (awaits gpuReady), so we need to await it starting
   // We don't await the full result since it would try to read the stream
@@ -190,8 +194,8 @@ describe("origin allowlist", () => {
 });
 
 describe("image ffmpeg args", () => {
-  it("basic resize fit", () => {
-    expect(imageArgs(plain("/rs:fit:100:75"))).toMatchInlineSnapshot(`
+  it("basic resize fit", async () => {
+    expect(await imageArgs(plain("/rs:fit:100:75"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -214,8 +218,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("resize fill", () => {
-    expect(imageArgs(plain("/rs:fill:100:100"))).toMatchInlineSnapshot(`
+  it("resize fill", async () => {
+    expect(await imageArgs(plain("/rs:fill:100:100"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -238,8 +242,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("resize force", () => {
-    expect(imageArgs(plain("/rs:force:80:120"))).toMatchInlineSnapshot(`
+  it("resize force", async () => {
+    expect(await imageArgs(plain("/rs:force:80:120"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -262,8 +266,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("width only", () => {
-    expect(imageArgs(plain("/w:100"))).toMatchInlineSnapshot(`
+  it("width only", async () => {
+    expect(await imageArgs(plain("/w:100"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -286,8 +290,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("resizing algorithm lanczos3", () => {
-    expect(imageArgs(plain("/w:100/ra:lanczos3"))).toMatchInlineSnapshot(`
+  it("resizing algorithm lanczos3", async () => {
+    expect(await imageArgs(plain("/w:100/ra:lanczos3"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -310,8 +314,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("crop with compass gravity nowe", () => {
-    expect(imageArgs(plain("/c:100:75:nowe"))).toMatchInlineSnapshot(`
+  it("crop with compass gravity nowe", async () => {
+    expect(await imageArgs(plain("/c:100:75:nowe"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -334,8 +338,9 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("crop with focus point gravity", () => {
-    expect(imageArgs(plain("/c:100:75/g:fp:0.8:0.8"))).toMatchInlineSnapshot(`
+  it("crop with focus point gravity", async () => {
+    expect(await imageArgs(plain("/c:100:75/g:fp:0.8:0.8")))
+      .toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -358,8 +363,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("crop_aspect_ratio 16:9", () => {
-    expect(imageArgs(plain("/car:16:9/w:100"))).toMatchInlineSnapshot(`
+  it("crop_aspect_ratio 16:9", async () => {
+    expect(await imageArgs(plain("/car:16:9/w:100"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -382,8 +387,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("quality and format webp", () => {
-    expect(imageArgs(plain("/w:100/q:80/f:webp"))).toMatchInlineSnapshot(`
+  it("quality and format webp", async () => {
+    expect(await imageArgs(plain("/w:100/q:80/f:webp"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -406,8 +411,9 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("format_quality overrides global quality", () => {
-    expect(imageArgs(plain("/w:100/q:80/fq:jpg:50"))).toMatchInlineSnapshot(`
+  it("format_quality overrides global quality", async () => {
+    expect(await imageArgs(plain("/w:100/q:80/fq:jpg:50")))
+      .toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -430,8 +436,9 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("padding with background", () => {
-    expect(imageArgs(plain("/w:100/pd:10/bg:ff0000"))).toMatchInlineSnapshot(`
+  it("padding with background", async () => {
+    expect(await imageArgs(plain("/w:100/pd:10/bg:ff0000")))
+      .toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -454,8 +461,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("padding with background alpha", () => {
-    expect(imageArgs(plain("/w:100/pd:10/bg:ff0000/bga:0.5")))
+  it("padding with background alpha", async () => {
+    expect(await imageArgs(plain("/w:100/pd:10/bg:ff0000/bga:0.5")))
       .toMatchInlineSnapshot(`
         [
           "-hide_banner",
@@ -479,8 +486,8 @@ describe("image ffmpeg args", () => {
       `);
   });
 
-  it("rotate 90", () => {
-    expect(imageArgs(plain("/w:100/rot:90"))).toMatchInlineSnapshot(`
+  it("rotate 90", async () => {
+    expect(await imageArgs(plain("/w:100/rot:90"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -503,8 +510,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("blur and sharpen", () => {
-    expect(imageArgs(plain("/w:100/bl:5/sh:2"))).toMatchInlineSnapshot(`
+  it("blur and sharpen", async () => {
+    expect(await imageArgs(plain("/w:100/bl:5/sh:2"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -541,8 +548,8 @@ describe("image ffmpeg args", () => {
     });
   });
 
-  it("flip horizontal and vertical", () => {
-    expect(imageArgs(plain("/flip:1:1"))).toMatchInlineSnapshot(`
+  it("flip horizontal and vertical", async () => {
+    expect(await imageArgs(plain("/flip:1:1"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -565,8 +572,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("pixelate", () => {
-    expect(imageArgs(plain("/px:8"))).toMatchInlineSnapshot(`
+  it("pixelate", async () => {
+    expect(await imageArgs(plain("/px:8"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -594,8 +601,8 @@ describe("image ffmpeg args", () => {
     expect(parsed.enforceThumbnail).toBe(true);
   });
 
-  it("unsharp masking (always mode)", () => {
-    expect(imageArgs(plain("/ush:always:1:24"))).toMatchInlineSnapshot(`
+  it("unsharp masking (always mode)", async () => {
+    expect(await imageArgs(plain("/ush:always:1:24"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -618,8 +625,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("colorize overlay", () => {
-    expect(imageArgs(plain("/col:0.5:ff0000"))).toMatchInlineSnapshot(`
+  it("colorize overlay", async () => {
+    expect(await imageArgs(plain("/col:0.5:ff0000"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -642,8 +649,8 @@ describe("image ffmpeg args", () => {
     `);
   });
 
-  it("brightness and saturation via adjust", () => {
-    expect(imageArgs(plain("/a:50::0.5"))).toMatchInlineSnapshot(`
+  it("brightness and saturation via adjust", async () => {
+    expect(await imageArgs(plain("/a:50::0.5"))).toMatchInlineSnapshot(`
       [
         "-hide_banner",
         "-y",
@@ -1685,8 +1692,8 @@ describe("video thumbnail with image options", () => {
     expect(vta.focusY).toBe(0.5);
   });
 
-  it("vta fill produces scale+crop ffmpeg filters", () => {
-    const args = imageArgs(
+  it("vta fill produces scale+crop ffmpeg filters", async () => {
+    const args = await imageArgs(
       "/vta:0.5:100:5:320:180:0:0:1/plain/https://example.com/video.mp4@gif",
     );
     const vfIdx = args.indexOf("-vf");
@@ -1698,8 +1705,8 @@ describe("video thumbnail with image options", () => {
     expect(filterStr).toContain("crop=320:180:");
   });
 
-  it("vta fill uses custom focus point in crop", () => {
-    const args = imageArgs(
+  it("vta fill uses custom focus point in crop", async () => {
+    const args = await imageArgs(
       "/vta:0.5:100:5:320:180:0:0:1:0.3:0.7/plain/https://example.com/video.mp4@gif",
     );
     const vfIdx = args.indexOf("-vf");
@@ -1707,8 +1714,8 @@ describe("video thumbnail with image options", () => {
     expect(filterStr).toContain("crop=320:180:(iw-320)*0.3:(ih-180)*0.7");
   });
 
-  it("vta extendFrame produces scale+pad ffmpeg filters", () => {
-    const args = imageArgs(
+  it("vta extendFrame produces scale+pad ffmpeg filters", async () => {
+    const args = await imageArgs(
       "/vta:0.5:100:5:320:180:1/plain/https://example.com/video.mp4@gif",
     );
     const vfIdx = args.indexOf("-vf");
@@ -1719,8 +1726,8 @@ describe("video thumbnail with image options", () => {
     expect(filterStr).toContain("pad=320:180:(ow-iw)/2:(oh-ih)/2:color=black");
   });
 
-  it("vta without fill or extendFrame uses fit (decrease) only", () => {
-    const args = imageArgs(
+  it("vta without fill or extendFrame uses fit (decrease) only", async () => {
+    const args = await imageArgs(
       "/vta:0.5:100:5:320:180/plain/https://example.com/video.mp4@gif",
     );
     const vfIdx = args.indexOf("-vf");
@@ -1740,8 +1747,8 @@ describe("video thumbnail with image options", () => {
     expect(getOutputMediaType(result)).toBe("image");
   });
 
-  it("resize + vts + crop produces correct ffmpeg args", () => {
-    const args = imageArgs(
+  it("resize + vts + crop produces correct ffmpeg args", async () => {
+    const args = await imageArgs(
       "/rs:fill:480:360/vts:3/c:100:100/plain/https://example.com/video.mp4@jpg",
     );
     // Should seek to 3 seconds
@@ -1755,8 +1762,8 @@ describe("video thumbnail with image options", () => {
     expect(filterStr).toContain("crop=");
   });
 
-  it("vts + blur produces correct ffmpeg args", () => {
-    const args = imageArgs(
+  it("vts + blur produces correct ffmpeg args", async () => {
+    const args = await imageArgs(
       "/vts:3/bl:5/plain/https://example.com/video.mp4@jpg",
     );
     expect(args).toContain("-ss");
@@ -2178,13 +2185,12 @@ describe("security limits", () => {
 });
 
 describe("best format ffmpeg args", () => {
-  it("uses PNG as intermediate format when bestFormat is active", () => {
+  it("uses PNG as intermediate format when bestFormat is active", async () => {
     const parsed = parseProcessingUrl(plain("/w:100/f:best"));
-    if (getOutputMediaType(parsed) !== "image") throw new Error("Expected image URL");
+    if (getOutputMediaType(parsed) !== "image")
+      throw new Error("Expected image URL");
     setupSpawnMock();
-    // Fire processImage but don't await — we only need the ffmpeg args from the first spawn call.
-    // The promise will reject because sharp can't parse mock data, so catch and ignore.
-    processImage(parsed.sourceUrl, parsed as never).catch(() => {});
+    await processImage(parsed.sourceUrl, parsed as never).catch(() => {});
     const args = mockSpawn.mock.calls.at(-1)![1] as string[];
     // When best format is active, ffmpeg should output PNG (lossless intermediate)
     expect(args).toContain("png");

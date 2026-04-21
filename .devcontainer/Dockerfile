@@ -8,6 +8,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       git-lfs \
       libimage-exiftool-perl \
+      libheif-examples \
       heif-thumbnailer \
       curl \
       xz-utils && \
