@@ -27,12 +27,6 @@ import {
 
 import { videoCodecString } from "./codec.js";
 import { probeSource } from "./ffprobe.js";
-import {
-  decodeHeifToPng,
-  isHeifFile,
-  looksLikeHeif,
-  probeRemoteIsHeif,
-} from "./heif.js";
 import { logger } from "./logger.js";
 import { recordException, tracer } from "./tracing.js";
 
@@ -553,23 +547,11 @@ export async function processImage(
   const enforceThumbnail = parsed.enforceThumbnail ?? env.ENFORCE_THUMBNAIL;
   const needsMetadataCopy =
     !shouldStripMetadata || (shouldStripMetadata && shouldKeepCopyright);
-  const extensionLooksLikeHeif = looksLikeHeif(sourceUrl);
-  // When we have no other reason to download, a cheap Range request for the
-  // first 64 bytes lets us catch HEIF sources with a misleading extension
-  // (e.g. a .png file that is really HEIC) without paying for a full download.
-  const isHeifByMagic =
-    !needsMetadataCopy && !enforceThumbnail && !extensionLooksLikeHeif
-      ? await probeRemoteIsHeif(sourceUrl)
-      : false;
-  const needsSourceFile =
-    needsMetadataCopy ||
-    enforceThumbnail ||
-    extensionLooksLikeHeif ||
-    isHeifByMagic;
+  const needsSourceFile = needsMetadataCopy || enforceThumbnail;
 
   let sourceTempDir: string | undefined;
   try {
-    // Download source to a temp file when we need it for metadata copy, thumbnail extraction, or HEIF pre-decoding.
+    // Download source to a temp file when we need it for metadata copy or thumbnail extraction.
     let sourceTempPath: string | undefined;
     let ffmpegInput = sourceUrl;
     if (needsSourceFile) {
@@ -584,16 +566,6 @@ export async function processImage(
         ffmpegInput = sourceTempPath;
       } else {
         sourceTempPath = undefined;
-      }
-    }
-
-    // HEIF pre-decode: ffmpeg's HEIF demuxer cannot reassemble tiled image grids
-    // (iPhone full-size photos), so we hand HEIF off to libheif via heif-convert
-    // and feed the resulting PNG into ffmpeg instead.
-    if (sourceTempPath && (await isHeifFile(sourceTempPath))) {
-      const decoded = await decodeHeifToPng(sourceTempPath);
-      if (decoded) {
-        ffmpegInput = decoded;
       }
     }
 
@@ -974,25 +946,41 @@ async function generateVideoAnimation(
 
   if (parsed.outputFormat === "gif") {
     args.push("-f", "gif", "pipe:1");
-  } else {
-    // Default to animated webp
-    args.push("-loop", "0");
-    const webpQuality =
-      parsed.formatQuality?.["webp"] ??
-      parsed.quality ??
-      env.FORMAT_QUALITY?.["webp"] ??
-      env.QUALITY;
-    args.push("-quality", String(webpQuality));
-    args.push("-f", "webp", "pipe:1");
+
+    const stream = runFfmpeg(args);
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      stream.on("end", () => resolve(Buffer.concat(chunks)));
+      stream.on("error", reject);
+    });
   }
 
+  // Animated webp: ffmpeg's webp muxer needs a seekable output so it can
+  // backpatch the RIFF size header. Piping produces a zero-size header
+  // that downstream decoders (sharp) reject.
+  args.push("-loop", "0");
+  const webpQuality =
+    parsed.formatQuality?.["webp"] ??
+    parsed.quality ??
+    env.FORMAT_QUALITY?.["webp"] ??
+    env.QUALITY;
+  args.push("-quality", String(webpQuality));
+  const dir = mkdtempSync(join(tmpdir(), "asset-proxy-vta-"));
+  const outPath = join(dir, "output.webp");
+  args.push("-c:v", "libwebp", "-f", "webp", outPath);
+
   const stream = runFfmpeg(args);
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-    stream.on("end", () => resolve(Buffer.concat(chunks)));
+  await new Promise<void>((resolve, reject) => {
+    stream.on("end", resolve);
     stream.on("error", reject);
+    stream.resume();
   });
+  try {
+    return await readFile(outPath);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 async function applyFormatOptions(
