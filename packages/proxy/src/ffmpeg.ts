@@ -27,6 +27,12 @@ import {
 
 import { videoCodecString } from "./codec.js";
 import { probeSource } from "./ffprobe.js";
+import {
+  decodeHeifToPng,
+  isHeifFile,
+  looksLikeHeif,
+  probeRemoteIsHeif,
+} from "./heif.js";
 import { logger } from "./logger.js";
 import { recordException, tracer } from "./tracing.js";
 
@@ -547,9 +553,22 @@ export async function processImage(
   const enforceThumbnail = parsed.enforceThumbnail ?? env.ENFORCE_THUMBNAIL;
   const needsMetadataCopy =
     !shouldStripMetadata || (shouldStripMetadata && shouldKeepCopyright);
-  const needsSourceFile = needsMetadataCopy || enforceThumbnail;
+  const extensionLooksLikeHeif = looksLikeHeif(sourceUrl);
+  // When we have no other reason to download, a cheap Range request for the
+  // first 64 bytes lets us catch HEIF sources with a misleading extension
+  // (e.g. a .png file that is really HEIC) without paying for a full download.
+  const isHeifByMagic =
+    !needsMetadataCopy && !enforceThumbnail && !extensionLooksLikeHeif
+      ? await probeRemoteIsHeif(sourceUrl)
+      : false;
+  const needsSourceFile =
+    needsMetadataCopy ||
+    enforceThumbnail ||
+    extensionLooksLikeHeif ||
+    isHeifByMagic;
 
-  // Download source to a temp file when we need it for metadata copy or thumbnail extraction.
+  // Download source to a temp file when we need it for metadata copy, thumbnail
+  // extraction, or HEIF pre-decoding.
   let sourceTempDir: string | undefined;
   let sourceTempPath: string | undefined;
   let ffmpegInput = sourceUrl;
@@ -562,6 +581,16 @@ export async function processImage(
       ffmpegInput = sourceTempPath;
     } else {
       sourceTempPath = undefined;
+    }
+  }
+
+  // HEIF pre-decode: ffmpeg's HEIF demuxer cannot reassemble tiled image grids
+  // (iPhone full-size photos), so we hand HEIF off to libheif via heif-convert
+  // and feed the resulting PNG into ffmpeg instead.
+  if (sourceTempPath && (await isHeifFile(sourceTempPath))) {
+    const decoded = await decodeHeifToPng(sourceTempPath);
+    if (decoded) {
+      ffmpegInput = decoded;
     }
   }
 

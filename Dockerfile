@@ -68,11 +68,20 @@ ENV AUTOQUALITY_FORMAT_MAX=
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      libimage-exiftool-perl \
-      heif-thumbnailer \
       ca-certificates \
       curl \
+      software-properties-common \
       xz-utils && \
+    # strukturag/libheif PPA (maintained by the libheif upstream) ships
+    # libheif 1.19+ for Noble. Required because the stock 1.17.6 rejects
+    # tiled iPhone HEICs with "Too many auxiliary image references" and
+    # cannot decode HEIF image grids that iPhones produce for full-size
+    # photos.
+    add-apt-repository -y ppa:strukturag/libheif && \
+    apt-get install -y --no-install-recommends \
+      libimage-exiftool-perl \
+      libheif-examples \
+      heif-thumbnailer && \
     ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then FFMPEG_ARCH="linuxarm64"; NODE_ARCH="linux-arm64"; \
     else FFMPEG_ARCH="linux64"; NODE_ARCH="linux-x64"; fi && \
@@ -80,7 +89,7 @@ RUN apt-get update && \
       | tar -xJ --strip-components=1 -C /usr/local && \
     curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${NODE_ARCH}.tar.xz \
       | tar -xJ --strip-components=1 -C /usr/local && \
-    apt-get purge -y xz-utils && \
+    apt-get purge -y software-properties-common xz-utils && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
