@@ -549,164 +549,170 @@ export async function processImage(
     !shouldStripMetadata || (shouldStripMetadata && shouldKeepCopyright);
   const needsSourceFile = needsMetadataCopy || enforceThumbnail;
 
-  // Download source to a temp file when we need it for metadata copy or thumbnail extraction.
   let sourceTempDir: string | undefined;
-  let sourceTempPath: string | undefined;
-  let ffmpegInput = sourceUrl;
-  if (needsSourceFile) {
-    sourceTempDir = mkdtempSync(join(tmpdir(), "asset-proxy-src-"));
-    sourceTempPath = join(sourceTempDir, "source");
-    const srcRes = await fetch(sourceUrl);
-    if (srcRes.ok) {
-      await writeFile(sourceTempPath, Buffer.from(await srcRes.arrayBuffer()));
-      ffmpegInput = sourceTempPath;
+  try {
+    // Download source to a temp file when we need it for metadata copy or thumbnail extraction.
+    let sourceTempPath: string | undefined;
+    let ffmpegInput = sourceUrl;
+    if (needsSourceFile) {
+      sourceTempDir = mkdtempSync(join(tmpdir(), "asset-proxy-src-"));
+      sourceTempPath = join(sourceTempDir, "source");
+      const srcRes = await fetch(sourceUrl);
+      if (srcRes.ok) {
+        await writeFile(
+          sourceTempPath,
+          Buffer.from(await srcRes.arrayBuffer()),
+        );
+        ffmpegInput = sourceTempPath;
+      } else {
+        sourceTempPath = undefined;
+      }
+    }
+
+    // Extract embedded thumbnail if requested and source is available
+    if (enforceThumbnail && sourceTempPath) {
+      const thumbPath = await extractThumbnail(sourceTempPath);
+      if (thumbPath) {
+        ffmpegInput = thumbPath;
+      }
+    }
+
+    let trimFilter: string | undefined;
+    if (parsed.trim) {
+      trimFilter = await detectTrimCrop(ffmpegInput, parsed.trim);
+    }
+
+    // Determine if best format selection is active
+    const useBestFormat =
+      parsed.bestFormat || (!parsed.bestFormat && env.BEST_FORMAT_BY_DEFAULT);
+
+    // Resolve effective quality: per-request format > per-request global > env format > env global
+    const effectiveQuality =
+      parsed.formatQuality?.[parsed.outputFormat] ??
+      parsed.quality ??
+      env.FORMAT_QUALITY?.[parsed.outputFormat] ??
+      env.QUALITY;
+    const effectiveParsed = { ...parsed, quality: effectiveQuality };
+
+    // When best format is active, use PNG as intermediate format for ffmpeg
+    const ffmpegParsed = useBestFormat
+      ? ({
+          ...effectiveParsed,
+          outputFormat: "png" as ImageFormat,
+          quality: undefined,
+        } as ImageUrl)
+      : effectiveParsed;
+
+    let buffer: Buffer;
+    let outputFormat: ImageFormat = parsed.outputFormat;
+
+    // Video thumbnail animation: generate animated gif/webp from video frames
+    if (parsed.videoThumbnailAnimation) {
+      buffer = await generateVideoAnimation(ffmpegInput, effectiveParsed);
+      outputFormat = parsed.outputFormat === "gif" ? "gif" : "webp";
+    } else if (!useBestFormat && parsed.outputFormat === "avif") {
+      const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
+      const outPath = join(dir, "output.avif");
+      const args = buildImageArgs(ffmpegInput, ffmpegParsed, {
+        outputPath: outPath,
+        trimFilter,
+      });
+      const stream = runFfmpeg(args);
+      await new Promise<void>((resolve, reject) => {
+        stream.on("end", resolve);
+        stream.on("error", reject);
+        stream.resume();
+      });
+      buffer = await readFile(outPath);
+      await rm(dir, { recursive: true, force: true });
     } else {
-      sourceTempPath = undefined;
+      const stream = runFfmpeg(
+        buildImageArgs(ffmpegInput, ffmpegParsed, { trimFilter }),
+      );
+      buffer = await new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+        stream.on("end", () => resolve(Buffer.concat(chunks)));
+        stream.on("error", reject);
+      });
+    }
+
+    // Best format: compare candidate formats and pick the smallest
+    if (useBestFormat && !parsed.videoThumbnailAnimation) {
+      const best = await selectBestFormat(
+        buffer,
+        parsed.quality ?? env.QUALITY,
+        parsed.formatQuality ??
+          (parsed.quality ? undefined : env.FORMAT_QUALITY),
+      );
+      buffer = best.buffer;
+      outputFormat = best.format;
+    }
+
+    const aq =
+      parsed.autoquality ??
+      (env.AUTOQUALITY_METHOD !== "none"
+        ? {
+            method: env.AUTOQUALITY_METHOD as "dssim",
+            target: env.AUTOQUALITY_TARGET ?? 0.02,
+            min:
+              env.AUTOQUALITY_FORMAT_MIN?.[outputFormat] ??
+              env.AUTOQUALITY_MIN ??
+              70,
+            max:
+              env.AUTOQUALITY_FORMAT_MAX?.[outputFormat] ??
+              env.AUTOQUALITY_MAX ??
+              80,
+            allowedError: env.AUTOQUALITY_ALLOWED_ERROR ?? 0.001,
+          }
+        : undefined);
+
+    if (aq?.method === "dssim") {
+      buffer = await autoqualityDssim(buffer, outputFormat, {
+        target: aq.target,
+        min: aq.min,
+        max: aq.max,
+        allowedError: aq.allowedError,
+      });
+    } else if (aq?.method === "size" && aq.target) {
+      buffer = await shrinkToMaxBytes(buffer, outputFormat, aq.target);
+    }
+
+    if (
+      parsed.jpegOptions ||
+      parsed.pngOptions ||
+      parsed.webpOptions ||
+      parsed.avifOptions
+    ) {
+      buffer = await applyFormatOptions(buffer, parsed);
+    }
+
+    if (
+      parsed.maxBytes &&
+      parsed.maxBytes > 0 &&
+      buffer.length > parsed.maxBytes
+    ) {
+      buffer = await shrinkToMaxBytes(buffer, outputFormat, parsed.maxBytes);
+    }
+
+    const needsExiftool =
+      (needsMetadataCopy && sourceTempPath) || (parsed.dpi && parsed.dpi > 0);
+
+    if (needsExiftool) {
+      buffer = await runExiftool(buffer, {
+        sourcePath: needsMetadataCopy ? sourceTempPath : undefined,
+        copyrightOnly: shouldStripMetadata && shouldKeepCopyright,
+        stripColorProfile: shouldStripColorProfile,
+        dpi: parsed.dpi,
+      });
+    }
+
+    return { buffer, outputFormat };
+  } finally {
+    if (sourceTempDir) {
+      await rm(sourceTempDir, { recursive: true, force: true });
     }
   }
-
-  // Extract embedded thumbnail if requested and source is available
-  if (enforceThumbnail && sourceTempPath) {
-    const thumbPath = await extractThumbnail(sourceTempPath);
-    if (thumbPath) {
-      ffmpegInput = thumbPath;
-    }
-  }
-
-  let trimFilter: string | undefined;
-  if (parsed.trim) {
-    trimFilter = await detectTrimCrop(ffmpegInput, parsed.trim);
-  }
-
-  // Determine if best format selection is active
-  const useBestFormat =
-    parsed.bestFormat || (!parsed.bestFormat && env.BEST_FORMAT_BY_DEFAULT);
-
-  // Resolve effective quality: per-request format > per-request global > env format > env global
-  const effectiveQuality =
-    parsed.formatQuality?.[parsed.outputFormat] ??
-    parsed.quality ??
-    env.FORMAT_QUALITY?.[parsed.outputFormat] ??
-    env.QUALITY;
-  const effectiveParsed = { ...parsed, quality: effectiveQuality };
-
-  // When best format is active, use PNG as intermediate format for ffmpeg
-  const ffmpegParsed = useBestFormat
-    ? ({
-        ...effectiveParsed,
-        outputFormat: "png" as ImageFormat,
-        quality: undefined,
-      } as ImageUrl)
-    : effectiveParsed;
-
-  let buffer: Buffer;
-  let outputFormat: ImageFormat = parsed.outputFormat;
-
-  // Video thumbnail animation: generate animated gif/webp from video frames
-  if (parsed.videoThumbnailAnimation) {
-    buffer = await generateVideoAnimation(ffmpegInput, effectiveParsed);
-    outputFormat = parsed.outputFormat === "gif" ? "gif" : "webp";
-  } else if (!useBestFormat && parsed.outputFormat === "avif") {
-    const dir = mkdtempSync(join(tmpdir(), "asset-proxy-"));
-    const outPath = join(dir, "output.avif");
-    const args = buildImageArgs(ffmpegInput, ffmpegParsed, {
-      outputPath: outPath,
-      trimFilter,
-    });
-    const stream = runFfmpeg(args);
-    await new Promise<void>((resolve, reject) => {
-      stream.on("end", resolve);
-      stream.on("error", reject);
-      stream.resume();
-    });
-    buffer = await readFile(outPath);
-    await rm(dir, { recursive: true, force: true });
-  } else {
-    const stream = runFfmpeg(
-      buildImageArgs(ffmpegInput, ffmpegParsed, { trimFilter }),
-    );
-    buffer = await new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-      stream.on("end", () => resolve(Buffer.concat(chunks)));
-      stream.on("error", reject);
-    });
-  }
-
-  // Best format: compare candidate formats and pick the smallest
-  if (useBestFormat && !parsed.videoThumbnailAnimation) {
-    const best = await selectBestFormat(
-      buffer,
-      parsed.quality ?? env.QUALITY,
-      parsed.formatQuality ?? (parsed.quality ? undefined : env.FORMAT_QUALITY),
-    );
-    buffer = best.buffer;
-    outputFormat = best.format;
-  }
-
-  const aq =
-    parsed.autoquality ??
-    (env.AUTOQUALITY_METHOD !== "none"
-      ? {
-          method: env.AUTOQUALITY_METHOD as "dssim",
-          target: env.AUTOQUALITY_TARGET ?? 0.02,
-          min:
-            env.AUTOQUALITY_FORMAT_MIN?.[outputFormat] ??
-            env.AUTOQUALITY_MIN ??
-            70,
-          max:
-            env.AUTOQUALITY_FORMAT_MAX?.[outputFormat] ??
-            env.AUTOQUALITY_MAX ??
-            80,
-          allowedError: env.AUTOQUALITY_ALLOWED_ERROR ?? 0.001,
-        }
-      : undefined);
-
-  if (aq?.method === "dssim") {
-    buffer = await autoqualityDssim(buffer, outputFormat, {
-      target: aq.target,
-      min: aq.min,
-      max: aq.max,
-      allowedError: aq.allowedError,
-    });
-  } else if (aq?.method === "size" && aq.target) {
-    buffer = await shrinkToMaxBytes(buffer, outputFormat, aq.target);
-  }
-
-  if (
-    parsed.jpegOptions ||
-    parsed.pngOptions ||
-    parsed.webpOptions ||
-    parsed.avifOptions
-  ) {
-    buffer = await applyFormatOptions(buffer, parsed);
-  }
-
-  if (
-    parsed.maxBytes &&
-    parsed.maxBytes > 0 &&
-    buffer.length > parsed.maxBytes
-  ) {
-    buffer = await shrinkToMaxBytes(buffer, outputFormat, parsed.maxBytes);
-  }
-
-  const needsExiftool =
-    (needsMetadataCopy && sourceTempPath) || (parsed.dpi && parsed.dpi > 0);
-
-  if (needsExiftool) {
-    buffer = await runExiftool(buffer, {
-      sourcePath: needsMetadataCopy ? sourceTempPath : undefined,
-      copyrightOnly: shouldStripMetadata && shouldKeepCopyright,
-      stripColorProfile: shouldStripColorProfile,
-      dpi: parsed.dpi,
-    });
-  }
-
-  if (sourceTempDir) {
-    await rm(sourceTempDir, { recursive: true, force: true });
-  }
-
-  return { buffer, outputFormat };
 }
 
 /** Extract embedded thumbnail from an image. Tries exiftool (EXIF/AVIF) then heif-thumbnailer (HEIC). */
