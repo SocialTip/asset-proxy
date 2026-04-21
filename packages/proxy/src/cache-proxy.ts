@@ -346,7 +346,7 @@ export async function createCacheProxyApp() {
         });
       })
       .finally(async () => {
-        logger.info("[cache-proxy] inflight-cleanup", { key });
+        logger.verbose("[cache-proxy] inflight-cleanup", { key });
         inflight.delete(key);
         const stream = await streamPromise.catch(() => null);
         stream?.release();
@@ -413,7 +413,7 @@ export async function createCacheProxyApp() {
     let cacheWriteStarted = false;
     source.once("data", () => {
       cacheWriteStarted = true;
-      logger.info("[cache-proxy] starting cache write", { key });
+      logger.verbose("[cache-proxy] starting cache write", { key });
       const cacheStream = cacheBucket
         .file(gcsKey)
         .createWriteStream({ contentType, resumable: false });
