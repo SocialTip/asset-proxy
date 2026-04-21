@@ -550,8 +550,15 @@ export async function processImage(
   const looksLikeHeif = /\.(heic|heif)$/i.test(
     safePathname(sourceUrl) ?? sourceUrl,
   );
+  // When we have no other reason to download, a cheap Range request for the
+  // first 64 bytes lets us catch HEIF sources with a misleading extension
+  // (e.g. a .png file that is really HEIC) without paying for a full download.
+  const isHeifByMagic =
+    !needsMetadataCopy && !enforceThumbnail && !looksLikeHeif
+      ? await probeRemoteIsHeif(sourceUrl)
+      : false;
   const needsSourceFile =
-    needsMetadataCopy || enforceThumbnail || looksLikeHeif;
+    needsMetadataCopy || enforceThumbnail || looksLikeHeif || isHeifByMagic;
 
   // Download source to a temp file when we need it for metadata copy, thumbnail
   // extraction, or HEIF pre-decoding.
@@ -832,27 +839,44 @@ const HEIF_BRANDS = new Set([
   "mif2",
 ]);
 
-/** Sniffs the ISOBMFF ftyp box to detect HEIF (HEIC) containers. Matches primary brand and any compatible brand listed after the minor version. Excludes AVIF, which ffmpeg already handles correctly. */
+/** Detects HEIF (HEIC) ISOBMFF files by inspecting the ftyp box. Matches the primary brand and any compatible brand listed after the minor version. Excludes AVIF, which ffmpeg already handles correctly. */
+function isHeifMagic(buf: Buffer): boolean {
+  if (buf.length < 16) return false;
+  if (buf.subarray(4, 8).toString("ascii") !== "ftyp") return false;
+  const primary = buf.subarray(8, 12).toString("ascii");
+  if (HEIF_BRANDS.has(primary)) return true;
+  for (let i = 16; i + 4 <= buf.length; i += 4) {
+    const brand = buf.subarray(i, i + 4).toString("ascii");
+    if (HEIF_BRANDS.has(brand)) return true;
+  }
+  return false;
+}
+
 async function isHeifFile(path: string): Promise<boolean> {
   let handle;
   try {
     handle = await open(path, "r");
     const buf = Buffer.alloc(64);
     const { bytesRead } = await handle.read(buf, 0, 64, 0);
-    if (bytesRead < 16) return false;
-    if (buf.subarray(4, 8).toString("ascii") !== "ftyp") return false;
-    const primary = buf.subarray(8, 12).toString("ascii");
-    if (HEIF_BRANDS.has(primary)) return true;
-    // Scan compatible brands (4-byte codes starting at offset 16).
-    for (let i = 16; i + 4 <= bytesRead; i += 4) {
-      const brand = buf.subarray(i, i + 4).toString("ascii");
-      if (HEIF_BRANDS.has(brand)) return true;
-    }
-    return false;
+    return isHeifMagic(buf.subarray(0, bytesRead));
   } catch {
     return false;
   } finally {
     await handle?.close();
+  }
+}
+
+/** Issues a Range request for the first 64 bytes of the source and checks for an HEIF ftyp signature. Used to catch HEIF files with a non-HEIF extension before committing to ffmpeg's streaming decode path. Failures (origin rejects range, network error) fall through as non-HEIF — the subsequent ffmpeg decode still runs and any real failure surfaces there. */
+async function probeRemoteIsHeif(sourceUrl: string): Promise<boolean> {
+  try {
+    const res = await fetch(sourceUrl, {
+      headers: { Range: "bytes=0-63" },
+    });
+    if (!res.ok && res.status !== 206) return false;
+    const body = Buffer.from(await res.arrayBuffer());
+    return isHeifMagic(body.subarray(0, 64));
+  } catch {
+    return false;
   }
 }
 
