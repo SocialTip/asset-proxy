@@ -21,6 +21,7 @@ import type {
 } from "fastify";
 import Fastify from "fastify";
 
+import { cacheControlFor } from "./cache-control.js";
 import { env as envSwitched, isCacheMode, type ProcessingEnv } from "./env.js";
 import { startHealthServer } from "./health-server.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
@@ -314,7 +315,7 @@ async function processAndRespond(
     }
     const contentType = response.headers.get("content-type");
     if (contentType) reply.header("Content-Type", contentType);
-    reply.header("Cache-Control", env.CACHE_CONTROL);
+    reply.header("Cache-Control", cacheControlFor(parsed.expires));
     setContentDisposition(reply, parsed);
     const contentLength = response.headers.get("content-length");
     if (contentLength) reply.header("Content-Length", contentLength);
@@ -334,7 +335,7 @@ async function processAndRespond(
       );
       const contentType = CONTENT_TYPES[result.outputFormat] || "image/jpeg";
       reply.header("Content-Type", contentType);
-      reply.header("Cache-Control", env.CACHE_CONTROL);
+      reply.header("Cache-Control", cacheControlFor(parsed.expires));
       setContentDisposition(reply, parsed, result.outputFormat);
       return reply.send(result.buffer);
     } catch (err) {
@@ -362,7 +363,7 @@ async function processAndRespond(
           ? `${baseType}; codecs="${result.codecs}"`
           : baseType;
       reply.header("Content-Type", contentType);
-      reply.header("Cache-Control", env.CACHE_CONTROL);
+      reply.header("Cache-Control", cacheControlFor(parsed.expires));
       setContentDisposition(reply, parsed, result.outputFormat);
       logger.verbose("[processor] send video stream", { key });
       return reply.send(result.stream);

@@ -17,6 +17,7 @@ import Fastify, {
 } from "fastify";
 import parseRange from "range-parser";
 
+import { cacheControlFor } from "./cache-control.js";
 import { type CacheEnv, env as envSwitched } from "./env.js";
 import { h2Fetch } from "./h2-fetch.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
@@ -205,6 +206,7 @@ export async function createCacheProxyApp() {
     request: FastifyRequest<RouteGenericInterface, Http2Server>,
     reply: FastifyReply<RouteGenericInterface, Http2Server>,
     file: ReturnType<typeof cacheBucket.file>,
+    expires: number | undefined,
   ): Promise<void> {
     const span = tracer.startSpan("cache.serveFromCache");
     span.setAttribute("cache.key", file.name);
@@ -216,7 +218,7 @@ export async function createCacheProxyApp() {
     const fileSize = Number(metadata.size);
 
     reply.header("Content-Type", contentType);
-    reply.header("Cache-Control", env.CACHE_CONTROL);
+    reply.header("Cache-Control", cacheControlFor(expires));
     reply.header("Accept-Ranges", "bytes");
     if (metadata.etag) {
       reply.header("ETag", metadata.etag as string);
@@ -265,6 +267,9 @@ export async function createCacheProxyApp() {
     if (urlOptions?.cors === "1") {
       reply.header("Access-Control-Allow-Origin", "*");
     }
+    const expires = urlOptions?.expires
+      ? Number(urlOptions.expires) || undefined
+      : undefined;
 
     if (request.headers["x-imgproxy-compat"] === "1") {
       const span = tracer.startSpan("cache.imgproxyCompatRedirect");
@@ -286,7 +291,7 @@ export async function createCacheProxyApp() {
     const [exists] = await file.exists();
     if (exists) {
       logger.info("[cache-proxy] hit", { key });
-      return serveFromCache(request, reply, file);
+      return serveFromCache(request, reply, file, expires);
     }
 
     const pending = inflight.get(key);
@@ -298,7 +303,7 @@ export async function createCacheProxyApp() {
         logger.info("[cache-proxy] miss-concurrent with range -> serve", {
           key,
         });
-        return serveFromCache(request, reply, file);
+        return serveFromCache(request, reply, file, expires);
       }
       // For concurrent non-range requests to the same resource, we wait for the stream to be available and send it to each client (to save time in case the request stream starts before being fully uploaded to the cache).
       logger.info("[cache-proxy] miss-concurrent without range", { key });
@@ -308,7 +313,7 @@ export async function createCacheProxyApp() {
         logger.info("[cache-proxy] miss-concurrent without range -> serve", {
           key,
         });
-        return serveFromCache(request, reply, file);
+        return serveFromCache(request, reply, file, expires);
       }
       logger.info("[cache-proxy] miss-concurrent without range -> stream", {
         key,

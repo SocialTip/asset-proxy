@@ -252,6 +252,57 @@ describe("cache proxy", () => {
     expect(res.headers.get("content-length")).toBeTruthy();
   });
 
+  it("caps Cache-Control max-age to remaining TTL when expires is set", async () => {
+    const expires = Math.floor(Date.now() / 1000) + 3600;
+    const parsed = parseProcessingUrl(
+      `/insecure/cb:${CACHE_BUSTER}-exp/exp:${expires}/rs:fit:100:100/plain/${SOURCE_URL}`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    // Cache miss: header flows through from the processing proxy.
+    const missRes = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(missRes.status).toBe(200);
+    const missCacheControl = missRes.headers.get("cache-control") ?? "";
+    expect(missCacheControl).toMatch(/^public, max-age=\d+$/);
+    expect(missCacheControl).not.toMatch(/immutable/);
+    const missMaxAge = Number(missCacheControl.match(/max-age=(\d+)/)?.[1]);
+    expect(missMaxAge).toBeGreaterThan(3500);
+    expect(missMaxAge).toBeLessThanOrEqual(3600);
+
+    await waitForCacheWrite(urlPath);
+
+    // Cache hit: header is set by serveFromCache using urlOptions.expires.
+    const hitRes = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(hitRes.status).toBe(200);
+    const hitCacheControl = hitRes.headers.get("cache-control") ?? "";
+    expect(hitCacheControl).toMatch(/^public, max-age=\d+$/);
+    expect(hitCacheControl).not.toMatch(/immutable/);
+    const hitMaxAge = Number(hitCacheControl.match(/max-age=(\d+)/)?.[1]);
+    expect(hitMaxAge).toBeGreaterThan(3500);
+    expect(hitMaxAge).toBeLessThanOrEqual(3600);
+  });
+
+  it("uses default Cache-Control when expires is unset", async () => {
+    const parsed = parseProcessingUrl(
+      `/insecure/cb:${CACHE_BUSTER}-noexp/rs:fit:100:100/plain/${SOURCE_URL}`,
+    );
+    const urlPath = generateUrl(parsed, URL_CONFIG);
+
+    const missRes = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(missRes.status).toBe(200);
+    expect(missRes.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+
+    await waitForCacheWrite(urlPath);
+
+    const hitRes = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
+    expect(hitRes.status).toBe(200);
+    expect(hitRes.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+  });
+
   it("returns 404 for empty request URL", async () => {
     const res = await fetch(`${CACHE_PROXY_URL}/`);
     expect(await res.text()).toMatchInlineSnapshot(`""`);
