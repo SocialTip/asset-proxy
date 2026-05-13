@@ -44,12 +44,5 @@
     "prettier": "^3.8.1",
     "typescript-eslint": "^8.57.0",
     "vitest": "^4.1.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "protobufjs",
-      "sharp"
-    ]
   }
 }
