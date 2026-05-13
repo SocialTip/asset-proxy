@@ -20,6 +20,7 @@ import type {
 } from "fastify";
 import sharp from "sharp";
 
+import { cacheControlFor } from "./cache-control.js";
 import { env as envSwitched, type ProcessingEnv } from "./env.js";
 
 const env = envSwitched as ProcessingEnv;
@@ -760,7 +761,7 @@ export async function handleInfoRequest(
     }
   }
 
-  reply.header("Cache-Control", env.CACHE_CONTROL);
+  reply.header("Cache-Control", cacheControlFor(parsed.expires));
   return reply.send(metadata);
 }
 

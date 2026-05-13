@@ -4,6 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "start": "pnpm --filter proxy start",
     "dev": "pnpm --filter proxy dev",
@@ -44,11 +45,5 @@
     "prettier": "^3.8.1",
     "typescript-eslint": "^8.57.0",
     "vitest": "^4.1.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "sharp"
-    ]
   }
 }

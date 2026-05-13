@@ -21,6 +21,8 @@ An ignored value used to differentiate CDN cache keys. The proxy does not use th
 
 Unix timestamp after which the URL returns 404 Not Found. Used to create time-limited URLs. Example: `exp:1700000000`.
 
+When set, the response `Cache-Control` `max-age` is capped to the remaining TTL (and `immutable` is dropped), so edge caches stop serving the response once the URL is no longer valid.
+
 ## Filename — `filename:<name>` (shorthand `fn`)
 
 Set the `Content-Disposition` header filename. When combined with `return_attachment`, triggers a download with the given filename. Example: `fn:photo.jpg`.
