@@ -52,11 +52,6 @@ jobs:
         if: failure() && steps.stack.outcome == 'failure'
         run: docker compose logs
 
-      - name: Seed fake-gcs bucket
-        run: |
-          curl -sf -X POST http://localhost:4443/storage/v1/b \
-            -H 'Content-Type: application/json' -d '{"name":"test-cache"}'
-
       - name: Run tests
         id: tests
         run: pnpm -w run test --coverage
