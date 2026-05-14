@@ -11,7 +11,7 @@ describe("video flip", () => {
 describe("video framerate", () => {
   it("limits framerate to 10fps", async () => {
     const { videoPath } = await fetchVideo("/fr:10/ct:1");
-    const meta = probeVideo(videoPath);
+    const meta = await probeVideo(videoPath);
     expect(meta.fps).toBe(10);
   });
 });
