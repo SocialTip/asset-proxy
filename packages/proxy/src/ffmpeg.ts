@@ -1763,8 +1763,15 @@ function buildImageArgs(
     filters.push("pad=ceil(iw/2)*2:ceil(ih/2)*2");
   }
 
+  // Use -filter_complex (not -vf) so the graph composes with any internal
+  // complex filtergraph ffmpeg builds for the input. HEIC tile-grid sources
+  // are exposed in ffmpeg 8 as a stream group fed by an internal complex
+  // filtergraph; applying -vf on top errors with "Simple and complex filtering
+  // cannot be used together for the same stream". Passing the filters with
+  // no input/output labels lets ffmpeg auto-attach this graph to the
+  // assembled stream group output rather than the raw inner tile stream.
   if (filters.length > 0) {
-    args.push("-vf", filters.join(","));
+    args.push("-filter_complex", filters.join(","));
   }
 
   // Always strip metadata in ffmpeg. If metadata needs to be preserved
