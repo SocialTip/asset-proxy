@@ -1,5 +1,6 @@
-import { execSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,11 +9,21 @@ import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 import { AV, AVC } from "media-codecs";
 import MediaInfoFactory, {
   type AudioTrack,
+  type GeneralTrack,
   type MediaInfoResult,
   type VideoTrack,
 } from "mediainfo.js";
 
 import { h2Fetch as fetch, SERVICE_URL, URL_CONFIG } from "./setup.js";
+
+function resolveFfmpegPath(): string {
+  const p: string | null = createRequire(import.meta.url)("ffmpeg-static");
+  if (!p) {
+    throw new Error("ffmpeg-static did not provide a binary for this platform");
+  }
+  return p;
+}
+const ffmpegPath = resolveFfmpegPath();
 
 export const VIDEO_SOURCE_URL = "http://file-server/test-video.mp4";
 export const VIDEO_LC_SOURCE_URL = "http://file-server/test-video-lc.mp4";
@@ -68,30 +79,51 @@ export interface VideoMeta {
   fps: number;
 }
 
-export function probeVideo(filePath: string): VideoMeta {
-  const raw = execSync(
-    `ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate -show_entries format=duration -of json "${filePath}"`,
-    { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+export async function probeVideo(filePath: string): Promise<VideoMeta> {
+  const buf = readFileSync(filePath);
+  const mi = await MediaInfoFactory();
+  const result: MediaInfoResult = await mi.analyzeData(
+    () => buf.length,
+    (size: number, offset: number) => new Uint8Array(buf.buffer, offset, size),
   );
-  const parsed = JSON.parse(raw);
-  const stream = parsed.streams[0];
-  const [num, den] = stream.r_frame_rate.split("/").map(Number);
+  mi.close();
+  const tracks = result.media?.track ?? [];
+  const video = tracks.find((t) => t["@type"] === "Video") as
+    | VideoTrack
+    | undefined;
+  const general = tracks.find((t) => t["@type"] === "General") as
+    | GeneralTrack
+    | undefined;
+  if (!video) {
+    throw new Error(`No video track found in ${filePath}`);
+  }
   return {
-    width: stream.width,
-    height: stream.height,
-    duration: parseFloat(parsed.format.duration),
-    fps: num / den,
+    width: Number(video.Width),
+    height: Number(video.Height),
+    duration: Number(general?.Duration ?? video.Duration ?? 0),
+    fps: Number(video.FrameRate),
   };
 }
 
 export function extractFrame(videoPath: string): Buffer {
   const tmp = mkdtempSync(join(tmpdir(), "asset-proxy-test-"));
   const framePath = join(tmp, "frame.png");
-  execSync(
-    `ffmpeg -hide_banner -y -i "${videoPath}" -frames:v 1 -f image2 "${framePath}"`,
+  execFileSync(
+    ffmpegPath,
+    [
+      "-hide_banner",
+      "-y",
+      "-i",
+      videoPath,
+      "-frames:v",
+      "1",
+      "-f",
+      "image2",
+      framePath,
+    ],
     { stdio: ["pipe", "pipe", "pipe"] },
   );
-  return execSync(`cat "${framePath}"`);
+  return readFileSync(framePath);
 }
 
 export async function fetchVideo(

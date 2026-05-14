@@ -44,7 +44,7 @@ describe("video resize", () => {
     expect(buffer.indexOf("moof")).toBe(-1);
 
     const videoPath = writeTmp(buffer, "mp4");
-    const meta = probeVideo(videoPath);
+    const meta = await probeVideo(videoPath);
     expect(meta.width).toBe(128);
     expect(meta.height).toBe(128);
     expect(meta.fps).toBe(15);
@@ -69,7 +69,7 @@ describe("video resize", () => {
     expect(buffer.indexOf("moof")).toBeGreaterThan(-1);
 
     const videoPath = writeTmp(buffer, "mp4");
-    const meta = probeVideo(videoPath);
+    const meta = await probeVideo(videoPath);
     expect(meta.width).toBe(128);
     expect(meta.height).toBe(128);
   });
@@ -78,7 +78,7 @@ describe("video resize", () => {
     const { videoPath } = await fetchVideo(
       "/resize:force:128:128/car:1:1/fr:15/ct:1",
     );
-    const meta = probeVideo(videoPath);
+    const meta = await probeVideo(videoPath);
     expect(meta.width).toBe(128);
     expect(meta.height).toBe(128);
     const frame = extractFrame(videoPath);
