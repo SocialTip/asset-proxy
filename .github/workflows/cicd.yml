@@ -19,7 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BEST_FORMAT_MAX_RESOLUTION: "0.005"
-      NODE_V8_COVERAGE: /coverage
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,9 +43,25 @@ jobs:
       - name: Prepare coverage mounts
         run: mkdir -p .coverage-docker/asset-proxy .coverage-docker/cache-proxy
 
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build proxy image with GHA cache
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: |
+            asset-proxy-asset-proxy:latest
+            asset-proxy-cache-proxy:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Start docker compose stack
         id: stack
-        run: docker compose up -d --build --wait
+        env:
+          NODE_V8_COVERAGE: /coverage
+        run: docker compose up -d --wait
 
       - name: Print docker logs if stack failed
         if: failure() && steps.stack.outcome == 'failure'
