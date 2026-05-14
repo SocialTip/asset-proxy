@@ -390,4 +390,20 @@ describe("tiled HEIC source (iPhone-style grid)", () => {
     expect(meta.height).toBe(2048);
     await expect(toPng(buffer)).resolves.toMatchImageSnapshot();
   });
+
+  // Regression: ffmpeg 8 exposes the HEIC tile grid as a stream group fed by
+  // an internal complex filtergraph. Using -vf for resize/crop on top of it
+  // errors with "Simple and complex filtering cannot be used together for the
+  // same stream"; the fix is to route filters through -filter_complex.
+  it("applies resize+crop filters to a tile-grid HEIC without filtergraph conflict", async () => {
+    const buffer = await fetchImageFrom(
+      "/f:webp/g:no/rs:fill:360:640",
+      GRID_HEIC_URL,
+    );
+    const meta = await sharp(buffer).metadata();
+    expect(meta.format).toBe("webp");
+    expect(meta.width).toBe(360);
+    expect(meta.height).toBe(640);
+    await expect(toPng(buffer)).resolves.toMatchImageSnapshot();
+  });
 });

@@ -201,7 +201,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "scale='min(100\\,iw)':'min(75\\,ih)':force_original_aspect_ratio=decrease",
         "-map_metadata",
         "-1",
@@ -225,7 +225,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "scale='min(100\\,iw)':'min(100\\,ih)':force_original_aspect_ratio=increase,crop='min(100\\,iw)':'min(100\\,ih)':(iw-ow)/2:(ih-oh)/2",
         "-map_metadata",
         "-1",
@@ -249,7 +249,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "scale='min(80\\,iw)':'min(120\\,ih)'",
         "-map_metadata",
         "-1",
@@ -273,7 +273,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease",
         "-map_metadata",
         "-1",
@@ -297,7 +297,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease:flags=lanczos",
         "-map_metadata",
         "-1",
@@ -321,7 +321,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "crop=100:75:0:0",
         "-map_metadata",
         "-1",
@@ -341,26 +341,26 @@ describe("image ffmpeg args", () => {
   it("crop with focus point gravity", async () => {
     expect(await imageArgs(plain("/c:100:75/g:fp:0.8:0.8")))
       .toMatchInlineSnapshot(`
-      [
-        "-hide_banner",
-        "-y",
-        "-i",
-        "https://example.com/photo.jpg",
-        "-vf",
-        "crop=100:75:min(max(iw*0.8-100/2\\,0)\\,iw-100):min(max(ih*0.8-75/2\\,0)\\,ih-75)",
-        "-map_metadata",
-        "-1",
-        "-frames:v",
-        "1",
-        "-f",
-        "image2",
-        "-c:v",
-        "mjpeg",
-        "-q:v",
-        "8",
-        "pipe:1",
-      ]
-    `);
+        [
+          "-hide_banner",
+          "-y",
+          "-i",
+          "https://example.com/photo.jpg",
+          "-filter_complex",
+          "crop=100:75:min(max(iw*0.8-100/2\\,0)\\,iw-100):min(max(ih*0.8-75/2\\,0)\\,ih-75)",
+          "-map_metadata",
+          "-1",
+          "-frames:v",
+          "1",
+          "-f",
+          "image2",
+          "-c:v",
+          "mjpeg",
+          "-q:v",
+          "8",
+          "pipe:1",
+        ]
+      `);
   });
 
   it("crop_aspect_ratio 16:9", async () => {
@@ -370,7 +370,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "crop='if(gt(dar\\,1.7777777777777777)\\,ih*1.7777777777777777\\,iw)':'if(gt(dar\\,1.7777777777777777)\\,ih\\,iw/1.7777777777777777)',scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease",
         "-map_metadata",
         "-1",
@@ -394,7 +394,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease",
         "-map_metadata",
         "-1",
@@ -414,51 +414,51 @@ describe("image ffmpeg args", () => {
   it("format_quality overrides global quality", async () => {
     expect(await imageArgs(plain("/w:100/q:80/fq:jpg:50")))
       .toMatchInlineSnapshot(`
-      [
-        "-hide_banner",
-        "-y",
-        "-i",
-        "https://example.com/photo.jpg",
-        "-vf",
-        "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease",
-        "-map_metadata",
-        "-1",
-        "-frames:v",
-        "1",
-        "-f",
-        "image2",
-        "-c:v",
-        "mjpeg",
-        "-q:v",
-        "17",
-        "pipe:1",
-      ]
-    `);
+        [
+          "-hide_banner",
+          "-y",
+          "-i",
+          "https://example.com/photo.jpg",
+          "-filter_complex",
+          "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease",
+          "-map_metadata",
+          "-1",
+          "-frames:v",
+          "1",
+          "-f",
+          "image2",
+          "-c:v",
+          "mjpeg",
+          "-q:v",
+          "17",
+          "pipe:1",
+        ]
+      `);
   });
 
   it("padding with background", async () => {
     expect(await imageArgs(plain("/w:100/pd:10/bg:ff0000")))
       .toMatchInlineSnapshot(`
-      [
-        "-hide_banner",
-        "-y",
-        "-i",
-        "https://example.com/photo.jpg",
-        "-vf",
-        "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease,format=rgba,geq=r='r(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':g='g(X,Y)*alpha(X,Y)/255+0*(255-alpha(X,Y))/255':b='b(X,Y)*alpha(X,Y)/255+0*(255-alpha(X,Y))/255':a='255',pad=iw+20:ih+20:10:10:#ff0000",
-        "-map_metadata",
-        "-1",
-        "-frames:v",
-        "1",
-        "-f",
-        "image2",
-        "-c:v",
-        "mjpeg",
-        "-q:v",
-        "8",
-        "pipe:1",
-      ]
-    `);
+        [
+          "-hide_banner",
+          "-y",
+          "-i",
+          "https://example.com/photo.jpg",
+          "-filter_complex",
+          "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease,format=rgba,geq=r='r(X,Y)*alpha(X,Y)/255+255*(255-alpha(X,Y))/255':g='g(X,Y)*alpha(X,Y)/255+0*(255-alpha(X,Y))/255':b='b(X,Y)*alpha(X,Y)/255+0*(255-alpha(X,Y))/255':a='255',pad=iw+20:ih+20:10:10:#ff0000",
+          "-map_metadata",
+          "-1",
+          "-frames:v",
+          "1",
+          "-f",
+          "image2",
+          "-c:v",
+          "mjpeg",
+          "-q:v",
+          "8",
+          "pipe:1",
+        ]
+      `);
   });
 
   it("padding with background alpha", async () => {
@@ -469,7 +469,7 @@ describe("image ffmpeg args", () => {
           "-y",
           "-i",
           "https://example.com/photo.jpg",
-          "-vf",
+          "-filter_complex",
           "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease,format=rgba,pad=iw+20:ih+20:10:10:#ff0000@0.5",
           "-map_metadata",
           "-1",
@@ -493,7 +493,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease,transpose=1",
         "-map_metadata",
         "-1",
@@ -517,7 +517,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "scale='min(100\\,iw)':-1:force_original_aspect_ratio=decrease,gblur=sigma=5,unsharp=5:5:2:5:5:0",
         "-map_metadata",
         "-1",
@@ -555,7 +555,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "hflip,vflip",
         "-map_metadata",
         "-1",
@@ -579,7 +579,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "scale=iw/8:ih/8:flags=neighbor,scale=iw*8:ih*8:flags=neighbor",
         "-map_metadata",
         "-1",
@@ -608,7 +608,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "unsharp=5:5:0.041666666666666664:5:5:0",
         "-map_metadata",
         "-1",
@@ -632,7 +632,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "lutrgb=r=128+val*0.5:g=0+val*0.5:b=0+val*0.5",
         "-map_metadata",
         "-1",
@@ -656,7 +656,7 @@ describe("image ffmpeg args", () => {
         "-y",
         "-i",
         "https://example.com/photo.jpg",
-        "-vf",
+        "-filter_complex",
         "eq=brightness=0.19607843137254902:saturation=0.5",
         "-map_metadata",
         "-1",
@@ -1755,7 +1755,7 @@ describe("video thumbnail with image options", () => {
     expect(args).toContain("-ss");
     expect(args).toContain("3");
     // Should have both resize and crop in filter chain
-    const vfIdx = args.indexOf("-vf");
+    const vfIdx = args.indexOf("-filter_complex");
     expect(vfIdx).toBeGreaterThan(-1);
     const filterStr = args[vfIdx + 1];
     expect(filterStr).toContain("scale=");
@@ -1768,7 +1768,7 @@ describe("video thumbnail with image options", () => {
     );
     expect(args).toContain("-ss");
     expect(args).toContain("3");
-    const vfIdx = args.indexOf("-vf");
+    const vfIdx = args.indexOf("-filter_complex");
     const filterStr = args[vfIdx + 1];
     expect(filterStr).toContain("gblur=sigma=5");
   });
