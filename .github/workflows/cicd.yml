@@ -83,6 +83,9 @@ jobs:
         run: |
           curl -fsSL https://github.com/BtbN/FFmpeg-Builds/releases/download/${FFMPEG_RELEASE}/ffmpeg-${FFMPEG_BUILD}-linux64-gpl-${FFMPEG_VERSION}.tar.xz \
             | sudo tar -xJ --strip-components=1 -C /usr/local
+          # The runner image's package index goes stale between image builds, and a point
+          # release replacing a .deb then 404s the install (seen with libheif 4.7 -> 4.8).
+          sudo apt-get update -qq
           sudo apt-get install -y -qq libimage-exiftool-perl heif-thumbnailer libheif-plugin-libde265 libheif-plugin-aomdec
 
       - name: Start fake GCS server
