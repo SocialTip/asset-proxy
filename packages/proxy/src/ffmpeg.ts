@@ -1207,14 +1207,24 @@ interface TrimOptions {
   equalVert: boolean;
 }
 
-/** Run ffmpeg cropdetect on a single frame to determine trim bounds. Returns a crop filter string like "crop=180:140:10:5". */
-function detectTrimCrop(
+/**
+ * Run ffmpeg cropdetect on a single frame to determine trim bounds. Returns a crop filter
+ * string like "crop=180:140:10:5".
+ *
+ * Exported for tests: the `skip=0` below is load-bearing and only a real cropdetect run
+ * shows it. cropdetect's `skip` option defaults to 2, which discards the first frames
+ * before detection starts — and this probe reads exactly one frame (`-frames:v 1`), so
+ * without `skip=0` cropdetect never evaluates anything, prints no `crop=` line, and trim
+ * silently no-ops on every still image and extracted video frame.
+ */
+export function detectTrimCrop(
   sourceUrl: string,
   trim: TrimOptions,
 ): Promise<string | undefined> {
   const span = tracer.startSpan("exec.ffmpeg.cropdetect");
   return new Promise((resolve) => {
-    // cropdetect round=2 to allow odd dimensions, limit=threshold/255
+    // cropdetect round=2 to allow odd dimensions, limit=threshold/255, skip=0 so the one
+    // frame read here is actually evaluated (the default skips the first two frames).
     const limit = Math.min(trim.threshold / 255, 1);
     const args = [
       "-hide_banner",
@@ -1223,7 +1233,7 @@ function detectTrimCrop(
       "-frames:v",
       "1",
       "-vf",
-      `cropdetect=limit=${limit}:round=2:reset=0`,
+      `cropdetect=limit=${limit}:round=2:reset=0:skip=0`,
       "-f",
       "null",
       "-",
