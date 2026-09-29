@@ -1311,7 +1311,7 @@ export function extractUrlOptions(
   path: string,
 ): Record<string, string> | undefined {
   const parts = path.split("/");
-  const splitIdx = parts.findIndex((p) => /(plain|enc)/.test(p));
+  const splitIdx = parts.findIndex((p) => p === "plain" || p === "enc");
   if (splitIdx === -1) return undefined;
   const optionsPart = parts.slice(0, splitIdx);
   return Object.fromEntries(
@@ -1331,7 +1331,7 @@ export function parseProcessingUrl(
   options?: ParseOptions,
 ): ParsedUrl {
   const parts = path.split("/");
-  const splitIdx = parts.findIndex((p) => /(plain|enc)/.test(p));
+  const splitIdx = parts.findIndex((p) => p === "plain" || p === "enc");
   if (splitIdx === -1) {
     throw new HTTPError(
       "Unsupported URL format: expected /plain/ or /enc/ source URL",

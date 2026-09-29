@@ -16,6 +16,13 @@ describe("extractUrlOptions", () => {
     });
   });
 
+  it("ignores 'plain' and 'enc' inside other segments", () => {
+    const opts = extractUrlOptions(
+      `/xencx/fn:plain-video.mp4/raw:1/plain/${SRC}`,
+    );
+    expect(opts).toMatchObject({ filename: "plain-video.mp4", raw: "1" });
+  });
+
   it("extracts options from a signed URL", () => {
     const path = `/rs:fill:200:200/cors:1/plain/${SRC}`;
     const sig = sign(path, SIGNING_KEY, SIGNING_SALT);

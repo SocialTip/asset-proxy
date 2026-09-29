@@ -1,4 +1,5 @@
 import type { Storage } from "@google-cloud/storage";
+import { LRUCache } from "lru-cache";
 
 export interface SourceMetadataResult {
   contentType?: string;
@@ -7,18 +8,39 @@ export interface SourceMetadataResult {
 
 const HEAD_TIMEOUT_MS = 5_000;
 
+// ponytail: a changed source can report a stale size for up to a minute; that only affects how a range is capped, since Content-Range is copied from the source response.
+const cache = new LRUCache<string, Promise<SourceMetadataResult>>({
+  max: 1000,
+  ttl: 60 * 1000,
+});
+
+/** Clear the metadata cache. Exposed for testing only. */
+export function clearSourceMetadataCache(): void {
+  cache.clear();
+}
+
 /**
- * Returns a memoised thunk that lazily fetches source file metadata. Uses the GCS API for `gs://` URLs and a HEAD request for HTTP(S) URLs.
+ * Returns a thunk that lazily fetches source file metadata. Uses the GCS API for `gs://` URLs and a HEAD request for HTTP(S) URLs.
+ *
+ * Results are cached across requests for a minute, because ranged playback asks for the same source's metadata on every chunk. Empty results (failed lookups) are not cached.
  */
 export function createSourceMetadata(
   sourceUrl: string,
   gcs: Storage,
 ): () => Promise<SourceMetadataResult> {
-  let promise: Promise<SourceMetadataResult> | null = null;
   return () => {
-    promise ??= sourceUrl.startsWith("gs://")
-      ? fetchGcs(sourceUrl, gcs)
-      : fetchHead(sourceUrl);
+    let promise = cache.get(sourceUrl);
+    if (!promise) {
+      promise = sourceUrl.startsWith("gs://")
+        ? fetchGcs(sourceUrl, gcs)
+        : fetchHead(sourceUrl);
+      cache.set(sourceUrl, promise);
+      promise.then((result) => {
+        if (!result.contentType && !result.contentLength) {
+          cache.delete(sourceUrl);
+        }
+      });
+    }
     return promise;
   };
 }
@@ -33,10 +55,7 @@ async function fetchGcs(
   const bucket = withoutScheme.slice(0, slashIdx);
   const objectPath = withoutScheme.slice(slashIdx + 1);
   try {
-    const [metadata] = await gcs
-      .bucket(bucket)
-      .file(objectPath)
-      .getMetadata();
+    const [metadata] = await gcs.bucket(bucket).file(objectPath).getMetadata();
     return {
       contentType: (metadata.contentType as string) ?? undefined,
       contentLength: metadata.size ? Number(metadata.size) : undefined,
