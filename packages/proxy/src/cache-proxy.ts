@@ -121,6 +121,26 @@ const HOP_BY_HOP = new Set([
   "host",
 ]);
 
+/** Copies request headers to forward upstream, dropping pseudo and hop-by-hop headers. Range headers are only kept when `keepRange` is set. */
+function forwardHeaders(
+  request: FastifyRequest<RouteGenericInterface, Http2Server>,
+  keepRange: boolean,
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(request.headers)) {
+    const name = key.toLowerCase();
+    if (
+      typeof value === "string" &&
+      !key.startsWith(":") &&
+      !HOP_BY_HOP.has(name) &&
+      (keepRange || (name !== "range" && name !== "if-range"))
+    ) {
+      headers[key] = value;
+    }
+  }
+  return headers;
+}
+
 function cacheKey(requestPath: string): string {
   return requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
 }
@@ -281,6 +301,24 @@ export async function createCacheProxyApp() {
         return reply.redirect(compatPath, 301);
       }
     }
+
+    // Raw responses are passed through straight from the source (already in GCS), so the cache bucket is skipped and ranges are forwarded. Cloud CDN caches them in chunks.
+    if (["1", "t", "true"].includes(urlOptions?.raw ?? "")) {
+      const key = requestKey(path);
+      logger.info("[cache-proxy] raw passthrough", { key });
+      const upstream = await h2Fetch(`${env.FORWARD_URL}${request.url}`, {
+        headers: forwardHeaders(request, true),
+      }).catch((cause) => {
+        logger.error("Failed to fetch from upstream", { cause, key });
+        throw new HTTPError("Upstream request failed", { code: "BAD_GATEWAY" });
+      });
+      reply.code(upstream.status);
+      for (const [h, v] of upstream.headers) {
+        if (!HOP_BY_HOP.has(h.toLowerCase())) reply.header(h, v);
+      }
+      return reply.send(upstream.body ?? undefined);
+    }
+
     const gcsKey = cacheKey(path);
     if (!gcsKey) {
       return reply.code(404).header("Content-Type", "text/plain").send();
@@ -358,19 +396,9 @@ export async function createCacheProxyApp() {
       });
 
     const forwardUrl = `${env.FORWARD_URL}${request.url}`;
-    const headers: Record<string, string> = {};
-    for (const [key, value] of Object.entries(request.headers)) {
-      if (
-        typeof value === "string" &&
-        !key.startsWith(":") &&
-        !HOP_BY_HOP.has(key.toLowerCase()) &&
-        key.toLowerCase() !== "range"
-      ) {
-        headers[key] = value;
-      }
-    }
-
-    const upstream = await h2Fetch(forwardUrl, { headers }).catch((cause) => {
+    const upstream = await h2Fetch(forwardUrl, {
+      headers: forwardHeaders(request, false),
+    }).catch((cause) => {
       logger.error("Failed to fetch from upstream", { cause, key });
       const error = new HTTPError("Upstream request failed", {
         code: "BAD_GATEWAY",

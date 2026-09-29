@@ -263,7 +263,9 @@ describe("cache proxy", () => {
     const missRes = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(missRes.status).toBe(200);
     const missCacheControl = missRes.headers.get("cache-control") ?? "";
-    expect(missCacheControl).toMatch(/^public, max-age=\d+$/);
+    expect(missCacheControl).toMatch(
+      /^public, max-age=\d+, stale-while-revalidate=0$/,
+    );
     expect(missCacheControl).not.toMatch(/immutable/);
     const missMaxAge = Number(missCacheControl.match(/max-age=(\d+)/)?.[1]);
     expect(missMaxAge).toBeGreaterThan(3500);
@@ -275,7 +277,9 @@ describe("cache proxy", () => {
     const hitRes = await fetch(`${CACHE_PROXY_URL}${urlPath}`);
     expect(hitRes.status).toBe(200);
     const hitCacheControl = hitRes.headers.get("cache-control") ?? "";
-    expect(hitCacheControl).toMatch(/^public, max-age=\d+$/);
+    expect(hitCacheControl).toMatch(
+      /^public, max-age=\d+, stale-while-revalidate=0$/,
+    );
     expect(hitCacheControl).not.toMatch(/immutable/);
     const hitMaxAge = Number(hitCacheControl.match(/max-age=(\d+)/)?.[1]);
     expect(hitMaxAge).toBeGreaterThan(3500);

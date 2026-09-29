@@ -1941,6 +1941,92 @@ describe("miscellaneous options", () => {
     }
   });
 
+  describe("raw:1 byte ranges", () => {
+    const RAW_URL = "/insecure/raw:1/plain/https://example.com/video.mp4";
+    const SIZE = 20 * 1024 * 1024;
+    let originalFetch: typeof globalThis.fetch;
+    let mockFetch: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+      mockFetch = vi.fn(async (_url: string, init?: RequestInit) => {
+        const range = (init?.headers as Record<string, string> | undefined)
+          ?.range;
+        const headers = {
+          "content-type": "video/mp4",
+          "accept-ranges": "bytes",
+          etag: '"abc"',
+          "last-modified": "Wed, 01 Jan 2025 00:00:00 GMT",
+        };
+        if (init?.method === "HEAD") {
+          return new Response(null, {
+            headers: { ...headers, "content-length": String(SIZE) },
+          });
+        }
+        if (!range) {
+          return new Response("full", {
+            headers: { ...headers, "content-length": "4" },
+          });
+        }
+        const [start, end] = range.slice("bytes=".length).split("-");
+        return new Response("part", {
+          status: 206,
+          headers: {
+            ...headers,
+            "content-length": "4",
+            "content-range": `bytes ${start}-${end}/${SIZE}`,
+          },
+        });
+      });
+      globalThis.fetch = mockFetch as typeof globalThis.fetch;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    function sourceGetHeaders() {
+      const call = mockFetch.mock.calls.find(
+        ([, init]) => (init as RequestInit | undefined)?.method !== "HEAD",
+      );
+      return (call?.[1] as RequestInit | undefined)?.headers as Record<
+        string,
+        string
+      >;
+    }
+
+    it("forwards a satisfiable range and If-Range and returns 206", async () => {
+      const res = await request(app)
+        .get(RAW_URL)
+        .set("range", "bytes=0-1023")
+        .set("if-range", '"abc"');
+      expect(res.status).toBe(206);
+      expect(res.headers["content-range"]).toBe(`bytes 0-1023/${SIZE}`);
+      expect(res.text).toBe("part");
+      expect(sourceGetHeaders()).toEqual({
+        range: "bytes=0-1023",
+        "if-range": '"abc"',
+      });
+    });
+
+    it("caps open-ended ranges at 8 MiB", async () => {
+      const res = await request(app).get(RAW_URL).set("range", "bytes=1000-");
+      expect(res.status).toBe(206);
+      expect(sourceGetHeaders().range).toBe(
+        `bytes=1000-${1000 + 8 * 1024 * 1024 - 1}`,
+      );
+    });
+
+    it("rejects range requests for expired URLs", async () => {
+      const past = Math.floor(Date.now() / 1000) - 60;
+      const res = await request(app)
+        .get(`/insecure/exp:${past}/raw:1/plain/https://example.com/video.mp4`)
+        .set("range", "bytes=0-1023");
+      expect(res.status).toBe(404);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   it("skip_processing skips when source extension matches", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockResolvedValue(

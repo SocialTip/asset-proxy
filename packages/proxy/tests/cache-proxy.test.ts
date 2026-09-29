@@ -205,3 +205,47 @@ describe("cache proxy inflight coalescing", () => {
     expect(rangeRes.headers["content-length"]).toBe("4");
   });
 });
+
+describe("cache proxy raw passthrough", () => {
+  beforeEach(() => {
+    mockFile.mockClear();
+    mockCreateWriteStream.mockClear();
+    mockH2Fetch.mockReset();
+  });
+
+  it("forwards Range to upstream and returns the 206 without touching the cache bucket", async () => {
+    mockH2Fetch.mockResolvedValue({
+      status: 206,
+      ok: true,
+      headers: new Headers({
+        "content-type": "video/mp4",
+        "content-range": "bytes 0-3/16",
+        "accept-ranges": "bytes",
+        etag: '"abc"',
+      }),
+      body: Readable.from([Buffer.from("0123")]),
+    });
+
+    const app = await createCacheProxyApp();
+    const res = await request(app)
+      .get("/insecure/raw:1/plain/gs://bucket/video.mp4")
+      .set("range", "bytes=0-3")
+      .set("if-range", '"abc"');
+
+    expect(res.status).toBe(206);
+    expect(res.headers["content-range"]).toBe("bytes 0-3/16");
+    expect(res.headers["etag"]).toBe('"abc"');
+    expect(res.text).toBe("0123");
+    expect(mockH2Fetch).toHaveBeenCalledWith(
+      "http://upstream:8080/insecure/raw:1/plain/gs://bucket/video.mp4",
+      {
+        headers: expect.objectContaining({
+          range: "bytes=0-3",
+          "if-range": '"abc"',
+        }),
+      },
+    );
+    expect(mockFile).not.toHaveBeenCalled();
+    expect(mockCreateWriteStream).not.toHaveBeenCalled();
+  });
+});
