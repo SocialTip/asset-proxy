@@ -23,7 +23,6 @@ type ParsedUrl = ReturnType<typeof parseProcessingUrl>;
 type AppRequest = FastifyRequest<RouteGenericInterface, Http2Server>;
 type AppReply = FastifyReply<RouteGenericInterface, Http2Server>;
 
-// ponytail: fixed cap so every passthrough response finishes well inside the load balancer's 30s response timeout; lower it if slow clients still time out.
 const MAX_RAW_RANGE_BYTES = 8 * 1024 * 1024;
 
 const PASSTHROUGH_HEADERS = [
@@ -68,6 +67,23 @@ export function parseSignedUrl(path: string): ParsedUrl {
   return parsed;
 }
 
+/**
+ * Whether the URL uses options that the processing proxy checks before passing a source through (hashsum, per-URL source, result and animation limits, fallback image). The cache proxy forwards such raw URLs to the processing proxy instead of serving them itself.
+ *
+ * Keep in sync with the checks in `handleRequest` (`index.ts`).
+ */
+export function usesProcessorChecks(parsed: ParsedUrl): boolean {
+  return Boolean(
+    parsed.hashsum ||
+    parsed.maxSrcFileSize ||
+    parsed.maxSrcResolution ||
+    parsed.maxResultDimension ||
+    parsed.maxAnimationFrames ||
+    parsed.maxAnimationFrameResolution ||
+    parsed.fallbackImageUrl,
+  );
+}
+
 export function setContentDisposition(
   reply: AppReply,
   parsed: ParsedUrl,
@@ -102,19 +118,31 @@ export async function servePassthrough(
 ): Promise<void> {
   const headers: Record<string, string> = {};
   const { range, "if-range": ifRange } = request.headers;
-  const { contentLength: size } = await getSourceMetadata();
-  if (range && size) {
-    const ranges = parseRange(size, range, { combine: true });
-    if (ranges === -1 || ranges === -2 || ranges.length !== 1) {
+  let size: number | undefined;
+  if (range) {
+    ({ contentLength: size } = await getSourceMetadata());
+    const ranges = size ? parseRange(size, range, { combine: true }) : -1;
+    if (Array.isArray(ranges) && ranges.length > 1) {
       reply.code(416);
       reply.header("Content-Range", `bytes */${size}`);
       return reply.send();
     }
-    const { start, end } = ranges[0];
-    headers.range = `bytes=${start}-${Math.min(end, start + MAX_RAW_RANGE_BYTES - 1)}`;
+    // A satisfiable range is capped. Otherwise (unknown size, or unsatisfiable against a possibly stale size) the source decides, applying If-Range to the current object.
+    headers.range = Array.isArray(ranges)
+      ? `bytes=${ranges[0].start}-${Math.min(ranges[0].end, ranges[0].start + MAX_RAW_RANGE_BYTES - 1)}`
+      : range;
     if (typeof ifRange === "string") headers["if-range"] = ifRange;
   }
   const response = await fetch(sourceUrl, { headers });
+  if (response.status === 416) {
+    await response.body?.cancel();
+    reply.code(416);
+    const contentRange =
+      response.headers.get("content-range") ??
+      (size ? `bytes */${size}` : undefined);
+    if (contentRange) reply.header("Content-Range", contentRange);
+    return reply.send();
+  }
   if (!response.ok) {
     throw new HTTPError(`Failed to fetch source: ${response.status}`, {
       code: "BAD_REQUEST",

@@ -219,6 +219,7 @@ async function handleRequest(request: AppRequest, reply: AppReply) {
       }),
     });
 
+    // Per-URL options checked here must also be listed in `usesProcessorChecks`, so the cache proxy forwards raw URLs that use them.
     if (parsed.hashsum) {
       await verifyHashsum(sourceUrl, parsed.hashsum);
     }

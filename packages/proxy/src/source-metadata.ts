@@ -8,7 +8,6 @@ export interface SourceMetadataResult {
 
 const HEAD_TIMEOUT_MS = 5_000;
 
-// ponytail: a changed source can report a stale size for up to a minute; that only affects how a range is capped, since Content-Range is copied from the source response.
 const cache = new LRUCache<string, Promise<SourceMetadataResult>>({
   max: 1000,
   ttl: 60 * 1000,

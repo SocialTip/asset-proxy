@@ -53,6 +53,13 @@ const commonFields = {
     ),
 };
 
+/** `verifySignature` skips verification unless both are set, so a lone key or salt must fail fast instead of silently accepting unsigned URLs. */
+const signingKeysPaired = [
+  (data: { SIGNING_KEY?: Buffer; SIGNING_SALT?: Buffer }) =>
+    (data.SIGNING_KEY === undefined) === (data.SIGNING_SALT === undefined),
+  { message: "SIGNING_KEY and SIGNING_SALT must both be set or both be unset" },
+] as const;
+
 const processingModeSchema = z
   .object({
     ...commonFields,
@@ -181,48 +188,41 @@ const processingModeSchema = z
     /** Max result width or height in pixels. 0 = unlimited. */
     MAX_RESULT_DIMENSION: z.coerce.number().int().default(0),
   })
-  .refine(
-    (data) => {
-      const hasKey = data.SIGNING_KEY !== undefined;
-      const hasSalt = data.SIGNING_SALT !== undefined;
-      return hasKey === hasSalt;
-    },
-    {
-      message: "SIGNING_KEY and SIGNING_SALT must both be set or both be unset",
-    },
-  );
+  .refine(...signingKeysPaired);
 
-const cacheModeSchema = z.object({
-  ...commonFields,
+const cacheModeSchema = z
+  .object({
+    ...commonFields,
 
-  /** URL of the processing proxy to forward cache misses to. Supports http:// (h2c) and https:// (h2 over TLS). */
-  FORWARD_URL: z.string().url(),
+    /** URL of the processing proxy to forward cache misses to. Supports http:// (h2c) and https:// (h2 over TLS). */
+    FORWARD_URL: z.string().url(),
 
-  /** GCS bucket name for the cache. */
-  CACHE_BUCKET: z.string(),
+    /** GCS bucket name for the cache. */
+    CACHE_BUCKET: z.string(),
 
-  /** Hex-encoded AES-256-CBC key for decrypting `/enc/` source URLs in imgproxy compat mode. */
-  SOURCE_URL_ENCRYPTION_KEY: z
-    .string()
-    .length(64, "Must be a 32-byte hex-encoded string (64 hex characters)")
-    .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
-    .transform((v) => Buffer.from(v, "hex"))
-    .optional(),
+    /** Hex-encoded AES-256-CBC key for decrypting `/enc/` source URLs in imgproxy compat mode. */
+    SOURCE_URL_ENCRYPTION_KEY: z
+      .string()
+      .length(64, "Must be a 32-byte hex-encoded string (64 hex characters)")
+      .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
+      .transform((v) => Buffer.from(v, "hex"))
+      .optional(),
 
-  /** Hex-encoded HMAC-SHA256 key for re-signing redirected URLs (imgproxy compat mode). Must be set together with `SIGNING_SALT`. */
-  SIGNING_KEY: z
-    .string()
-    .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
-    .transform((v) => Buffer.from(v, "hex"))
-    .optional(),
+    /** Hex-encoded HMAC-SHA256 key for re-signing redirected URLs (imgproxy compat mode). Must be set together with `SIGNING_SALT`. */
+    SIGNING_KEY: z
+      .string()
+      .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
+      .transform((v) => Buffer.from(v, "hex"))
+      .optional(),
 
-  /** Hex-encoded salt for re-signing redirected URLs (imgproxy compat mode). Must be set together with `SIGNING_KEY`. */
-  SIGNING_SALT: z
-    .string()
-    .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
-    .transform((v) => Buffer.from(v, "hex"))
-    .optional(),
-});
+    /** Hex-encoded salt for re-signing redirected URLs (imgproxy compat mode). Must be set together with `SIGNING_KEY`. */
+    SIGNING_SALT: z
+      .string()
+      .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
+      .transform((v) => Buffer.from(v, "hex"))
+      .optional(),
+  })
+  .refine(...signingKeysPaired);
 
 export type ProcessingEnv = z.infer<typeof processingModeSchema>;
 export type CacheEnv = z.infer<typeof cacheModeSchema>;

@@ -49,6 +49,7 @@ const mockFile = vi.fn(() => ({
   ]),
   createReadStream: mockCreateReadStream,
   createWriteStream: mockCreateWriteStream,
+  getSignedUrl: vi.fn(async () => ["https://signed.example/video.mp4"]),
 }));
 
 vi.mock("@google-cloud/storage", () => ({
@@ -261,6 +262,31 @@ describe("cache proxy raw passthrough", () => {
     expect(mockH2Fetch).not.toHaveBeenCalled();
     expect(mockFile).not.toHaveBeenCalled();
     expect(mockCreateWriteStream).not.toHaveBeenCalled();
+  });
+
+  it("signs gs:// sources and streams the range from the signed URL", async () => {
+    const app = await createCacheProxyApp();
+    const res = await request(app)
+      .get("/insecure/raw:1/plain/gs://bucket/video.mp4")
+      .set("range", "bytes=0-3");
+
+    expect(res.status).toBe(206);
+    expect(res.text).toBe("0123");
+    expect(mockFetch).toHaveBeenCalledWith("https://signed.example/video.mp4", {
+      headers: { range: "bytes=0-3" },
+    });
+    expect(mockH2Fetch).not.toHaveBeenCalled();
+    expect(mockCreateWriteStream).not.toHaveBeenCalled();
+  });
+
+  it("sets Access-Control-Allow-Origin for every truthy cors value", async () => {
+    const app = await createCacheProxyApp();
+    for (const value of ["1", "t", "true"]) {
+      const res = await request(app).get(
+        `/insecure/cors:${value}/raw:1/plain/https://example.com/video.mp4`,
+      );
+      expect(res.headers["access-control-allow-origin"]).toBe("*");
+    }
   });
 
   it("refuses expired URLs", async () => {
