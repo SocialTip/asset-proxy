@@ -15,7 +15,7 @@ Return the source without any processing. The proxy fetches the source and passe
 
 Raw responses (and responses skipped via `skip_processing`) support byte-range requests, so large files can be played, seeked and downloaded in pieces:
 
-- A request with a single `Range` returns `206 Partial Content` with `Content-Range`, `Content-Length` and `Accept-Ranges: bytes`. Ranges are capped at 8 MiB, so an open-ended range such as `bytes=0-` returns at most the first 8 MiB; clients request the next range from where the response ends.
+- A request with a single `Range` returns `206 Partial Content` with `Content-Range`, `Content-Length` and `Accept-Ranges: bytes`. Ranges are capped at 8 MiB, so an open-ended range such as `bytes=0-` returns at most the first 8 MiB; clients request the next range from where the response ends. If the source size can't be determined, the range is passed to the source uncapped.
 - An unsatisfiable or multi-part range returns `416 Range Not Satisfiable` with `Content-Range: bytes */<size>`.
 - A request without `Range` returns `200` with the full body and a correct `Content-Length`.
 - `Accept-Ranges`, `ETag` and `Last-Modified` are passed through from the source, and `If-Range` is forwarded to it. Together these let a CDN such as Cloud CDN cache large objects by filling them in chunks.

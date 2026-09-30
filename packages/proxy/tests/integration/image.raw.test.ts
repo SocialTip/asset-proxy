@@ -79,3 +79,44 @@ describe.each([
     expect(res.headers.get("content-range")).toBe(`bytes */${source.length}`);
   });
 });
+
+describe("raw passthrough headers", () => {
+  const path = generateUrl(
+    parseProcessingUrl(
+      `/insecure/exp:${Math.floor(Date.now() / 1000) + 3600}/raw:1/plain/${SOURCE_URL}`,
+    ),
+    URL_CONFIG,
+  );
+  const names = [
+    "content-type",
+    "content-length",
+    "content-range",
+    "accept-ranges",
+    "etag",
+    "last-modified",
+    "cache-control",
+    "content-disposition",
+  ];
+
+  it.each([
+    ["a full response", {}],
+    ["a range response", { range: "bytes=0-99" }],
+  ])(
+    "match between the cache and processing proxies for %s",
+    async (_name, headers) => {
+      const [processing, cache] = await Promise.all(
+        [SERVICE_URL, CACHE_PROXY_URL].map((base) =>
+          fetch(`${base}${path}`, { headers }),
+        ),
+      );
+      expect(cache.status).toBe(processing.status);
+      const pick = (res: Response) =>
+        names.map((n) =>
+          n === "cache-control"
+            ? res.headers.get(n)?.replace(/max-age=\d+/, "max-age=N")
+            : res.headers.get(n),
+        );
+      expect(pick(cache)).toEqual(pick(processing));
+    },
+  );
+});

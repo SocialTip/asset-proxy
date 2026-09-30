@@ -22,8 +22,13 @@ import { type CacheEnv, env as envSwitched } from "./env.js";
 import { h2Fetch } from "./h2-fetch.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 import { logger } from "./logger.js";
+import {
+  parseSignedUrl,
+  servePassthrough,
+  usesProcessorChecks,
+} from "./raw-passthrough.js";
 import { requestKey } from "./request-key.js";
-import { assertOriginAllowed } from "./resolve-source.js";
+import { assertOriginAllowed, resolveGcsUrl } from "./resolve-source.js";
 import { createSourceMetadata } from "./source-metadata.js";
 import { tracer } from "./tracing.js";
 
@@ -111,6 +116,9 @@ class InflightStream {
   }
 }
 
+/** Values the URL parser treats as `true` for boolean options. */
+const TRUTHY = ["1", "t", "true"];
+
 const HOP_BY_HOP = new Set([
   "connection",
   "keep-alive",
@@ -164,9 +172,7 @@ async function imgproxyCompatRedirect(
     });
 
     parsed = parseProcessingUrl(pathAfterSignature, {
-      encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY
-        ? Buffer.from(env.SOURCE_URL_ENCRYPTION_KEY, "hex")
-        : undefined,
+      encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY,
     });
   } catch {
     return undefined;
@@ -284,7 +290,7 @@ export async function createCacheProxyApp() {
   app.get("/*", async (request, reply) => {
     const path = request.url.split("?")[0];
     const urlOptions = extractUrlOptions(path);
-    if (urlOptions?.cors === "1") {
+    if (TRUTHY.includes(urlOptions?.cors ?? "")) {
       reply.header("Access-Control-Allow-Origin", "*");
     }
     const expires = urlOptions?.expires
@@ -302,10 +308,27 @@ export async function createCacheProxyApp() {
       }
     }
 
-    // Raw responses are passed through straight from the source (already in GCS), so the cache bucket is skipped and ranges are forwarded. Cloud CDN caches them in chunks.
-    if (["1", "t", "true"].includes(urlOptions?.raw ?? "")) {
+    // Raw responses are streamed straight from the source (already in GCS), so the cache bucket and the processing proxy are skipped. Cloud CDN caches them in chunks. URLs with source checks that need the processing proxy are forwarded to it with their ranges.
+    if (TRUTHY.includes(urlOptions?.raw ?? "")) {
       const key = requestKey(path);
-      logger.info("[cache-proxy] raw passthrough", { key });
+      const parsed = parseSignedUrl(path);
+      if (!usesProcessorChecks(parsed)) {
+        logger.info("[cache-proxy] raw passthrough", { key });
+        const getSourceMetadata = createSourceMetadata(parsed.sourceUrl, gcs);
+        // Signing and the metadata lookup are independent, so a cold chunk pays for one round trip, not two. Metadata is only needed to cap a range.
+        const [sourceUrl] = await Promise.all([
+          resolveGcsUrl(parsed.sourceUrl, gcs),
+          request.headers.range ? getSourceMetadata() : undefined,
+        ]);
+        return servePassthrough(
+          request,
+          reply,
+          parsed,
+          sourceUrl,
+          getSourceMetadata,
+        );
+      }
+      logger.info("[cache-proxy] raw forward", { key });
       const upstream = await h2Fetch(`${env.FORWARD_URL}${request.url}`, {
         headers: forwardHeaders(request, true),
       }).catch((cause) => {

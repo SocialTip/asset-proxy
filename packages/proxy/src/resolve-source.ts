@@ -43,8 +43,11 @@ export function clearSignedUrlCache(): void {
 
 /**
  * Resolves a `gs://` URL to a V4 signed HTTPS URL. Signed URLs are cached, because on Cloud Run each signature is an IAM `signBlob` call and ranged playback resolves the same object for every chunk.
+ *
+ * Other URLs are returned unchanged.
  */
 export function resolveGcsUrl(gsUrl: string, gcs: Storage): Promise<string> {
+  if (!gsUrl.startsWith("gs://")) return Promise.resolve(gsUrl);
   let promise = signedUrls.get(gsUrl);
   if (!promise) {
     promise = signGcsUrl(gsUrl, gcs);

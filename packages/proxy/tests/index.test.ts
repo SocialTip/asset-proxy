@@ -1949,7 +1949,7 @@ describe("miscellaneous options", () => {
 
     beforeEach(() => {
       originalFetch = globalThis.fetch;
-      mockFetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      mockFetch = vi.fn(async (url: string, init?: RequestInit) => {
         const range = (init?.headers as Record<string, string> | undefined)
           ?.range;
         const headers = {
@@ -1959,6 +1959,8 @@ describe("miscellaneous options", () => {
           "last-modified": "Wed, 01 Jan 2025 00:00:00 GMT",
         };
         if (init?.method === "HEAD") {
+          if (url.includes("nosize"))
+            return new Response(null, { status: 404 });
           return new Response(null, {
             headers: { ...headers, "content-length": String(SIZE) },
           });
@@ -1969,6 +1971,12 @@ describe("miscellaneous options", () => {
           });
         }
         const [start, end] = range.slice("bytes=".length).split("-");
+        if (Number(start) >= SIZE) {
+          return new Response(null, {
+            status: 416,
+            headers: { "content-range": `bytes */${SIZE}` },
+          });
+        }
         return new Response("part", {
           status: 206,
           headers: {
@@ -2015,6 +2023,36 @@ describe("miscellaneous options", () => {
       expect(sourceGetHeaders().range).toBe(
         `bytes=1000-${1000 + 8 * 1024 * 1024 - 1}`,
       );
+    });
+
+    it("lets the source answer a range beyond the known size, with If-Range", async () => {
+      const res = await request(app)
+        .get(RAW_URL)
+        .set("range", `bytes=${SIZE}-`)
+        .set("if-range", '"abc"');
+      expect(res.status).toBe(416);
+      expect(res.headers["content-range"]).toBe(`bytes */${SIZE}`);
+      expect(sourceGetHeaders()).toEqual({
+        range: `bytes=${SIZE}-`,
+        "if-range": '"abc"',
+      });
+    });
+
+    it("forwards the range unchanged when the source size is unknown", async () => {
+      const res = await request(app)
+        .get("/insecure/raw:1/plain/https://example.com/nosize.mp4")
+        .set("range", "bytes=0-1023");
+      expect(res.status).toBe(206);
+      expect(sourceGetHeaders().range).toBe("bytes=0-1023");
+    });
+
+    it("rejects multi-part ranges without fetching the source", async () => {
+      const res = await request(app)
+        .get(RAW_URL)
+        .set("range", "bytes=0-9,100-109");
+      expect(res.status).toBe(416);
+      expect(res.headers["content-range"]).toBe(`bytes */${SIZE}`);
+      expect(sourceGetHeaders()).toBeUndefined();
     });
 
     it("rejects range requests for expired URLs", async () => {
