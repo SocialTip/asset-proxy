@@ -13,6 +13,15 @@ Skip all processing when the source file extension matches one of the listed for
 
 Return the source without any processing. The proxy fetches the source and passes it through unchanged, preserving the original content type.
 
+Raw responses (and responses skipped via `skip_processing`) support byte-range requests, so large files can be played, seeked and downloaded in pieces:
+
+- A request with a single `Range` returns `206 Partial Content` with `Content-Range`, `Content-Length` and `Accept-Ranges: bytes`. Ranges are capped at 8 MiB, so an open-ended range such as `bytes=0-` returns at most the first 8 MiB; clients request the next range from where the response ends.
+- An unsatisfiable or multi-part range returns `416 Range Not Satisfiable` with `Content-Range: bytes */<size>`.
+- A request without `Range` returns `200` with the full body and a correct `Content-Length`.
+- `Accept-Ranges`, `ETag` and `Last-Modified` are passed through from the source, and `If-Range` is forwarded to it. Together these let a CDN such as Cloud CDN cache large objects by filling them in chunks.
+
+Signature and `expires` checks apply to every range request.
+
 ## Cache Buster — `cache_buster:<value>` (shorthand `cb`)
 
 An ignored value used to differentiate CDN cache keys. The proxy does not use this value — it exists purely to allow cache invalidation by changing the URL. Example: `cb:v2`.
@@ -21,7 +30,7 @@ An ignored value used to differentiate CDN cache keys. The proxy does not use th
 
 Unix timestamp after which the URL returns 404 Not Found. Used to create time-limited URLs. Example: `exp:1700000000`.
 
-When set, the response `Cache-Control` `max-age` is capped to the remaining TTL (and `immutable` is dropped), so edge caches stop serving the response once the URL is no longer valid.
+When set, the response `Cache-Control` `max-age` is capped to the remaining TTL (and `immutable` is dropped), so edge caches stop serving the response once the URL is no longer valid. `stale-while-revalidate=0` is also added so that CDN "serve while stale" policies (e.g. Cloud CDN's `serveWhileStale`) do not keep serving it after expiry.
 
 ## Filename — `filename:<name>` (shorthand `fn`)
 

@@ -95,6 +95,8 @@ flowchart LR
     Cache -->|response| Client
 ```
 
+Requests with `raw:1` skip the cache bucket entirely: they are forwarded to `FORWARD_URL` with their `Range` and `If-Range` headers, and the (possibly `206 Partial Content`) response is streamed back unchanged without buffering. The source is already stored, so caching a copy adds nothing; a CDN in front of the proxy caches raw responses in chunks instead (see [Raw](docs/Processing.md#raw--raw1)).
+
 In a typical deployment, both containers run in the same service. The cache proxy is the public-facing container, and the processing proxy is only reachable internally.
 
 ## imgproxy compatibility mode

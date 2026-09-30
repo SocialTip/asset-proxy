@@ -11,6 +11,11 @@ expect.extend({ toMatchImageSnapshot });
 afterEach(async () => {
   const { clearProbeCache } = await import("../src/ffprobe.js");
   clearProbeCache();
+  const { clearSignedUrlCache } = await import("../src/resolve-source.js");
+  clearSignedUrlCache();
+  const { clearSourceMetadataCache } =
+    await import("../src/source-metadata.js");
+  clearSourceMetadataCache();
 });
 
 interface InjectableApp {

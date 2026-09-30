@@ -20,6 +20,7 @@ import type {
   RouteGenericInterface,
 } from "fastify";
 import Fastify from "fastify";
+import parseRange from "range-parser";
 
 import { cacheControlFor } from "./cache-control.js";
 import { env as envSwitched, isCacheMode, type ProcessingEnv } from "./env.js";
@@ -55,9 +56,20 @@ const CONTENT_TYPES: Record<string, string> = {
 
 const gcs = new Storage();
 
+// ponytail: fixed cap so every passthrough response finishes well inside the load balancer's 30s response timeout; lower it if slow clients still time out.
+const MAX_RAW_RANGE_BYTES = 8 * 1024 * 1024;
+
+const PASSTHROUGH_HEADERS = [
+  "content-type",
+  "content-length",
+  "content-range",
+  "accept-ranges",
+  "etag",
+  "last-modified",
+];
+
 export const app = Fastify({ http2: true });
 app.register(fastifyOtelInstrumentation.plugin());
-
 
 function shouldSkipProcessing(
   parsed: ReturnType<typeof parseProcessingUrl>,
@@ -271,7 +283,15 @@ async function handleRequest(request: AppRequest, reply: AppReply) {
     await checkSourceLimits(parsed, getSourceMetadata, sourceUrl);
 
     try {
-      await processAndRespond(reply, parsed, sourceUrl, key, outputMediaType);
+      await processAndRespond(
+        request,
+        reply,
+        parsed,
+        sourceUrl,
+        key,
+        outputMediaType,
+        getSourceMetadata,
+      );
     } catch (err) {
       if (parsed.fallbackImageUrl && !reply.sent) {
         const fallbackUrl = Buffer.from(
@@ -296,29 +316,48 @@ async function handleRequest(request: AppRequest, reply: AppReply) {
 }
 
 async function processAndRespond(
+  request: AppRequest,
   reply: AppReply,
   parsed: ReturnType<typeof parseProcessingUrl>,
   sourceUrl: string,
   key: string,
   mediaType: "image" | "video",
+  getSourceMetadata: () => Promise<{ contentLength?: number }>,
 ): Promise<void> {
   if (parsed.cors) {
     reply.header("Access-Control-Allow-Origin", "*");
   }
 
   if (shouldSkipProcessing(parsed)) {
-    const response = await fetch(sourceUrl);
+    const headers: Record<string, string> = {};
+    const { range, "if-range": ifRange } = request.headers;
+    const { contentLength: size } = await getSourceMetadata();
+    if (range && size) {
+      const ranges = parseRange(size, range, { combine: true });
+      if (ranges === -1 || ranges === -2 || ranges.length !== 1) {
+        reply.code(416);
+        reply.header("Content-Range", `bytes */${size}`);
+        return reply.send();
+      }
+      const { start, end } = ranges[0];
+      headers.range = `bytes=${start}-${Math.min(end, start + MAX_RAW_RANGE_BYTES - 1)}`;
+      if (typeof ifRange === "string") headers["if-range"] = ifRange;
+    }
+    const response = await fetch(sourceUrl, { headers });
     if (!response.ok) {
       throw new HTTPError(`Failed to fetch source: ${response.status}`, {
         code: "BAD_REQUEST",
       });
     }
-    const contentType = response.headers.get("content-type");
-    if (contentType) reply.header("Content-Type", contentType);
+    reply.code(response.status);
+    for (const name of PASSTHROUGH_HEADERS) {
+      const value = response.headers.get(name);
+      if (value) reply.header(name, value);
+    }
+    // Cloud CDN only fills in chunks when range responses advertise support, which some origins (e.g. nginx) omit on 206.
+    if (response.status === 206) reply.header("Accept-Ranges", "bytes");
     reply.header("Cache-Control", cacheControlFor(parsed.expires));
     setContentDisposition(reply, parsed);
-    const contentLength = response.headers.get("content-length");
-    if (contentLength) reply.header("Content-Length", contentLength);
     const responseSpan = tracer.startSpan("response.stream");
     const raw = Readable.fromWeb(
       response.body as import("node:stream/web").ReadableStream,

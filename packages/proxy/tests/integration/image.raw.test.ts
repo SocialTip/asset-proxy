@@ -6,7 +6,12 @@ import { generateUrl } from "@socialtip/asset-proxy-url-generator";
 import { parseProcessingUrl } from "@socialtip/asset-proxy-url-parser";
 
 import { SOURCE_URL } from "./helpers.js";
-import { h2Fetch as fetch, SERVICE_URL, URL_CONFIG } from "./setup.js";
+import {
+  CACHE_PROXY_URL,
+  h2Fetch as fetch,
+  SERVICE_URL,
+  URL_CONFIG,
+} from "./setup.js";
 
 const fixturesDir = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -23,5 +28,54 @@ describe("raw passthrough", () => {
     const proxyBuffer = Buffer.from(await res.arrayBuffer());
     const sourceBuffer = readFileSync(resolve(fixturesDir, "test-image.png"));
     expect(proxyBuffer.equals(sourceBuffer)).toBe(true);
+  });
+});
+
+describe.each([
+  ["processing proxy", SERVICE_URL],
+  ["cache proxy", CACHE_PROXY_URL],
+])("raw byte ranges via %s", (_name, baseUrl) => {
+  const source = readFileSync(resolve(fixturesDir, "test-image.png"));
+  const url = `${baseUrl}${generateUrl(
+    parseProcessingUrl(`/insecure/raw:1/plain/${SOURCE_URL}`),
+    URL_CONFIG,
+  )}`;
+
+  it("advertises range support on a full response", async () => {
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("accept-ranges")).toBe("bytes");
+    expect(res.headers.get("content-length")).toBe(String(source.length));
+    expect(res.headers.get("etag")).toBeTruthy();
+    expect(res.headers.get("last-modified")).toBeTruthy();
+  });
+
+  it("returns 206 for a range at the start of the file", async () => {
+    const res = await fetch(url, { headers: { range: "bytes=0-99" } });
+    expect(res.status).toBe(206);
+    expect(res.headers.get("content-range")).toBe(
+      `bytes 0-99/${source.length}`,
+    );
+    expect(res.headers.get("accept-ranges")).toBe("bytes");
+    const body = Buffer.from(await res.arrayBuffer());
+    expect(body.equals(source.subarray(0, 100))).toBe(true);
+  });
+
+  it("returns 206 for a range at the end of the file", async () => {
+    const res = await fetch(url, { headers: { range: "bytes=-100" } });
+    expect(res.status).toBe(206);
+    expect(res.headers.get("content-range")).toBe(
+      `bytes ${source.length - 100}-${source.length - 1}/${source.length}`,
+    );
+    const body = Buffer.from(await res.arrayBuffer());
+    expect(body.equals(source.subarray(-100))).toBe(true);
+  });
+
+  it("returns 416 for an unsatisfiable range", async () => {
+    const res = await fetch(url, {
+      headers: { range: `bytes=${source.length}-` },
+    });
+    expect(res.status).toBe(416);
+    expect(res.headers.get("content-range")).toBe(`bytes */${source.length}`);
   });
 });
