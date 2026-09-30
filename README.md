@@ -95,7 +95,7 @@ flowchart LR
     Cache -->|response| Client
 ```
 
-Requests with `raw:1` skip the cache bucket entirely: they are forwarded to `FORWARD_URL` with their `Range` and `If-Range` headers, and the (possibly `206 Partial Content`) response is streamed back unchanged without buffering. The source is already stored, so caching a copy adds nothing; a CDN in front of the proxy caches raw responses in chunks instead (see [Raw](docs/Processing.md#raw--raw1)).
+Requests with `raw:1` skip both the cache bucket and `FORWARD_URL`: the cache proxy verifies the URL itself (signature, source decryption, `expires` and `ALLOWED_ORIGINS`) and streams the requested byte range straight from the source without buffering, with the same response headers the processing proxy would send. The source is already stored, so caching a copy adds nothing; a CDN in front of the proxy caches raw responses in chunks instead (see [Raw](docs/Processing.md#raw--raw1)). This means the cache proxy needs `SIGNING_KEY`, `SIGNING_SALT`, `SOURCE_URL_ENCRYPTION_KEY` and `ALLOWED_ORIGINS` set to the same values as the processing proxy, and read access to the source buckets. Raw URLs that also use `hashsum`, `max_src_file_size`, `max_src_resolution` or `fallback_image_url` are still forwarded to `FORWARD_URL` with their `Range` and `If-Range` headers, since those checks run in the processing proxy.
 
 In a typical deployment, both containers run in the same service. The cache proxy is the public-facing container, and the processing proxy is only reachable internally.
 

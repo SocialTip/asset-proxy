@@ -23,6 +23,19 @@ describe("resolveGcsUrl", () => {
     expect(getSignedUrl).toHaveBeenCalledTimes(1);
   });
 
+  it("returns non-gs:// URLs unchanged", async () => {
+    const getSignedUrl = vi.fn(
+      async (): Promise<[string]> => ["https://signed"],
+    );
+    expect(
+      await resolveGcsUrl(
+        "https://example.com/a.mp4",
+        storageWith(getSignedUrl),
+      ),
+    ).toBe("https://example.com/a.mp4");
+    expect(getSignedUrl).not.toHaveBeenCalled();
+  });
+
   it("does not cache a failed signing", async () => {
     const getSignedUrl = vi
       .fn<() => Promise<[string]>>()

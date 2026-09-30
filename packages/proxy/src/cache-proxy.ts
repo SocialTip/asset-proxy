@@ -22,8 +22,9 @@ import { type CacheEnv, env as envSwitched } from "./env.js";
 import { h2Fetch } from "./h2-fetch.js";
 import { fastifyOtelInstrumentation } from "./instrument.js";
 import { logger } from "./logger.js";
+import { parseSignedUrl, servePassthrough } from "./raw-passthrough.js";
 import { requestKey } from "./request-key.js";
-import { assertOriginAllowed } from "./resolve-source.js";
+import { assertOriginAllowed, resolveGcsUrl } from "./resolve-source.js";
 import { createSourceMetadata } from "./source-metadata.js";
 import { tracer } from "./tracing.js";
 
@@ -164,9 +165,7 @@ async function imgproxyCompatRedirect(
     });
 
     parsed = parseProcessingUrl(pathAfterSignature, {
-      encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY
-        ? Buffer.from(env.SOURCE_URL_ENCRYPTION_KEY, "hex")
-        : undefined,
+      encryptionKey: env.SOURCE_URL_ENCRYPTION_KEY,
     });
   } catch {
     return undefined;
@@ -302,10 +301,27 @@ export async function createCacheProxyApp() {
       }
     }
 
-    // Raw responses are passed through straight from the source (already in GCS), so the cache bucket is skipped and ranges are forwarded. Cloud CDN caches them in chunks.
+    // Raw responses are streamed straight from the source (already in GCS), so the cache bucket and the processing proxy are skipped. Cloud CDN caches them in chunks. URLs with source checks that need the processing proxy are forwarded to it with their ranges.
     if (["1", "t", "true"].includes(urlOptions?.raw ?? "")) {
       const key = requestKey(path);
-      logger.info("[cache-proxy] raw passthrough", { key });
+      const parsed = parseSignedUrl(path);
+      if (
+        !parsed.hashsum &&
+        !parsed.maxSrcFileSize &&
+        !parsed.maxSrcResolution &&
+        !parsed.fallbackImageUrl
+      ) {
+        logger.info("[cache-proxy] raw passthrough", { key });
+        const sourceUrl = await resolveGcsUrl(parsed.sourceUrl, gcs);
+        return servePassthrough(
+          request,
+          reply,
+          parsed,
+          sourceUrl,
+          createSourceMetadata(parsed.sourceUrl, gcs),
+        );
+      }
+      logger.info("[cache-proxy] raw forward", { key });
       const upstream = await h2Fetch(`${env.FORWARD_URL}${request.url}`, {
         headers: forwardHeaders(request, true),
       }).catch((cause) => {

@@ -206,6 +206,7 @@ const cacheModeSchema = z.object({
     .string()
     .length(64, "Must be a 32-byte hex-encoded string (64 hex characters)")
     .regex(/^[0-9a-fA-F]+$/, "Must be a hex-encoded string")
+    .transform((v) => Buffer.from(v, "hex"))
     .optional(),
 
   /** Hex-encoded HMAC-SHA256 key for re-signing redirected URLs (imgproxy compat mode). Must be set together with `SIGNING_SALT`. */
